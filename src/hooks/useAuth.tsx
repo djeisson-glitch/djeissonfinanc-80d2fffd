@@ -1,56 +1,45 @@
-import { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
-
-interface SimpleUser {
-  id: string;
-  email: string;
-}
+import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
+import { supabase } from '@/integrations/supabase/client';
+import { Session, User } from '@supabase/supabase-js';
 
 interface AuthContextType {
-  isAuthenticated: boolean;
-  user: SimpleUser | null;
+  session: Session | null;
+  user: User | null;
   loading: boolean;
-  signIn: (email: string, password: string) => boolean;
-  signOut: () => void;
+  signOut: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType>({
-  isAuthenticated: false,
+  session: null,
   user: null,
   loading: true,
-  signIn: () => false,
-  signOut: () => {},
+  signOut: async () => {},
 });
 
-const VALID_EMAIL = 'contato@djeissonmauss.com';
-const VALID_PASSWORD = 'DjEissoN@2k26%$#@';
-const HARDCODED_USER: SimpleUser = { id: 'hardcoded-user-id', email: VALID_EMAIL };
-
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const stored = localStorage.getItem('isAuthenticated');
-    setIsAuthenticated(stored === 'true');
-    setLoading(false);
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSession(session);
+      setLoading(false);
+    });
+
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
+      setLoading(false);
+    });
+
+    return () => subscription.unsubscribe();
   }, []);
 
-  const signIn = useCallback((email: string, password: string): boolean => {
-    if (email === VALID_EMAIL && password === VALID_PASSWORD) {
-      localStorage.setItem('isAuthenticated', 'true');
-      setIsAuthenticated(true);
-      return true;
-    }
-    return false;
-  }, []);
-
-  const signOut = useCallback(() => {
-    localStorage.removeItem('isAuthenticated');
-    setIsAuthenticated(false);
-  }, []);
+  const signOut = async () => {
+    await supabase.auth.signOut();
+  };
 
   return (
-    <AuthContext.Provider value={{ isAuthenticated, user: isAuthenticated ? HARDCODED_USER : null, loading, signIn, signOut }}>
+    <AuthContext.Provider value={{ session, user: session?.user ?? null, loading, signOut }}>
       {children}
     </AuthContext.Provider>
   );
