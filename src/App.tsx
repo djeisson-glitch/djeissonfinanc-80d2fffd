@@ -5,7 +5,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider } from "@/hooks/useAuth";
 import AppLayout from "@/components/layout/AppLayout";
-import AuthPage from "@/pages/Auth";
+import LoginPage from "@/pages/Login";
 import OnboardingPage from "@/pages/Onboarding";
 import DashboardPage from "@/pages/Dashboard";
 import TransacoesPage from "@/pages/Transacoes";
@@ -24,7 +24,7 @@ const App = () => (
         <Sonner />
         <BrowserRouter>
           <Routes>
-            <Route path="/auth" element={<AuthPage />} />
+            <Route path="/login" element={<LoginPage />} />
             <Route path="/onboarding" element={<OnboardingPage />} />
             <Route element={<AppLayout />}>
               <Route path="/" element={<DashboardPage />} />

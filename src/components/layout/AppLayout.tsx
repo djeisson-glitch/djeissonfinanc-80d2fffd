@@ -1,42 +1,22 @@
-import { useEffect, useState, ReactNode } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate, Outlet } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
-import { supabase } from '@/integrations/supabase/client';
 import { AppSidebar } from '@/components/layout/AppSidebar';
 import { AppHeader } from '@/components/layout/AppHeader';
 import { SidebarProvider } from '@/components/ui/sidebar';
 import { Skeleton } from '@/components/ui/skeleton';
 
 export default function AppLayout() {
-  const { user, loading: authLoading } = useAuth();
+  const { isAuthenticated, loading } = useAuth();
   const navigate = useNavigate();
-  const [checkingOnboarding, setCheckingOnboarding] = useState(true);
 
   useEffect(() => {
-    if (authLoading) return;
-    if (!user) {
-      navigate('/auth');
-      return;
+    if (!loading && !isAuthenticated) {
+      navigate('/login');
     }
+  }, [isAuthenticated, loading, navigate]);
 
-    // Check if user has completed onboarding
-    const checkOnboarding = async () => {
-      const { data } = await supabase
-        .from('contas')
-        .select('id')
-        .eq('user_id', user.id)
-        .limit(1);
-      
-      if (!data || data.length === 0) {
-        navigate('/onboarding');
-      }
-      setCheckingOnboarding(false);
-    };
-
-    checkOnboarding();
-  }, [user, authLoading, navigate]);
-
-  if (authLoading || checkingOnboarding) {
+  if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="space-y-4 w-64">
@@ -47,6 +27,8 @@ export default function AppLayout() {
       </div>
     );
   }
+
+  if (!isAuthenticated) return null;
 
   return (
     <SidebarProvider>
