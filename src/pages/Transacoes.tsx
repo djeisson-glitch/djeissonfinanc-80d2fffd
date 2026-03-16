@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
-import { formatCurrency, formatDate } from '@/lib/format';
+import { formatCurrency, formatDate, getMonthRange } from '@/lib/format';
 import { CATEGORIAS } from '@/types/database.types';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -15,11 +15,15 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { useToast } from '@/hooks/use-toast';
 import { Pencil, Trash2, Search } from 'lucide-react';
+import { MonthSelector } from '@/components/MonthSelector';
 
 export default function TransacoesPage() {
   const { user } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const now = new Date();
+  const [month, setMonth] = useState(now.getMonth());
+  const [year, setYear] = useState(now.getFullYear());
   const [filterCategoria, setFilterCategoria] = useState('all');
   const [filterEssencial, setFilterEssencial] = useState('all');
   const [filterConta, setFilterConta] = useState('all');
@@ -27,6 +31,8 @@ export default function TransacoesPage() {
   const [search, setSearch] = useState('');
   const [editingTx, setEditingTx] = useState<any>(null);
   const [learnPattern, setLearnPattern] = useState(false);
+
+  const { start, end } = getMonthRange(month, year);
 
   const { data: contas } = useQuery({
     queryKey: ['contas', user?.id],
@@ -38,14 +44,15 @@ export default function TransacoesPage() {
   });
 
   const { data: transacoes } = useQuery({
-    queryKey: ['transacoes', user?.id],
+    queryKey: ['transacoes', user?.id, start, end],
     queryFn: async () => {
       const { data } = await supabase
         .from('transacoes')
         .select('*')
         .eq('user_id', user!.id)
-        .order('data', { ascending: false })
-        .limit(200);
+        .gte('data', start)
+        .lte('data', end)
+        .order('data', { ascending: false });
       return data || [];
     },
     enabled: !!user,
@@ -97,8 +104,10 @@ export default function TransacoesPage() {
 
   return (
     <div className="space-y-4 animate-fade-in">
-      <h1 className="text-2xl font-bold">Transações</h1>
-
+      <div className="flex items-center justify-between">
+        <h1 className="text-2xl font-bold">Transações</h1>
+        <MonthSelector month={month} year={year} onChange={(m, y) => { setMonth(m); setYear(y); }} />
+      </div>
       <Card>
         <CardContent className="p-4">
           <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
