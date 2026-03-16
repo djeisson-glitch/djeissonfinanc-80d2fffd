@@ -3,24 +3,41 @@ import { BrowserRouter, Route, Routes } from "react-router-dom";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import Index from "./pages/Index.tsx";
-import NotFound from "./pages/NotFound.tsx";
+import { AuthProvider } from "@/hooks/useAuth";
+import AppLayout from "@/components/layout/AppLayout";
+import AuthPage from "@/pages/Auth";
+import OnboardingPage from "@/pages/Onboarding";
+import DashboardPage from "@/pages/Dashboard";
+import TransacoesPage from "@/pages/Transacoes";
+import CalculadoraPage from "@/pages/Calculadora";
+import ContasPage from "@/pages/Contas";
+import ConfiguracoesPage from "@/pages/Configuracoes";
+import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
-    <TooltipProvider>
-      <Toaster />
-      <Sonner />
-      <BrowserRouter>
-        <Routes>
-          <Route path="/" element={<Index />} />
-          {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
-          <Route path="*" element={<NotFound />} />
-        </Routes>
-      </BrowserRouter>
-    </TooltipProvider>
+    <AuthProvider>
+      <TooltipProvider>
+        <Toaster />
+        <Sonner />
+        <BrowserRouter>
+          <Routes>
+            <Route path="/auth" element={<AuthPage />} />
+            <Route path="/onboarding" element={<OnboardingPage />} />
+            <Route element={<AppLayout />}>
+              <Route path="/" element={<DashboardPage />} />
+              <Route path="/transacoes" element={<TransacoesPage />} />
+              <Route path="/calculadora" element={<CalculadoraPage />} />
+              <Route path="/contas" element={<ContasPage />} />
+              <Route path="/configuracoes" element={<ConfiguracoesPage />} />
+            </Route>
+            <Route path="*" element={<NotFound />} />
+          </Routes>
+        </BrowserRouter>
+      </TooltipProvider>
+    </AuthProvider>
   </QueryClientProvider>
 );
 
