@@ -1,7 +1,13 @@
 import { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
 
+interface SimpleUser {
+  id: string;
+  email: string;
+}
+
 interface AuthContextType {
   isAuthenticated: boolean;
+  user: SimpleUser | null;
   loading: boolean;
   signIn: (email: string, password: string) => boolean;
   signOut: () => void;
