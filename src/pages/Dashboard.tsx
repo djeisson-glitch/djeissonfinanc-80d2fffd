@@ -1,0 +1,238 @@
+import { useQuery } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/hooks/useAuth';
+import { getCurrentMonthRange, formatCurrency, getMonthName } from '@/lib/format';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { Progress } from '@/components/ui/progress';
+import { Skeleton } from '@/components/ui/skeleton';
+import { TrendingUp, TrendingDown, AlertTriangle, BarChart3 } from 'lucide-react';
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
+
+export default function DashboardPage() {
+  const { user } = useAuth();
+  const { start, end } = getCurrentMonthRange();
+
+  const { data: config } = useQuery({
+    queryKey: ['config', user?.id],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('configuracoes')
+        .select('*')
+        .eq('user_id', user!.id)
+        .single();
+      return data;
+    },
+    enabled: !!user,
+  });
+
+  const { data: transacoesMes, isLoading } = useQuery({
+    queryKey: ['dashboard', 'transacoes-mes', user?.id, start, end],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('transacoes')
+        .select('*')
+        .eq('user_id', user!.id)
+        .gte('data', start)
+        .lte('data', end);
+      return data || [];
+    },
+    enabled: !!user,
+  });
+
+  const { data: parcelasFuturas } = useQuery({
+    queryKey: ['dashboard', 'parcelas-futuras', user?.id],
+    queryFn: async () => {
+      const today = new Date();
+      const sixMonthsLater = new Date(today);
+      sixMonthsLater.setMonth(sixMonthsLater.getMonth() + 6);
+      const { data } = await supabase
+        .from('transacoes')
+        .select('*')
+        .eq('user_id', user!.id)
+        .not('parcela_total', 'is', null)
+        .gte('data', today.toISOString().split('T')[0])
+        .lte('data', sixMonthsLater.toISOString().split('T')[0]);
+      return data || [];
+    },
+    enabled: !!user,
+  });
+
+  const receita = config?.receita_mensal_fixa || 13000;
+  const reserva = config?.reserva_minima || 2000;
+
+  const totalDespesas = transacoesMes?.filter(t => t.tipo === 'despesa').reduce((s, t) => s + Number(t.valor), 0) || 0;
+  const totalReceitas = transacoesMes?.filter(t => t.tipo === 'receita').reduce((s, t) => s + Number(t.valor), 0) || 0;
+  const saldoProjetado = receita + totalReceitas - totalDespesas;
+  const percentGasto = receita > 0 ? (totalDespesas / receita) * 100 : 0;
+
+  // Category ranking
+  const categorias = transacoesMes
+    ?.filter(t => t.tipo === 'despesa')
+    .reduce((acc, t) => {
+      const cat = t.categoria;
+      if (!acc[cat]) acc[cat] = { total: 0, essencial: t.essencial };
+      acc[cat].total += Number(t.valor);
+      return acc;
+    }, {} as Record<string, { total: number; essencial: boolean }>) || {};
+
+  const categoryRanking = Object.entries(categorias)
+    .map(([cat, { total, essencial }]) => ({ cat, total, essencial, pct: totalDespesas > 0 ? (total / totalDespesas) * 100 : 0 }))
+    .sort((a, b) => b.total - a.total);
+
+  // Essenciais vs não-essenciais
+  const totalEssencial = transacoesMes?.filter(t => t.tipo === 'despesa' && t.essencial).reduce((s, t) => s + Number(t.valor), 0) || 0;
+  const totalNaoEssencial = totalDespesas - totalEssencial;
+  const pctEssencial = totalDespesas > 0 ? (totalEssencial / totalDespesas) * 100 : 0;
+
+  // Parcelas por mês
+  const parcelasPorMes: Record<string, number> = {};
+  parcelasFuturas?.forEach(p => {
+    const d = new Date(p.data);
+    const key = `${getMonthName(d.getMonth())}/${d.getFullYear().toString().slice(2)}`;
+    parcelasPorMes[key] = (parcelasPorMes[key] || 0) + Number(p.valor);
+  });
+  const parcelasChart = Object.entries(parcelasPorMes).map(([mes, valor]) => ({ mes, valor }));
+
+  if (isLoading) {
+    return (
+      <div className="grid gap-4 md:grid-cols-2">
+        {[1, 2, 3, 4].map(i => (
+          <Card key={i}><CardContent className="p-6"><Skeleton className="h-32" /></CardContent></Card>
+        ))}
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6 animate-fade-in">
+      <h1 className="text-2xl font-bold">Dashboard</h1>
+
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+        <Card>
+          <CardContent className="p-4">
+            <p className="text-sm text-muted-foreground">Receita</p>
+            <p className="text-2xl font-bold text-primary">{formatCurrency(receita)}</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4">
+            <p className="text-sm text-muted-foreground">Despesas</p>
+            <p className="text-2xl font-bold text-destructive">{formatCurrency(totalDespesas)}</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4">
+            <p className="text-sm text-muted-foreground">Saldo Projetado</p>
+            <p className={`text-2xl font-bold ${saldoProjetado >= reserva ? 'text-primary' : 'text-destructive'}`}>
+              {formatCurrency(saldoProjetado)}
+            </p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4">
+            <p className="text-sm text-muted-foreground">% da Receita</p>
+            <p className="text-2xl font-bold">{percentGasto.toFixed(1)}%</p>
+            <Progress value={Math.min(percentGasto, 100)} className="mt-2" />
+          </CardContent>
+        </Card>
+      </div>
+
+      <div className="grid gap-4 md:grid-cols-2">
+        {/* Category Ranking */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-lg flex items-center gap-2">
+              <BarChart3 className="h-5 w-5" />
+              Ranking de Categorias
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {categoryRanking.length === 0 ? (
+              <p className="text-sm text-muted-foreground">Nenhuma despesa este mês</p>
+            ) : (
+              <div className="space-y-3">
+                {categoryRanking.map(({ cat, total, essencial, pct }) => (
+                  <div key={cat} className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-medium">{cat}</span>
+                      <Badge variant={essencial ? 'default' : 'secondary'} className="text-xs">
+                        {essencial ? 'Essencial' : 'Dispensável'}
+                      </Badge>
+                    </div>
+                    <div className="text-right">
+                      <span className="text-sm font-medium">{formatCurrency(total)}</span>
+                      <span className="text-xs text-muted-foreground ml-2">{pct.toFixed(0)}%</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Installments Timeline */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-lg flex items-center gap-2">
+              <TrendingDown className="h-5 w-5" />
+              Timeline de Parcelas
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {parcelasChart.length === 0 ? (
+              <p className="text-sm text-muted-foreground">Nenhuma parcela futura</p>
+            ) : (
+              <ResponsiveContainer width="100%" height={200}>
+                <BarChart data={parcelasChart}>
+                  <XAxis dataKey="mes" tick={{ fontSize: 12 }} />
+                  <YAxis tick={{ fontSize: 12 }} tickFormatter={v => `${(v / 1000).toFixed(0)}k`} />
+                  <Tooltip formatter={(v: number) => formatCurrency(v)} />
+                  <Bar dataKey="valor" radius={[4, 4, 0, 0]}>
+                    {parcelasChart.map((_, i) => (
+                      <Cell key={i} fill="hsl(var(--accent))" />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Essenciais vs Não-essenciais */}
+        <Card className="md:col-span-2">
+          <CardHeader>
+            <CardTitle className="text-lg flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5" />
+              Essenciais vs Não-Essenciais
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-2 gap-4 mb-4">
+              <div>
+                <p className="text-sm text-muted-foreground">Essenciais</p>
+                <p className="text-xl font-bold text-primary">{formatCurrency(totalEssencial)}</p>
+                <p className="text-xs text-muted-foreground">{pctEssencial.toFixed(0)}% (meta: 70%)</p>
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground">Não-essenciais</p>
+                <p className="text-xl font-bold text-accent">{formatCurrency(totalNaoEssencial)}</p>
+                <p className="text-xs text-muted-foreground">{(100 - pctEssencial).toFixed(0)}% (meta: 30%)</p>
+              </div>
+            </div>
+            <div className="relative h-4 rounded-full bg-muted overflow-hidden">
+              <div
+                className="absolute inset-y-0 left-0 bg-primary rounded-full transition-all"
+                style={{ width: `${pctEssencial}%` }}
+              />
+            </div>
+            <div className="flex justify-between mt-1">
+              <span className="text-xs text-muted-foreground">Essenciais</span>
+              <span className="text-xs text-muted-foreground">Não-essenciais</span>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    </div>
+  );
+}
