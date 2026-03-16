@@ -14,7 +14,155 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      configuracoes: {
+        Row: {
+          created_at: string
+          id: string
+          receita_mensal_fixa: number
+          reserva_minima: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          receita_mensal_fixa?: number
+          reserva_minima?: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          receita_mensal_fixa?: number
+          reserva_minima?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      contas: {
+        Row: {
+          created_at: string
+          id: string
+          nome: string
+          saldo_inicial: number
+          tipo: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          nome: string
+          saldo_inicial?: number
+          tipo: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          nome?: string
+          saldo_inicial?: number
+          tipo?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      regras_categorizacao: {
+        Row: {
+          aprendido_auto: boolean
+          categoria: string
+          created_at: string
+          essencial: boolean
+          id: string
+          padrao: string
+          user_id: string
+        }
+        Insert: {
+          aprendido_auto?: boolean
+          categoria: string
+          created_at?: string
+          essencial?: boolean
+          id?: string
+          padrao: string
+          user_id: string
+        }
+        Update: {
+          aprendido_auto?: boolean
+          categoria?: string
+          created_at?: string
+          essencial?: boolean
+          id?: string
+          padrao?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      transacoes: {
+        Row: {
+          categoria: string
+          conta_id: string
+          created_at: string
+          data: string
+          descricao: string
+          essencial: boolean
+          grupo_parcela: string | null
+          hash_transacao: string
+          id: string
+          observacoes: string | null
+          parcela_atual: number | null
+          parcela_total: number | null
+          pessoa: string
+          tipo: string
+          user_id: string
+          valor: number
+        }
+        Insert: {
+          categoria?: string
+          conta_id: string
+          created_at?: string
+          data: string
+          descricao: string
+          essencial?: boolean
+          grupo_parcela?: string | null
+          hash_transacao: string
+          id?: string
+          observacoes?: string | null
+          parcela_atual?: number | null
+          parcela_total?: number | null
+          pessoa?: string
+          tipo: string
+          user_id: string
+          valor: number
+        }
+        Update: {
+          categoria?: string
+          conta_id?: string
+          created_at?: string
+          data?: string
+          descricao?: string
+          essencial?: boolean
+          grupo_parcela?: string | null
+          hash_transacao?: string
+          id?: string
+          observacoes?: string | null
+          parcela_atual?: number | null
+          parcela_total?: number | null
+          pessoa?: string
+          tipo?: string
+          user_id?: string
+          valor?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "transacoes_conta_id_fkey"
+            columns: ["conta_id"]
+            isOneToOne: false
+            referencedRelation: "contas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
