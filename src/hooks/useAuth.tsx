@@ -15,6 +15,7 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType>({
   isAuthenticated: false,
+  user: null,
   loading: true,
   signIn: () => false,
   signOut: () => {},
@@ -22,6 +23,7 @@ const AuthContext = createContext<AuthContextType>({
 
 const VALID_EMAIL = 'contato@djeissonmauss.com';
 const VALID_PASSWORD = 'DjEissoN@2k26%$#@';
+const HARDCODED_USER: SimpleUser = { id: 'hardcoded-user-id', email: VALID_EMAIL };
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -48,7 +50,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   return (
-    <AuthContext.Provider value={{ isAuthenticated, loading, signIn, signOut }}>
+    <AuthContext.Provider value={{ isAuthenticated, user: isAuthenticated ? HARDCODED_USER : null, loading, signIn, signOut }}>
       {children}
     </AuthContext.Provider>
   );
