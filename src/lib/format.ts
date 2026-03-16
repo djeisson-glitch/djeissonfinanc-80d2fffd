@@ -17,8 +17,12 @@ export function getMonthYear(dateStr: string): string {
 
 export function getCurrentMonthRange(): { start: string; end: string } {
   const now = new Date();
-  const start = new Date(now.getFullYear(), now.getMonth(), 1);
-  const end = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+  return getMonthRange(now.getMonth(), now.getFullYear());
+}
+
+export function getMonthRange(month: number, year: number): { start: string; end: string } {
+  const start = new Date(year, month, 1);
+  const end = new Date(year, month + 1, 0);
   return {
     start: start.toISOString().split('T')[0],
     end: end.toISOString().split('T')[0],
