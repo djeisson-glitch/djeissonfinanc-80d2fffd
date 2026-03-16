@@ -4,7 +4,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { formatCurrency, formatDate } from '@/lib/format';
 import { CATEGORIAS } from '@/types/database.types';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -37,7 +37,7 @@ export default function TransacoesPage() {
     enabled: !!user,
   });
 
-  const { data: transacoes, isLoading } = useQuery({
+  const { data: transacoes } = useQuery({
     queryKey: ['transacoes', user?.id],
     queryFn: async () => {
       const { data } = await supabase
@@ -99,7 +99,6 @@ export default function TransacoesPage() {
     <div className="space-y-4 animate-fade-in">
       <h1 className="text-2xl font-bold">Transações</h1>
 
-      {/* Filters */}
       <Card>
         <CardContent className="p-4">
           <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
@@ -140,7 +139,6 @@ export default function TransacoesPage() {
         </CardContent>
       </Card>
 
-      {/* Table */}
       <Card>
         <CardContent className="p-0">
           <Table>
@@ -158,19 +156,17 @@ export default function TransacoesPage() {
             </TableHeader>
             <TableBody>
               {filtered.map((t, i) => (
-                <TableRow key={t.id} className={i % 2 === 0 ? '' : 'bg-muted/30'}>
+                <TableRow key={t.id}>
                   <TableCell className="text-sm">{formatDate(t.data)}</TableCell>
                   <TableCell className="text-sm max-w-[200px] truncate">{t.descricao}</TableCell>
                   <TableCell>
-                    <Badge variant={t.essencial ? 'default' : 'secondary'} className="text-xs">
-                      {t.categoria}
-                    </Badge>
+                    <Badge variant="secondary" className="text-xs">{t.categoria}</Badge>
                   </TableCell>
-                  <TableCell className={`text-right text-sm font-medium ${t.tipo === 'receita' ? 'text-primary' : 'text-destructive'}`}>
+                  <TableCell className={`text-right text-sm font-medium ${t.tipo === 'receita' ? 'text-success' : 'text-destructive'}`}>
                     {t.tipo === 'receita' ? '+' : '-'}{formatCurrency(Number(t.valor))}
                   </TableCell>
                   <TableCell>
-                    <Badge variant={t.essencial ? 'default' : 'outline'} className="text-xs">
+                    <Badge variant="outline" className="text-xs">
                       {t.essencial ? 'Essencial' : 'Dispensável'}
                     </Badge>
                   </TableCell>
@@ -202,7 +198,6 @@ export default function TransacoesPage() {
         </CardContent>
       </Card>
 
-      {/* Edit Dialog */}
       <Dialog open={!!editingTx} onOpenChange={() => setEditingTx(null)}>
         <DialogContent>
           <DialogHeader>
