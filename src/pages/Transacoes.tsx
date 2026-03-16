@@ -104,8 +104,10 @@ export default function TransacoesPage() {
 
   return (
     <div className="space-y-4 animate-fade-in">
-      <h1 className="text-2xl font-bold">Transações</h1>
-
+      <div className="flex items-center justify-between">
+        <h1 className="text-2xl font-bold">Transações</h1>
+        <MonthSelector month={month} year={year} onChange={(m, y) => { setMonth(m); setYear(y); }} />
+      </div>
       <Card>
         <CardContent className="p-4">
           <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
