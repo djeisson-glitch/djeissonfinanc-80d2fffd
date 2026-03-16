@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { Skeleton } from '@/components/ui/skeleton';
-import { TrendingUp, TrendingDown, AlertTriangle, BarChart3 } from 'lucide-react';
+import { TrendingDown, AlertTriangle, BarChart3 } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 
 export default function DashboardPage() {
@@ -66,7 +66,6 @@ export default function DashboardPage() {
   const saldoProjetado = receita + totalReceitas - totalDespesas;
   const percentGasto = receita > 0 ? (totalDespesas / receita) * 100 : 0;
 
-  // Category ranking
   const categorias = transacoesMes
     ?.filter(t => t.tipo === 'despesa')
     .reduce((acc, t) => {
@@ -80,12 +79,10 @@ export default function DashboardPage() {
     .map(([cat, { total, essencial }]) => ({ cat, total, essencial, pct: totalDespesas > 0 ? (total / totalDespesas) * 100 : 0 }))
     .sort((a, b) => b.total - a.total);
 
-  // Essenciais vs não-essenciais
   const totalEssencial = transacoesMes?.filter(t => t.tipo === 'despesa' && t.essencial).reduce((s, t) => s + Number(t.valor), 0) || 0;
   const totalNaoEssencial = totalDespesas - totalEssencial;
   const pctEssencial = totalDespesas > 0 ? (totalEssencial / totalDespesas) * 100 : 0;
 
-  // Parcelas por mês
   const parcelasPorMes: Record<string, number> = {};
   parcelasFuturas?.forEach(p => {
     const d = new Date(p.data);
@@ -112,7 +109,7 @@ export default function DashboardPage() {
         <Card>
           <CardContent className="p-4">
             <p className="text-sm text-muted-foreground">Receita</p>
-            <p className="text-2xl font-bold text-primary">{formatCurrency(receita)}</p>
+            <p className="text-2xl font-bold text-success">{formatCurrency(receita)}</p>
           </CardContent>
         </Card>
         <Card>
@@ -124,7 +121,7 @@ export default function DashboardPage() {
         <Card>
           <CardContent className="p-4">
             <p className="text-sm text-muted-foreground">Saldo Projetado</p>
-            <p className={`text-2xl font-bold ${saldoProjetado >= reserva ? 'text-primary' : 'text-destructive'}`}>
+            <p className={`text-2xl font-bold ${saldoProjetado >= reserva ? 'text-success' : 'text-destructive'}`}>
               {formatCurrency(saldoProjetado)}
             </p>
           </CardContent>
@@ -139,7 +136,6 @@ export default function DashboardPage() {
       </div>
 
       <div className="grid gap-4 md:grid-cols-2">
-        {/* Category Ranking */}
         <Card>
           <CardHeader>
             <CardTitle className="text-lg flex items-center gap-2">
@@ -171,7 +167,6 @@ export default function DashboardPage() {
           </CardContent>
         </Card>
 
-        {/* Installments Timeline */}
         <Card>
           <CardHeader>
             <CardTitle className="text-lg flex items-center gap-2">
@@ -190,7 +185,7 @@ export default function DashboardPage() {
                   <Tooltip formatter={(v: number) => formatCurrency(v)} />
                   <Bar dataKey="valor" radius={[4, 4, 0, 0]}>
                     {parcelasChart.map((_, i) => (
-                      <Cell key={i} fill="hsl(var(--accent))" />
+                      <Cell key={i} fill="hsl(220, 13%, 22%)" />
                     ))}
                   </Bar>
                 </BarChart>
@@ -199,7 +194,6 @@ export default function DashboardPage() {
           </CardContent>
         </Card>
 
-        {/* Essenciais vs Não-essenciais */}
         <Card className="md:col-span-2">
           <CardHeader>
             <CardTitle className="text-lg flex items-center gap-2">
@@ -211,18 +205,18 @@ export default function DashboardPage() {
             <div className="grid grid-cols-2 gap-4 mb-4">
               <div>
                 <p className="text-sm text-muted-foreground">Essenciais</p>
-                <p className="text-xl font-bold text-primary">{formatCurrency(totalEssencial)}</p>
+                <p className="text-xl font-bold text-success">{formatCurrency(totalEssencial)}</p>
                 <p className="text-xs text-muted-foreground">{pctEssencial.toFixed(0)}% (meta: 70%)</p>
               </div>
               <div>
                 <p className="text-sm text-muted-foreground">Não-essenciais</p>
-                <p className="text-xl font-bold text-accent">{formatCurrency(totalNaoEssencial)}</p>
+                <p className="text-xl font-bold text-warning">{formatCurrency(totalNaoEssencial)}</p>
                 <p className="text-xs text-muted-foreground">{(100 - pctEssencial).toFixed(0)}% (meta: 30%)</p>
               </div>
             </div>
             <div className="relative h-4 rounded-full bg-muted overflow-hidden">
               <div
-                className="absolute inset-y-0 left-0 bg-primary rounded-full transition-all"
+                className="absolute inset-y-0 left-0 bg-foreground/20 rounded-full transition-all"
                 style={{ width: `${pctEssencial}%` }}
               />
             </div>
