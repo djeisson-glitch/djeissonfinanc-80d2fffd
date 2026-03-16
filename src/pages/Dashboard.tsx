@@ -1,17 +1,22 @@
+import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
-import { getCurrentMonthRange, formatCurrency, getMonthName } from '@/lib/format';
+import { getMonthRange, formatCurrency, getMonthName } from '@/lib/format';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { Skeleton } from '@/components/ui/skeleton';
 import { TrendingDown, AlertTriangle, BarChart3 } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
+import { MonthSelector } from '@/components/MonthSelector';
 
 export default function DashboardPage() {
   const { user } = useAuth();
-  const { start, end } = getCurrentMonthRange();
+  const now = new Date();
+  const [month, setMonth] = useState(now.getMonth());
+  const [year, setYear] = useState(now.getFullYear());
+  const { start, end } = getMonthRange(month, year);
 
   const { data: config } = useQuery({
     queryKey: ['config', user?.id],
