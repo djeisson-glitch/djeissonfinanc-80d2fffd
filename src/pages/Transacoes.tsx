@@ -27,6 +27,7 @@ export default function TransacoesPage() {
   const [month, setMonth] = useState(now.getMonth());
   const [year, setYear] = useState(now.getFullYear());
   const [filterCategoria, setFilterCategoria] = useState('all');
+  const [filterTipo, setFilterTipo] = useState('all');
   const [filterEssencial, setFilterEssencial] = useState('all');
   const [filterConta, setFilterConta] = useState('all');
   const [filterPessoa, setFilterPessoa] = useState('all');
@@ -34,12 +35,14 @@ export default function TransacoesPage() {
   const [editingTx, setEditingTx] = useState<any>(null);
   const [learnPattern, setLearnPattern] = useState(false);
 
-  // Read URL param on mount
+  // Read URL params on mount
   useEffect(() => {
     const cat = searchParams.get('categoria');
-    if (cat) {
-      setFilterCategoria(cat);
-    }
+    const tipo = searchParams.get('tipo');
+    const essencial = searchParams.get('essencial');
+    if (cat) setFilterCategoria(cat);
+    if (tipo) setFilterTipo(tipo);
+    if (essencial) setFilterEssencial(essencial);
   }, [searchParams]);
 
   const { start, end } = getMonthRange(month, year);
@@ -115,6 +118,7 @@ export default function TransacoesPage() {
 
   const filtered = transacoes?.filter(t => {
     if (filterCategoria !== 'all' && t.categoria !== filterCategoria) return false;
+    if (filterTipo !== 'all' && t.tipo !== filterTipo) return false;
     if (filterEssencial === 'true' && !t.essencial) return false;
     if (filterEssencial === 'false' && t.essencial) return false;
     if (filterConta !== 'all' && t.conta_id !== filterConta) return false;
@@ -135,7 +139,7 @@ export default function TransacoesPage() {
       </div>
       <Card>
         <CardContent className="p-4">
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+          <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
             <div className="relative col-span-2 md:col-span-1">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input placeholder="Buscar..." value={search} onChange={e => setSearch(e.target.value)} className="pl-9" />
@@ -154,8 +158,16 @@ export default function TransacoesPage() {
                 ))}
               </SelectContent>
             </Select>
-            <Select value={filterEssencial} onValueChange={setFilterEssencial}>
-              <SelectTrigger><SelectValue placeholder="Tipo" /></SelectTrigger>
+            <Select value={filterTipo} onValueChange={v => { setFilterTipo(v); if (v === 'all') { searchParams.delete('tipo'); } else { searchParams.set('tipo', v); } setSearchParams(searchParams, { replace: true }); }}>
+              <SelectTrigger><SelectValue placeholder="Receita/Despesa" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Receita/Despesa</SelectItem>
+                <SelectItem value="receita">Receitas</SelectItem>
+                <SelectItem value="despesa">Despesas</SelectItem>
+              </SelectContent>
+            </Select>
+            <Select value={filterEssencial} onValueChange={v => { setFilterEssencial(v); if (v === 'all') { searchParams.delete('essencial'); } else { searchParams.set('essencial', v); } setSearchParams(searchParams, { replace: true }); }}>
+              <SelectTrigger><SelectValue placeholder="Essencial" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">Todos</SelectItem>
                 <SelectItem value="true">Essenciais</SelectItem>
@@ -179,6 +191,27 @@ export default function TransacoesPage() {
           </div>
         </CardContent>
       </Card>
+
+      {(filterCategoria !== 'all' || filterTipo !== 'all' || filterEssencial !== 'all') && (
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="text-sm text-muted-foreground">Filtros ativos:</span>
+          {filterTipo !== 'all' && (
+            <Badge variant="secondary" className="cursor-pointer" onClick={() => { setFilterTipo('all'); searchParams.delete('tipo'); setSearchParams(searchParams, { replace: true }); }}>
+              {filterTipo === 'receita' ? 'Receitas' : 'Despesas'} ✕
+            </Badge>
+          )}
+          {filterCategoria !== 'all' && (
+            <Badge variant="secondary" className="cursor-pointer" onClick={() => handleFilterCategoria('all')}>
+              {filterCategoria} ✕
+            </Badge>
+          )}
+          {filterEssencial !== 'all' && (
+            <Badge variant="secondary" className="cursor-pointer" onClick={() => { setFilterEssencial('all'); searchParams.delete('essencial'); setSearchParams(searchParams, { replace: true }); }}>
+              {filterEssencial === 'true' ? 'Essenciais' : 'Dispensáveis'} ✕
+            </Badge>
+          )}
+        </div>
+      )}
 
       <Card>
         <CardContent className="p-0">
