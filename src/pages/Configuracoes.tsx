@@ -14,6 +14,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Save, Trash2, Settings, AlertTriangle } from 'lucide-react';
 import { ImportHistory } from '@/components/configuracoes/ImportHistory';
+import { DebugPanel } from '@/components/configuracoes/DebugPanel';
 
 export default function ConfiguracoesPage() {
   const { user } = useAuth();
@@ -107,6 +108,7 @@ export default function ConfiguracoesPage() {
         <TabsList>
           <TabsTrigger value="geral">Geral</TabsTrigger>
           <TabsTrigger value="historico">Histórico de Importações</TabsTrigger>
+          <TabsTrigger value="debug">Debug</TabsTrigger>
         </TabsList>
 
         <TabsContent value="geral" className="space-y-6">
@@ -204,6 +206,10 @@ export default function ConfiguracoesPage() {
 
         <TabsContent value="historico">
           <ImportHistory />
+        </TabsContent>
+
+        <TabsContent value="debug">
+          <DebugPanel />
         </TabsContent>
       </Tabs>
 
