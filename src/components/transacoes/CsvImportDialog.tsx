@@ -303,6 +303,27 @@ export function CsvImportDialog({ open, onOpenChange }: Props) {
       const totalDespesas = newTransactions.filter((t: any) => t.tipo === 'despesa').reduce((s: number, t: any) => s + Number(t.valor), 0);
       const totalReceitas = newTransactions.filter((t: any) => t.tipo === 'receita').reduce((s: number, t: any) => s + Number(t.valor), 0);
 
+      const duplicateHashes = new Set(duplicateTransactions.map((t: any) => t.hash_transacao));
+      const logEntries = parsedLineLogs.map((entry) => {
+        if (entry.hash_transacao && duplicateHashes.has(entry.hash_transacao)) {
+          return {
+            ...entry,
+            status: 'duplicata' as const,
+            reason: 'Transação idêntica já existe',
+          };
+        }
+
+        if (entry.status === 'importada') {
+          return {
+            ...entry,
+            status: 'importada' as const,
+            reason: 'Importada com sucesso',
+          };
+        }
+
+        return entry;
+      });
+
       const contaNome = contas.find(c => c.id === contaId)?.nome || '';
 
       setResult({
@@ -315,9 +336,10 @@ export function CsvImportDialog({ open, onOpenChange }: Props) {
         totalDespesas,
         totalReceitas,
         skippedLines: parsedSkippedLines,
+        totalCsvLines: parsedTotalLines,
+        logEntries,
       });
 
-      // Save import log
       await supabase.from('historico_importacoes').insert({
         user_id: user.id,
         nome_arquivo: file.name,
@@ -327,6 +349,15 @@ export function CsvImportDialog({ open, onOpenChange }: Props) {
         qtd_importada: imported,
         qtd_duplicadas: duplicateTransactions.length,
         qtd_total: allTransactions.length,
+      });
+
+      await supabase.from('import_logs').insert({
+        user_id: user.id,
+        arquivo: file.name,
+        total_linhas_csv: parsedTotalLines,
+        linhas_importadas: importedOriginals.length,
+        linhas_rejeitadas: parsedSkippedLines.length,
+        detalhes_json: logEntries,
       });
 
       queryClient.invalidateQueries({ queryKey: ['transacoes'] });
