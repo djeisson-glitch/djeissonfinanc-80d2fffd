@@ -7,13 +7,16 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
 import { useState } from 'react';
-import { Save, Trash2, Settings } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { Save, Trash2, Settings, AlertTriangle } from 'lucide-react';
 
 export default function ConfiguracoesPage() {
   const { user } = useAuth();
   const { toast } = useToast();
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
 
   const { data: config } = useQuery({
@@ -36,6 +39,9 @@ export default function ConfiguracoesPage() {
 
   const [receita, setReceita] = useState<number | null>(null);
   const [reserva, setReserva] = useState<number | null>(null);
+  const [resetDialogOpen, setResetDialogOpen] = useState(false);
+  const [resetConfirm, setResetConfirm] = useState('');
+  const [resetting, setResetting] = useState(false);
 
   const displayReceita = receita ?? config?.receita_mensal_fixa ?? 13000;
   const displayReserva = reserva ?? config?.reserva_minima ?? 2000;
@@ -63,6 +69,33 @@ export default function ConfiguracoesPage() {
       toast({ title: 'Regra excluída' });
     },
   });
+
+  const handleReset = async () => {
+    if (!user || resetConfirm !== 'RESETAR') return;
+    setResetting(true);
+
+    try {
+      // Delete all transactions
+      await supabase.from('transacoes').delete().eq('user_id', user.id);
+      // Delete all categorization rules
+      await supabase.from('regras_categorizacao').delete().eq('user_id', user.id);
+      // Delete config
+      await supabase.from('configuracoes').delete().eq('user_id', user.id);
+      // Reset saldo_inicial on all accounts
+      await supabase.from('contas').update({ saldo_inicial: 0 }).eq('user_id', user.id);
+
+      queryClient.clear();
+      toast({ title: 'Sistema resetado com sucesso' });
+      setResetDialogOpen(false);
+      setResetConfirm('');
+      navigate('/onboarding');
+    } catch (err) {
+      console.error(err);
+      toast({ title: 'Erro ao resetar', variant: 'destructive' });
+    }
+
+    setResetting(false);
+  };
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -136,6 +169,85 @@ export default function ConfiguracoesPage() {
           </Table>
         </CardContent>
       </Card>
+
+      {/* Danger Zone */}
+      <Card className="border-destructive/50">
+        <CardHeader>
+          <CardTitle className="text-lg flex items-center gap-2 text-destructive">
+            <AlertTriangle className="h-5 w-5" />
+            Zona de Perigo
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="text-sm text-muted-foreground mb-4">
+            Ações irreversíveis. Tenha certeza antes de prosseguir.
+          </p>
+          <Button
+            variant="destructive"
+            onClick={() => { setResetConfirm(''); setResetDialogOpen(true); }}
+          >
+            <Trash2 className="mr-2 h-4 w-4" />
+            Resetar Sistema Completo
+          </Button>
+        </CardContent>
+      </Card>
+
+      <Dialog open={resetDialogOpen} onOpenChange={setResetDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-destructive">
+              <AlertTriangle className="h-5 w-5" />
+              Resetar Sistema
+            </DialogTitle>
+            <DialogDescription className="text-left">
+              <strong>⚠️ ATENÇÃO: Esta ação NÃO pode ser desfeita.</strong>
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <p className="text-sm font-semibold text-destructive">Será deletado:</p>
+              <ul className="text-sm text-muted-foreground space-y-1 ml-4 list-disc">
+                <li>Todas as transações</li>
+                <li>Todas as regras de categorização</li>
+                <li>Configurações (receita mensal, reserva mínima)</li>
+                <li>Saldos iniciais das contas (volta pra R$ 0)</li>
+              </ul>
+            </div>
+
+            <div className="space-y-2">
+              <p className="text-sm font-semibold text-foreground">Será mantido:</p>
+              <ul className="text-sm text-muted-foreground space-y-1 ml-4 list-disc">
+                <li>As 4 contas criadas (Black, Mercado Pago, Sicredi Principal, Sicredi Secundário)</li>
+              </ul>
+            </div>
+
+            <div className="space-y-2">
+              <Label className="font-semibold">Digite "RESETAR" para confirmar:</Label>
+              <Input
+                value={resetConfirm}
+                onChange={e => setResetConfirm(e.target.value)}
+                placeholder="RESETAR"
+                className="border-destructive/50 focus-visible:ring-destructive"
+              />
+            </div>
+
+            <div className="flex gap-2">
+              <Button variant="outline" className="flex-1" onClick={() => setResetDialogOpen(false)}>
+                Cancelar
+              </Button>
+              <Button
+                variant="destructive"
+                className="flex-1"
+                disabled={resetConfirm !== 'RESETAR' || resetting}
+                onClick={handleReset}
+              >
+                {resetting ? 'Resetando...' : 'Confirmar Reset'}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
