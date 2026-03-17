@@ -219,12 +219,18 @@ export default function DashboardPage() {
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-2 gap-4 mb-4">
-              <div>
+              <div
+                className="cursor-pointer hover:bg-muted/50 rounded-lg p-2 -m-2 transition-colors"
+                onClick={() => navigate('/transacoes?essencial=true')}
+              >
                 <p className="text-sm text-muted-foreground">Essenciais</p>
                 <p className="text-xl font-bold text-success">{formatCurrency(totalEssencial)}</p>
                 <p className="text-xs text-muted-foreground">{pctEssencial.toFixed(0)}% (meta: 70%)</p>
               </div>
-              <div>
+              <div
+                className="cursor-pointer hover:bg-muted/50 rounded-lg p-2 -m-2 transition-colors"
+                onClick={() => navigate('/transacoes?essencial=false')}
+              >
                 <p className="text-sm text-muted-foreground">Não-essenciais</p>
                 <p className="text-xl font-bold text-warning">{formatCurrency(totalNaoEssencial)}</p>
                 <p className="text-xs text-muted-foreground">{(100 - pctEssencial).toFixed(0)}% (meta: 30%)</p>

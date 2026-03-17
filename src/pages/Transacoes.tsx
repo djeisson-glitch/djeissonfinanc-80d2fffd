@@ -27,6 +27,7 @@ export default function TransacoesPage() {
   const [month, setMonth] = useState(now.getMonth());
   const [year, setYear] = useState(now.getFullYear());
   const [filterCategoria, setFilterCategoria] = useState('all');
+  const [filterTipo, setFilterTipo] = useState('all');
   const [filterEssencial, setFilterEssencial] = useState('all');
   const [filterConta, setFilterConta] = useState('all');
   const [filterPessoa, setFilterPessoa] = useState('all');
@@ -34,12 +35,14 @@ export default function TransacoesPage() {
   const [editingTx, setEditingTx] = useState<any>(null);
   const [learnPattern, setLearnPattern] = useState(false);
 
-  // Read URL param on mount
+  // Read URL params on mount
   useEffect(() => {
     const cat = searchParams.get('categoria');
-    if (cat) {
-      setFilterCategoria(cat);
-    }
+    const tipo = searchParams.get('tipo');
+    const essencial = searchParams.get('essencial');
+    if (cat) setFilterCategoria(cat);
+    if (tipo) setFilterTipo(tipo);
+    if (essencial) setFilterEssencial(essencial);
   }, [searchParams]);
 
   const { start, end } = getMonthRange(month, year);
