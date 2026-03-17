@@ -14,6 +14,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Save, Trash2, Settings, AlertTriangle } from 'lucide-react';
 import { ImportHistory } from '@/components/configuracoes/ImportHistory';
+import { DebugPanel } from '@/components/configuracoes/DebugPanel';
 
 export default function ConfiguracoesPage() {
   const { user } = useAuth();
