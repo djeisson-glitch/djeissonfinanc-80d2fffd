@@ -117,13 +117,13 @@ export default function DashboardPage() {
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <Card>
+        <Card className="cursor-pointer hover:bg-muted/50 transition-colors" onClick={() => navigate('/transacoes?tipo=receita')}>
           <CardContent className="p-4">
             <p className="text-sm text-muted-foreground">Receita</p>
             <p className="text-2xl font-bold text-success">{formatCurrency(receita)}</p>
           </CardContent>
         </Card>
-        <Card>
+        <Card className="cursor-pointer hover:bg-muted/50 transition-colors" onClick={() => navigate('/transacoes?tipo=despesa')}>
           <CardContent className="p-4">
             <p className="text-sm text-muted-foreground">Despesas</p>
             <p className="text-2xl font-bold text-destructive">{formatCurrency(totalDespesas)}</p>
