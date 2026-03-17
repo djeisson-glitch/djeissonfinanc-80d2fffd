@@ -103,6 +103,13 @@ export default function ConfiguracoesPage() {
     <div className="space-y-6 animate-fade-in">
       <h1 className="text-2xl font-bold">Configurações</h1>
 
+      <Tabs defaultValue="geral" className="space-y-4">
+        <TabsList>
+          <TabsTrigger value="geral">Geral</TabsTrigger>
+          <TabsTrigger value="historico">Histórico de Importações</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="geral" className="space-y-6">
       <Card>
         <CardHeader>
           <CardTitle className="text-lg flex items-center gap-2">
