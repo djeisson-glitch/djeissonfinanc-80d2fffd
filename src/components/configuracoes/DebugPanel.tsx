@@ -208,7 +208,7 @@ export function DebugPanel() {
         coarseGroups[key].push(t);
       });
 
-      // Within each group, cluster by value tolerance ≤ R$ 1.00
+      // Within each group, cluster by value tolerance ≤ R$ 0.10
       const dupGroups: DupGroup[] = [];
 
       Object.entries(coarseGroups).forEach(([, items]) => {
@@ -223,7 +223,7 @@ export function DebugPanel() {
           for (let j = i + 1; j < items.length; j++) {
             if (assigned.has(j)) continue;
             const valDiff = Math.abs(Number(items[i].valor) - Number(items[j].valor));
-            if (valDiff <= 1.0) {
+            if (valDiff <= 0.10) {
               cluster.push(items[j]);
               assigned.add(j);
             }
@@ -232,9 +232,6 @@ export function DebugPanel() {
         }
 
         clusters.forEach(cluster => {
-          // Decide which to keep:
-          // For installments: prefer non-auto-projected (real), then oldest
-          // For non-installments: keep oldest
           const hasInstallments = cluster.some(isInstallment);
           let keepItem: any;
 
@@ -255,7 +252,7 @@ export function DebugPanel() {
           const removeIds = cluster.filter((t: any) => t.id !== keepItem.id).map((t: any) => t.id);
 
           dupGroups.push({
-            key: `${prefix15(keepItem.descricao)}|${Math.round(Number(keepItem.valor))}|${keepItem.conta_id}`,
+            key: `${prefix15(keepItem.descricao)}|${Math.round(Number(keepItem.valor))}|${keepItem.conta_id}|${idx_counter++}`,
             descricao: keepItem.descricao,
             valor: Number(keepItem.valor),
             pessoa: keepItem.pessoa,
