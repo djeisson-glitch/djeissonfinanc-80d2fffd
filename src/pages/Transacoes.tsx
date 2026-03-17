@@ -330,7 +330,7 @@ export default function TransacoesPage() {
                 >
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    {CATEGORIAS.map(c => (
+                    {(editingTx.tipo === 'receita' ? CATEGORIAS_RECEITA : CATEGORIAS_DESPESA).map(c => (
                       <SelectItem key={c} value={c}>
                         <div className="flex items-center gap-2">
                           <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: getCategoriaColor(c) }} />
