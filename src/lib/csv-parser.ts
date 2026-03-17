@@ -74,7 +74,7 @@ export function parseSicrediCSV(csvText: string): ParseResult {
       if (!data || !descricao || !valorStr) return null;
       
       // Parse value
-      const cleanVal = valorStr.replace('R$', '').replace(/\./g, '').replace(',', '.').trim();
+      const cleanVal = valorStr.replace('R$', '').replace(/\s/g, '').replace(/\./g, '').replace(',', '.').trim();
       const valor = parseFloat(cleanVal);
       if (isNaN(valor)) return null;
       
