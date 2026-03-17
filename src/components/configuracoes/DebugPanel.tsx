@@ -490,12 +490,17 @@ export function DebugPanel() {
         </CardHeader>
         <CardContent className="space-y-3">
           <p className="text-xs text-muted-foreground">
-            Busca transações com descrição similar, valor ±R$ 0,50, mesma pessoa, mesmo mês e mesma parcela. Mostra prévia antes de remover.
+            Busca transações com descrição similar (&gt;80%), valor ±R$ 0,50, mesma pessoa, mesmo mês e mesma parcela. Mostra prévia antes de remover.
           </p>
           <Button onClick={analyzeDuplicates} disabled={dedupLoading} size="sm" variant="destructive">
             {dedupLoading ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Trash2 className="h-4 w-4 mr-1" />}
             Analisar Duplicatas
           </Button>
+          {dedupSummary && (
+            <div className="p-3 rounded-md bg-muted border text-xs">
+              <p className="font-medium text-foreground">{dedupSummary}</p>
+            </div>
+          )}
         </CardContent>
       </Card>
 
