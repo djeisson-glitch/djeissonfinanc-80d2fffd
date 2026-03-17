@@ -47,6 +47,7 @@ export type ImportLogEntryInfo = {
 export type ImportResult = {
   imported: number;
   duplicates: number;
+  deletedAutoProjected?: number;
   contaNome: string;
   duplicateItems: DuplicateInfo[];
   originalItems: ImportedItem[];
@@ -105,6 +106,13 @@ export function ImportReport({ result, onClose, onForceImport, forceImporting }:
           <div className="flex items-center gap-2 p-3 rounded-lg bg-muted border">
             <ArrowRight className="h-4 w-4 text-primary shrink-0" />
             <span className="text-sm font-medium">🔄 {result.futureItems.length} parcelas futuras criadas automaticamente</span>
+          </div>
+        )}
+
+        {(result.deletedAutoProjected ?? 0) > 0 && (
+          <div className="flex items-center gap-2 p-3 rounded-lg bg-muted border">
+            <Check className="h-4 w-4 text-primary shrink-0" />
+            <span className="text-sm font-medium">🔁 {result.deletedAutoProjected} auto-projetadas substituídas por reais</span>
           </div>
         )}
 
