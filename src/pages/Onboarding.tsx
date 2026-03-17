@@ -36,14 +36,25 @@ export default function OnboardingPage() {
         reserva_minima: reservaMinima,
       });
 
-      // Create accounts
-      const contasToInsert = contas.map(c => ({
-        user_id: user.id,
-        nome: c.nome,
-        tipo: c.tipo,
-        saldo_inicial: c.saldo_inicial,
-      }));
-      await supabase.from('contas').insert(contasToInsert);
+      // Check if accounts already exist (prevent duplicates from re-running onboarding)
+      const { data: existingContas } = await supabase
+        .from('contas')
+        .select('nome')
+        .eq('user_id', user.id);
+
+      const existingNames = new Set(existingContas?.map(c => c.nome) || []);
+      const contasToInsert = contas
+        .filter(c => !existingNames.has(c.nome))
+        .map(c => ({
+          user_id: user.id,
+          nome: c.nome,
+          tipo: c.tipo,
+          saldo_inicial: c.saldo_inicial,
+        }));
+
+      if (contasToInsert.length > 0) {
+        await supabase.from('contas').insert(contasToInsert);
+      }
 
       toast({ title: 'Configuração concluída!' });
       navigate('/');
