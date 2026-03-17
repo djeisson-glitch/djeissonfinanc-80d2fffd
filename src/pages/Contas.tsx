@@ -11,7 +11,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import { useState } from 'react';
-import { Plus, CreditCard, Banknote } from 'lucide-react';
+import { Plus, CreditCard, Banknote, DollarSign } from 'lucide-react';
+import { PaymentModal } from '@/components/contas/PaymentModal';
 import { MonthSelector } from '@/components/MonthSelector';
 
 function getInvoiceStatus(fatura: number, pagamento: number): { label: string; color: string; variant: 'default' | 'destructive' | 'outline' | 'secondary' } {
