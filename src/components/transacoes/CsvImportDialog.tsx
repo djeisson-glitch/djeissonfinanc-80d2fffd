@@ -289,15 +289,30 @@ export function CsvImportDialog({ open, onOpenChange }: Props) {
         existing_data: existingHashes.get(t.hash_transacao) || t.data,
       }));
 
+      const contaNome = contas.find(c => c.id === contaId)?.nome || '';
+
       setResult({
         imported,
         duplicates: duplicateTransactions.length,
-        contaNome: contas.find(c => c.id === contaId)?.nome || '',
+        contaNome,
         duplicateItems,
+      });
+
+      // Save import log
+      await supabase.from('historico_importacoes').insert({
+        user_id: user.id,
+        nome_arquivo: file.name,
+        tipo_arquivo: fileType || 'csv',
+        conta_nome: contaNome,
+        conta_id: contaId,
+        qtd_importada: imported,
+        qtd_duplicadas: duplicateTransactions.length,
+        qtd_total: allTransactions.length,
       });
 
       queryClient.invalidateQueries({ queryKey: ['transacoes'] });
       queryClient.invalidateQueries({ queryKey: ['dashboard'] });
+      queryClient.invalidateQueries({ queryKey: ['historico_importacoes'] });
     } catch (err) {
       console.error(err);
       toast({ title: 'Erro ao importar', variant: 'destructive' });
