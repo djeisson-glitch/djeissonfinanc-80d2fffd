@@ -280,24 +280,28 @@ export function DebugPanel() {
     }
   };
 
+  const handleChangeKeep = (groupIdx: number, newKeepId: string) => {
+    if (!dedupGroups) return;
+    const updated = [...dedupGroups];
+    const group = { ...updated[groupIdx] };
+    group.keepId = newKeepId;
+    group.removeIds = group.items.filter((t: any) => t.id !== newKeepId).map((t: any) => t.id);
+    updated[groupIdx] = group;
+    setDedupGroups(updated);
+  };
+
   const confirmDeleteDuplicates = async () => {
     if (!dedupGroups) return;
     setDedupDeleting(true);
     try {
-      // Capture before-totals per conta+month for summary
-      const affectedKeys = new Set<string>();
-      dedupGroups.forEach(g => {
-        g.items.forEach((item: any) => {
-          affectedKeys.add(`${item.conta_id}|${item.data.substring(0, 7)}`);
-        });
-      });
-
-      // Sum values being removed per conta+month
       const removedByKey: Record<string, number> = {};
       dedupGroups.forEach(g => {
-        g.items.slice(1).forEach((item: any) => {
-          const k = `${item.conta_id}|${item.data.substring(0, 7)}`;
-          removedByKey[k] = (removedByKey[k] || 0) + Number(item.valor);
+        g.removeIds.forEach(rid => {
+          const item = g.items.find((t: any) => t.id === rid);
+          if (item) {
+            const k = `${item.conta_id}|${item.data.substring(0, 7)}`;
+            removedByKey[k] = (removedByKey[k] || 0) + Number(item.valor);
+          }
         });
       });
 
@@ -307,7 +311,6 @@ export function DebugPanel() {
         await supabase.from('transacoes').delete().in('id', batch);
       }
 
-      // Build summary
       const summaryParts: string[] = [`Removidas ${allIds.length} duplicatas.`];
       Object.entries(removedByKey).forEach(([key, removedVal]) => {
         const [contaId, month] = key.split('|');
