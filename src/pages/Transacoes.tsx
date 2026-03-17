@@ -15,7 +15,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { useToast } from '@/hooks/use-toast';
-import { Pencil, Trash2, Search } from 'lucide-react';
+import { Pencil, Trash2, Search, Download, Copy } from 'lucide-react';
+import { exportCSV, copyToClipboard } from '@/lib/export';
 import { MonthSelector } from '@/components/MonthSelector';
 
 export default function TransacoesPage() {
@@ -133,9 +134,17 @@ export default function TransacoesPage() {
 
   return (
     <div className="space-y-4 animate-fade-in">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-2">
         <h1 className="text-2xl font-bold">Transações</h1>
-        <MonthSelector month={month} year={year} onChange={(m, y) => { setMonth(m); setYear(y); }} />
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="sm" onClick={() => { copyToClipboard({ transactions: filtered, contas: contas || [], month, year }).then(() => toast({ title: 'Copiado para área de transferência' })); }}>
+            <Copy className="h-4 w-4 mr-1" />Copiar
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => exportCSV({ transactions: filtered, contas: contas || [], month, year })}>
+            <Download className="h-4 w-4 mr-1" />Exportar CSV
+          </Button>
+          <MonthSelector month={month} year={year} onChange={(m, y) => { setMonth(m); setYear(y); }} />
+        </div>
       </div>
       <Card>
         <CardContent className="p-4">
