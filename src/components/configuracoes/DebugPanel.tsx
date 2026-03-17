@@ -506,7 +506,6 @@ export function DebugPanel() {
           <p className="text-xs text-muted-foreground">
             Busca transações com descrição similar (15 chars), valor ±R$ 0,10, mesma pessoa, data_competencia exata e mesma parcela. Mostra prévia antes de remover.
           </p>
-          </p>
           <Button onClick={analyzeDuplicates} disabled={dedupLoading} size="sm" variant="destructive">
             {dedupLoading ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Trash2 className="h-4 w-4 mr-1" />}
             Analisar Duplicatas
