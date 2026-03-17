@@ -6,29 +6,17 @@ import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
-import { parseSicrediCSV, generateFutureInstallments } from '@/lib/csv-parser';
+import { parseSicrediCSV, generateFutureInstallments, type SkippedLine, type ParsedTransaction, type CsvLineLogEntry } from '@/lib/csv-parser';
 import { parseOFX } from '@/lib/ofx-parser';
 import { Progress } from '@/components/ui/progress';
 import { Upload, FileText, Check, AlertCircle, CreditCard, CalendarDays } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
-import { ImportReport, ImportResult, DuplicateInfo, ImportedItem, SkippedLineInfo } from './ImportReport';
-import { SkippedLine } from '@/lib/csv-parser';
+import { ImportReport, ImportResult, DuplicateInfo, ImportedItem } from './ImportReport';
 
 interface Props {
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }
-
-type ParsedTransaction = {
-  data: string;
-  descricao: string;
-  valor: number;
-  tipo: 'receita' | 'despesa';
-  parcela_atual: number | null;
-  parcela_total: number | null;
-  pessoa: string;
-  hash_transacao: string;
-};
 
 const MONTH_NAMES = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
 
@@ -37,12 +25,13 @@ function getDefaultDueDate(transactions: ParsedTransaction[]): { month: number; 
     const now = new Date();
     return { month: now.getMonth(), year: now.getFullYear() };
   }
-  // Find latest transaction date, default due = next month
+
   let latest = new Date(transactions[0].data + 'T00:00:00');
   for (const t of transactions) {
     const d = new Date(t.data + 'T00:00:00');
     if (d > latest) latest = d;
   }
+
   const nextMonth = new Date(latest);
   nextMonth.setMonth(nextMonth.getMonth() + 1);
   return { month: nextMonth.getMonth(), year: nextMonth.getFullYear() };
@@ -64,6 +53,8 @@ export function CsvImportDialog({ open, onOpenChange }: Props) {
   const [result, setResult] = useState<ImportResult | null>(null);
   const [parsedTransactions, setParsedTransactions] = useState<ParsedTransaction[]>([]);
   const [parsedSkippedLines, setParsedSkippedLines] = useState<SkippedLine[]>([]);
+  const [parsedTotalLines, setParsedTotalLines] = useState(0);
+  const [parsedLineLogs, setParsedLineLogs] = useState<CsvLineLogEntry[]>([]);
   const [forceImporting, setForceImporting] = useState(false);
 
   // Credit card due date
@@ -123,6 +114,8 @@ export function CsvImportDialog({ open, onOpenChange }: Props) {
     let transactions: ParsedTransaction[] = [];
     let accountType: 'corrente' | 'credito' | null = null;
     let skippedLines: SkippedLine[] = [];
+    let totalLines = 0;
+    let lineLogs: CsvLineLogEntry[] = [];
 
     if (ext === 'ofx') {
       const parsed = parseOFX(text);
@@ -134,6 +127,8 @@ export function CsvImportDialog({ open, onOpenChange }: Props) {
       contaDetectada = parsed.contaDetectada;
       transactions = parsed.transactions;
       skippedLines = parsed.skippedLines;
+      totalLines = parsed.totalLines;
+      lineLogs = parsed.lineLogs;
       if (contaDetectada && ['black', 'mercado pago'].some(n => contaDetectada!.toLowerCase().includes(n))) {
         accountType = 'credito';
       }
@@ -143,6 +138,8 @@ export function CsvImportDialog({ open, onOpenChange }: Props) {
     setDetectedAccountType(accountType);
     setParsedTransactions(transactions);
     setParsedSkippedLines(skippedLines);
+    setParsedTotalLines(totalLines);
+    setParsedLineLogs(lineLogs);
 
     // Set default due date
     const defaultDue = getDefaultDueDate(transactions);
@@ -309,6 +306,27 @@ export function CsvImportDialog({ open, onOpenChange }: Props) {
       const totalDespesas = newTransactions.filter((t: any) => t.tipo === 'despesa').reduce((s: number, t: any) => s + Number(t.valor), 0);
       const totalReceitas = newTransactions.filter((t: any) => t.tipo === 'receita').reduce((s: number, t: any) => s + Number(t.valor), 0);
 
+      const duplicateHashes = new Set(duplicateTransactions.map((t: any) => t.hash_transacao));
+      const logEntries = parsedLineLogs.map((entry) => {
+        if (entry.hash_transacao && duplicateHashes.has(entry.hash_transacao)) {
+          return {
+            ...entry,
+            status: 'duplicata' as const,
+            reason: 'Transação idêntica já existe',
+          };
+        }
+
+        if (entry.status === 'importada') {
+          return {
+            ...entry,
+            status: 'importada' as const,
+            reason: 'Importada com sucesso',
+          };
+        }
+
+        return entry;
+      });
+
       const contaNome = contas.find(c => c.id === contaId)?.nome || '';
 
       setResult({
@@ -321,9 +339,10 @@ export function CsvImportDialog({ open, onOpenChange }: Props) {
         totalDespesas,
         totalReceitas,
         skippedLines: parsedSkippedLines,
+        totalCsvLines: parsedTotalLines,
+        logEntries,
       });
 
-      // Save import log
       await supabase.from('historico_importacoes').insert({
         user_id: user.id,
         nome_arquivo: file.name,
@@ -334,6 +353,15 @@ export function CsvImportDialog({ open, onOpenChange }: Props) {
         qtd_duplicadas: duplicateTransactions.length,
         qtd_total: allTransactions.length,
       });
+
+      await supabase.from('import_logs').insert([{
+        user_id: user.id,
+        arquivo: file.name,
+        total_linhas_csv: parsedTotalLines,
+        linhas_importadas: importedOriginals.length,
+        linhas_rejeitadas: parsedSkippedLines.length,
+        detalhes_json: logEntries as any,
+      }]);
 
       queryClient.invalidateQueries({ queryKey: ['transacoes'] });
       queryClient.invalidateQueries({ queryKey: ['dashboard'] });
@@ -421,6 +449,8 @@ export function CsvImportDialog({ open, onOpenChange }: Props) {
     setDetectedAccountType(null);
     setParsedTransactions([]);
     setParsedSkippedLines([]);
+    setParsedTotalLines(0);
+    setParsedLineLogs([]);
     setForceImporting(false);
     setDueConfirmed(false);
     onOpenChange(false);

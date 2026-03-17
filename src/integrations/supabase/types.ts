@@ -107,6 +107,42 @@ export type Database = {
         }
         Relationships: []
       }
+      import_logs: {
+        Row: {
+          arquivo: string
+          created_at: string
+          data_importacao: string
+          detalhes_json: Json
+          id: string
+          linhas_importadas: number
+          linhas_rejeitadas: number
+          total_linhas_csv: number
+          user_id: string
+        }
+        Insert: {
+          arquivo: string
+          created_at?: string
+          data_importacao?: string
+          detalhes_json?: Json
+          id?: string
+          linhas_importadas?: number
+          linhas_rejeitadas?: number
+          total_linhas_csv?: number
+          user_id: string
+        }
+        Update: {
+          arquivo?: string
+          created_at?: string
+          data_importacao?: string
+          detalhes_json?: Json
+          id?: string
+          linhas_importadas?: number
+          linhas_rejeitadas?: number
+          total_linhas_csv?: number
+          user_id?: string
+        }
+        Relationships: []
+      }
       regras_categorizacao: {
         Row: {
           aprendido_auto: boolean
