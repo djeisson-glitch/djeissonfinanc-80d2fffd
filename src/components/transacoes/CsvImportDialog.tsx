@@ -193,6 +193,8 @@ export function CsvImportDialog({ open, onOpenChange }: Props) {
 
       const finalTransactions = applyDueDate(parsedTransactions);
       const allTransactions: any[] = [];
+      const originalItems: ImportedItem[] = [];
+      const futureItems: ImportedItem[] = [];
 
       for (const t of finalTransactions) {
         let categoria = 'Outros';
@@ -221,6 +223,7 @@ export function CsvImportDialog({ open, onOpenChange }: Props) {
           grupo_parcela,
           hash_transacao: t.hash_transacao,
           pessoa: t.pessoa,
+          _isOriginal: true,
         });
 
         if (t.parcela_atual && t.parcela_total && grupo_parcela) {
@@ -240,6 +243,7 @@ export function CsvImportDialog({ open, onOpenChange }: Props) {
               grupo_parcela,
               hash_transacao: ft.hash_transacao,
               pessoa: ft.pessoa,
+              _isOriginal: false,
             });
           }
         }
