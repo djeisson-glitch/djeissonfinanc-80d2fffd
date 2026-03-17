@@ -157,9 +157,31 @@ export function DebugPanel() {
     setSearchLoading(false);
   };
 
+  // Simple string similarity (Dice coefficient on bigrams)
+  const similarity = (a: string, b: string): number => {
+    if (a === b) return 1;
+    if (a.length < 2 || b.length < 2) return 0;
+    const bigrams = (s: string) => {
+      const set = new Map<string, number>();
+      for (let i = 0; i < s.length - 1; i++) {
+        const bi = s.substring(i, i + 2);
+        set.set(bi, (set.get(bi) || 0) + 1);
+      }
+      return set;
+    };
+    const aBi = bigrams(a);
+    const bBi = bigrams(b);
+    let intersection = 0;
+    aBi.forEach((count, bi) => {
+      intersection += Math.min(count, bBi.get(bi) || 0);
+    });
+    return (2 * intersection) / (a.length - 1 + b.length - 1);
+  };
+
   const analyzeDuplicates = async () => {
     if (!user) return;
     setDedupLoading(true);
+    setDedupSummary(null);
     try {
       let allTxs: any[] = [];
       let from = 0;
@@ -167,7 +189,7 @@ export function DebugPanel() {
       while (true) {
         const { data } = await supabase
           .from('transacoes')
-          .select('id, descricao, valor, pessoa, data, parcela_atual, parcela_total, created_at')
+          .select('id, descricao, valor, pessoa, data, conta_id, parcela_atual, parcela_total, created_at, tipo')
           .eq('user_id', user.id)
           .order('created_at', { ascending: true })
           .range(from, from + batchSize - 1);
@@ -178,38 +200,64 @@ export function DebugPanel() {
       }
 
       const normalize = (s: string) => s.toLowerCase().replace(/\s+/g, ' ').trim();
-      const groups: Record<string, any[]> = {};
 
+      // Group by coarse key first (value bucket + person + month + parcela)
+      const coarseGroups: Record<string, any[]> = {};
       allTxs.forEach(t => {
         const month = t.data.substring(0, 7);
         const parcela = t.parcela_atual != null ? `${t.parcela_atual}/${t.parcela_total}` : 'none';
         const valorBucket = Math.round(Number(t.valor));
-        const key = `${normalize(t.descricao)}|${valorBucket}|${normalize(t.pessoa)}|${month}|${parcela}`;
-        if (!groups[key]) groups[key] = [];
-        groups[key].push(t);
+        const key = `${valorBucket}|${normalize(t.pessoa)}|${month}|${parcela}`;
+        if (!coarseGroups[key]) coarseGroups[key] = [];
+        coarseGroups[key].push(t);
       });
 
+      // Within each coarse group, cluster by description similarity >80%
       const dupGroups: DupGroup[] = [];
-      Object.entries(groups).forEach(([key, items]) => {
-        if (items.length > 1) {
-          items.sort((a: any, b: any) => a.created_at.localeCompare(b.created_at));
-          dupGroups.push({
-            key,
-            descricao: items[0].descricao,
-            valor: Number(items[0].valor),
-            pessoa: items[0].pessoa,
-            month: items[0].data.substring(0, 7),
-            parcela: items[0].parcela_atual != null ? `${items[0].parcela_atual}/${items[0].parcela_total}` : '-',
-            items,
-            keepId: items[0].id,
-            removeIds: items.slice(1).map((i: any) => i.id),
-          });
+
+      Object.entries(coarseGroups).forEach(([, items]) => {
+        if (items.length < 2) return;
+        const clusters: any[][] = [];
+        const assigned = new Set<number>();
+
+        for (let i = 0; i < items.length; i++) {
+          if (assigned.has(i)) continue;
+          const cluster = [items[i]];
+          assigned.add(i);
+          const normI = normalize(items[i].descricao);
+          for (let j = i + 1; j < items.length; j++) {
+            if (assigned.has(j)) continue;
+            const normJ = normalize(items[j].descricao);
+            const valDiff = Math.abs(Number(items[i].valor) - Number(items[j].valor));
+            if (similarity(normI, normJ) >= 0.8 && valDiff <= 0.5) {
+              cluster.push(items[j]);
+              assigned.add(j);
+            }
+          }
+          if (cluster.length > 1) clusters.push(cluster);
         }
+
+        clusters.forEach(cluster => {
+          cluster.sort((a: any, b: any) => a.created_at.localeCompare(b.created_at));
+          const first = cluster[0];
+          dupGroups.push({
+            key: `${normalize(first.descricao)}|${Math.round(Number(first.valor))}`,
+            descricao: first.descricao,
+            valor: Number(first.valor),
+            pessoa: first.pessoa,
+            month: first.data.substring(0, 7),
+            parcela: first.parcela_atual != null ? `${first.parcela_atual}/${first.parcela_total}` : '-',
+            items: cluster,
+            keepId: first.id,
+            removeIds: cluster.slice(1).map((i: any) => i.id),
+          });
+        });
       });
 
       if (dupGroups.length === 0) {
         toast.info('Nenhuma duplicata encontrada');
       } else {
+        dupGroups.sort((a, b) => b.removeIds.length - a.removeIds.length);
         setDedupGroups(dupGroups);
         setDedupModalOpen(true);
       }
@@ -225,11 +273,38 @@ export function DebugPanel() {
     if (!dedupGroups) return;
     setDedupDeleting(true);
     try {
+      // Capture before-totals per conta+month for summary
+      const affectedKeys = new Set<string>();
+      dedupGroups.forEach(g => {
+        g.items.forEach((item: any) => {
+          affectedKeys.add(`${item.conta_id}|${item.data.substring(0, 7)}`);
+        });
+      });
+
+      // Sum values being removed per conta+month
+      const removedByKey: Record<string, number> = {};
+      dedupGroups.forEach(g => {
+        g.items.slice(1).forEach((item: any) => {
+          const k = `${item.conta_id}|${item.data.substring(0, 7)}`;
+          removedByKey[k] = (removedByKey[k] || 0) + Number(item.valor);
+        });
+      });
+
       const allIds = dedupGroups.flatMap(g => g.removeIds);
       for (let i = 0; i < allIds.length; i += 100) {
         const batch = allIds.slice(i, i + 100);
         await supabase.from('transacoes').delete().in('id', batch);
       }
+
+      // Build summary
+      const summaryParts: string[] = [`Removidas ${allIds.length} duplicatas.`];
+      Object.entries(removedByKey).forEach(([key, removedVal]) => {
+        const [contaId, month] = key.split('|');
+        const contaNome = getContaNome(contaId);
+        summaryParts.push(`${contaNome} ${formatMonthLabel(month)}: -${formatCurrency(removedVal)}`);
+      });
+
+      setDedupSummary(summaryParts.join(' '));
       toast.success(`${allIds.length} duplicata(s) removida(s)`);
       queryClient.invalidateQueries();
       setDedupModalOpen(false);
