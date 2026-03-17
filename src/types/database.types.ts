@@ -55,6 +55,7 @@ export interface CategoriaConfig {
 }
 
 export const CATEGORIAS_CONFIG: Record<string, CategoriaConfig> = {
+  // === DESPESAS ===
   "Alimentação": {
     cor: "#ef4444",
     essencial: true,
@@ -144,7 +145,53 @@ export const CATEGORIAS_CONFIG: Record<string, CategoriaConfig> = {
     cor: "#0ea5e9",
     essencial: false,
     subcategorias: []
-  }
+  },
+  // === RECEITAS ===
+  "Salário/Pró-labore": {
+    cor: "#10b981",
+    essencial: true,
+    subcategorias: []
+  },
+  "Freelance/PJ": {
+    cor: "#10b981",
+    essencial: false,
+    subcategorias: []
+  },
+  "Receita Produtora": {
+    cor: "#059669",
+    essencial: false,
+    subcategorias: []
+  },
+  "Investimentos": {
+    cor: "#3b82f6",
+    essencial: false,
+    subcategorias: ["Dividendos", "Juros", "Rendimentos"]
+  },
+  "Vendas": {
+    cor: "#f97316",
+    essencial: false,
+    subcategorias: ["Produtos", "Usados"]
+  },
+  "Reembolsos": {
+    cor: "#6b7280",
+    essencial: false,
+    subcategorias: []
+  },
+  "Devoluções": {
+    cor: "#6b7280",
+    essencial: false,
+    subcategorias: []
+  },
+  "Transferência entre contas": {
+    cor: "#a855f7",
+    essencial: false,
+    subcategorias: []
+  },
+  "Outras receitas": {
+    cor: "#9ca3af",
+    essencial: false,
+    subcategorias: []
+  },
 };
 
 export const CATEGORIAS = Object.keys(CATEGORIAS_CONFIG);
