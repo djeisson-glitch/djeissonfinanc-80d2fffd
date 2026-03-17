@@ -50,6 +50,8 @@ interface PreparedImportPlan {
   totalReceitas: number;
   logEntries: ImportResult['logEntries'];
   previewEntries: CsvPreviewEntry[];
+  autoProjectedIdsToDelete: string[];
+  replacedTransactions: PlannedTransaction[];
 }
 
 const MONTH_NAMES = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
