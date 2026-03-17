@@ -249,6 +249,18 @@ export default function ContasPage() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {paymentConta && (
+        <PaymentModal
+          open={!!paymentConta}
+          onOpenChange={(open) => { if (!open) setPaymentConta(null); }}
+          contaId={paymentConta.id}
+          contaNome={paymentConta.nome}
+          faturaTotal={paymentConta.fatura}
+          month={month}
+          year={year}
+        />
+      )}
     </div>
   );
 }
