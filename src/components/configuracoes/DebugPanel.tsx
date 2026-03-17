@@ -520,55 +520,67 @@ export function DebugPanel() {
 
       {/* Dedup Preview Modal */}
       <Dialog open={dedupModalOpen} onOpenChange={setDedupModalOpen}>
-        <DialogContent className="max-w-2xl max-h-[80vh] flex flex-col">
-          <DialogHeader>
+        <DialogContent className="max-w-2xl max-h-[85vh] flex flex-col p-0">
+          <DialogHeader className="px-6 pt-6 pb-2">
             <DialogTitle>Duplicatas Encontradas</DialogTitle>
           </DialogHeader>
-          <p className="text-sm text-muted-foreground">
-            {totalToRemove} transações serão removidas, {totalToKeep} serão mantidas.
+          <p className="text-sm text-muted-foreground px-6">
+            {totalToRemove} transações serão removidas, {totalToKeep} grupo(s). Clique no rádio para escolher qual manter.
           </p>
-          <ScrollArea className="flex-1 max-h-[50vh]">
-            <div className="space-y-4 pr-4">
+          <div className="flex-1 overflow-y-auto px-6 py-2" style={{ maxHeight: '70vh' }}>
+            <div className="space-y-4">
               {dedupGroups?.map((group, idx) => (
                 <div key={group.key} className="border rounded-lg p-3 space-y-2">
-                  <div className="flex items-center justify-between">
+                  <div className="flex items-center justify-between flex-wrap gap-1">
                     <p className="text-sm font-medium">
-                      Grupo {idx + 1}: {group.descricao}
+                      Grupo {idx + 1}: {group.descricao.substring(0, 40)}
                     </p>
-                    <Badge variant="outline" className="text-xs">
-                      {formatCurrency(group.valor)} · {group.items.length} transações
-                    </Badge>
+                    <div className="flex gap-1 flex-wrap">
+                      {group.parcela !== '-' && (
+                        <Badge variant="secondary" className="text-[10px]">{group.parcela}</Badge>
+                      )}
+                      <Badge variant="outline" className="text-[10px]">
+                        {formatCurrency(group.valor)} · {group.pessoa}
+                      </Badge>
+                    </div>
                   </div>
                   <div className="space-y-1">
                     {group.items.map((item: any) => {
                       const isKeep = item.id === group.keepId;
+                      const isAuto = item.descricao?.includes('(auto-projetada)');
                       return (
-                        <div
+                        <button
                           key={item.id}
-                          className={`flex items-center gap-2 text-xs p-1.5 rounded ${
-                            isKeep ? 'bg-emerald-500/10' : 'bg-destructive/10'
+                          type="button"
+                          onClick={() => handleChangeKeep(idx, item.id)}
+                          className={`flex items-center gap-2 text-xs p-2 rounded w-full text-left transition-colors ${
+                            isKeep ? 'bg-primary/10 ring-1 ring-primary/30' : 'bg-destructive/10 hover:bg-destructive/15'
                           }`}
                         >
-                          {isKeep ? (
-                            <Check className="h-3 w-3 text-emerald-500 shrink-0" />
-                          ) : (
-                            <X className="h-3 w-3 text-destructive shrink-0" />
-                          )}
+                          <span className={`h-3.5 w-3.5 rounded-full border-2 shrink-0 flex items-center justify-center ${
+                            isKeep ? 'border-primary' : 'border-muted-foreground'
+                          }`}>
+                            {isKeep && <span className="h-1.5 w-1.5 rounded-full bg-primary" />}
+                          </span>
                           <span className="font-mono text-muted-foreground">{item.id.slice(0, 8)}</span>
                           <span>{item.data}</span>
+                          {item.data_original && (
+                            <span className="text-muted-foreground">(comp: {item.data_original})</span>
+                          )}
                           <span className="text-muted-foreground">{formatCurrency(Number(item.valor))}</span>
-                          <span className="ml-auto text-muted-foreground">
+                          {isAuto && <Badge variant="secondary" className="text-[9px]">auto</Badge>}
+                          <span className={`ml-auto font-medium ${isKeep ? 'text-primary' : 'text-destructive'}`}>
                             {isKeep ? 'mantém' : 'remove'}
                           </span>
-                        </div>
+                        </button>
                       );
                     })}
                   </div>
                 </div>
               ))}
             </div>
-          </ScrollArea>
-          <DialogFooter>
+          </div>
+          <DialogFooter className="px-6 pb-6 pt-2 border-t">
             <Button variant="outline" onClick={() => setDedupModalOpen(false)}>Cancelar</Button>
             <Button variant="destructive" onClick={confirmDeleteDuplicates} disabled={dedupDeleting}>
               {dedupDeleting ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Trash2 className="h-4 w-4 mr-1" />}
