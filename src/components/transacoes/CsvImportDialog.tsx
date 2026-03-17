@@ -19,16 +19,19 @@ interface Props {
 }
 
 const MONTH_NAMES = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
+
+function getDefaultDueDate(transactions: ParsedTransaction[]): { month: number; year: number } {
   if (transactions.length === 0) {
     const now = new Date();
     return { month: now.getMonth(), year: now.getFullYear() };
   }
-  // Find latest transaction date, default due = next month
+
   let latest = new Date(transactions[0].data + 'T00:00:00');
   for (const t of transactions) {
     const d = new Date(t.data + 'T00:00:00');
     if (d > latest) latest = d;
   }
+
   const nextMonth = new Date(latest);
   nextMonth.setMonth(nextMonth.getMonth() + 1);
   return { month: nextMonth.getMonth(), year: nextMonth.getFullYear() };
