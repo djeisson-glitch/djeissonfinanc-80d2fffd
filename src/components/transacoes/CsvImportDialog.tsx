@@ -320,6 +320,7 @@ export function CsvImportDialog({ open, onOpenChange }: Props) {
         futureItems: importedFutures,
         totalDespesas,
         totalReceitas,
+        skippedLines: parsedSkippedLines,
       });
 
       // Save import log
