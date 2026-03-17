@@ -209,8 +209,8 @@ export function DebugPanel() {
       });
 
       // Within each group, cluster by value tolerance ≤ R$ 0.10
+      let idx_counter = 0;
       const dupGroups: DupGroup[] = [];
-
       Object.entries(coarseGroups).forEach(([, items]) => {
         if (items.length < 2) return;
         const clusters: any[][] = [];
