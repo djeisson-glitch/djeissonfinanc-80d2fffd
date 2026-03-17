@@ -24,6 +24,7 @@ export interface Transacao {
   descricao: string;
   valor: number;
   categoria: string;
+  subcategoria?: string | null;
   tipo: 'receita' | 'despesa';
   essencial: boolean;
   parcela_atual: number | null;
@@ -47,11 +48,114 @@ export interface RegraCategorizada {
 
 export type TransacaoComConta = Transacao & { conta: Pick<Conta, 'nome' | 'tipo'> };
 
-export const CATEGORIAS = [
-  'Alimentação', 'Moradia', 'Transporte', 'Saúde', 'Educação',
-  'Entretenimento', 'Vestuário', 'Beleza', 'Assinaturas',
-  'Serviços', 'Investimentos', 'Outros'
-] as const;
+export interface CategoriaConfig {
+  cor: string;
+  essencial: boolean;
+  subcategorias: string[];
+}
+
+export const CATEGORIAS_CONFIG: Record<string, CategoriaConfig> = {
+  "Alimentação": {
+    cor: "#ef4444",
+    essencial: true,
+    subcategorias: ["Fruteira", "Lanches/Delivery", "Restaurante", "Supermercado"]
+  },
+  "Assinatura": {
+    cor: "#a855f7",
+    essencial: false,
+    subcategorias: []
+  },
+  "Beleza": {
+    cor: "#f97316",
+    essencial: false,
+    subcategorias: ["Barbearia", "Salão/Beauty"]
+  },
+  "Casa": {
+    cor: "#0ea5e9",
+    essencial: true,
+    subcategorias: ["Aluguel", "Condomínio", "Gás", "Internet", "Luz", "Móveis", "Reformas/melhorias", "Utensílios"]
+  },
+  "Compras": {
+    cor: "#a855f7",
+    essencial: false,
+    subcategorias: []
+  },
+  "Educação": {
+    cor: "#a855f7",
+    essencial: true,
+    subcategorias: []
+  },
+  "Empréstimos": {
+    cor: "#ef4444",
+    essencial: false,
+    subcategorias: []
+  },
+  "Lazer": {
+    cor: "#f97316",
+    essencial: false,
+    subcategorias: ["Hobbys"]
+  },
+  "Operação bancária": {
+    cor: "#a855f7",
+    essencial: false,
+    subcategorias: []
+  },
+  "Outros": {
+    cor: "#9ca3af",
+    essencial: false,
+    subcategorias: []
+  },
+  "Pais Maiara": {
+    cor: "#9ca3af",
+    essencial: false,
+    subcategorias: []
+  },
+  "Presente": {
+    cor: "#84cc16",
+    essencial: false,
+    subcategorias: []
+  },
+  "Produtora": {
+    cor: "#ef4444",
+    essencial: false,
+    subcategorias: []
+  },
+  "Saúde": {
+    cor: "#22c55e",
+    essencial: true,
+    subcategorias: ["Consultas", "Farmácia", "Seguro de vida"]
+  },
+  "Serviços": {
+    cor: "#16a34a",
+    essencial: true,
+    subcategorias: ["Celular"]
+  },
+  "Transporte": {
+    cor: "#3b82f6",
+    essencial: true,
+    subcategorias: ["Combustível", "Financiamento", "Imposto", "Manutenção", "Seguro carro"]
+  },
+  "Vestuário": {
+    cor: "#0ea5e9",
+    essencial: false,
+    subcategorias: []
+  },
+  "Viagem": {
+    cor: "#0ea5e9",
+    essencial: false,
+    subcategorias: []
+  }
+};
+
+export const CATEGORIAS = Object.keys(CATEGORIAS_CONFIG);
+
+export const getCategoriaColor = (categoria: string): string => {
+  return CATEGORIAS_CONFIG[categoria]?.cor || '#9ca3af';
+};
+
+export const getSubcategorias = (categoria: string): string[] => {
+  return CATEGORIAS_CONFIG[categoria]?.subcategorias || [];
+};
 
 export const CONTAS_PADRAO: Omit<Conta, 'id' | 'user_id' | 'created_at'>[] = [
   { nome: 'Sicredi Secundário', tipo: 'debito', saldo_inicial: 0 },

@@ -5,6 +5,12 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
+const CATEGORIAS = [
+  "Alimentação", "Assinatura", "Beleza", "Casa", "Compras", "Educação",
+  "Empréstimos", "Lazer", "Operação bancária", "Outros", "Pais Maiara",
+  "Presente", "Produtora", "Saúde", "Serviços", "Transporte", "Vestuário", "Viagem"
+];
+
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
@@ -23,18 +29,26 @@ Valor: R$ ${tx.valor}
 
 Retorne:
 {
-  "categoria": "uma das: Alimentação, Moradia, Transporte, Saúde, Educação, Entretenimento, Vestuário, Beleza, Assinaturas, Serviços, Investimentos, Outros",
+  "categoria": "uma das categorias listadas abaixo",
   "essencial": true ou false,
   "confianca": 0-100
 }
 
+Categorias disponíveis: ${CATEGORIAS.join(", ")}
+
 Critérios:
-- Alimentação: supermercados, restaurantes, delivery
-- Moradia: aluguel, condomínio, água, luz, internet
-- Saúde: farmácia, consultas, plano de saúde, academia
-- Entretenimento: streaming, cinema, viagens, hobbies
-- Assinaturas: serviços recorrentes (Netflix, Spotify, etc)
-- Essencial: necessário para sobrevivência/trabalho`;
+- Alimentação: supermercados, restaurantes, delivery, fruteira
+- Casa: aluguel, condomínio, água, luz, internet, gás, móveis
+- Saúde: farmácia, consultas, plano de saúde, seguro de vida
+- Transporte: combustível, financiamento carro, seguro carro, manutenção, imposto veicular
+- Serviços: celular, serviços gerais
+- Assinatura: serviços recorrentes (Netflix, Spotify, etc)
+- Lazer: hobbys, entretenimento
+- Beleza: barbearia, salão
+- Operação bancária: taxas, transferências bancárias
+- Empréstimos: parcelas de empréstimo
+- Produtora: gastos relacionados a produtora
+- Essencial: necessário para sobrevivência/trabalho (Alimentação, Casa, Saúde, Transporte, Serviços, Educação)`;
 
       try {
         const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
@@ -54,7 +68,7 @@ Critérios:
                 parameters: {
                   type: "object",
                   properties: {
-                    categoria: { type: "string", enum: ["Alimentação", "Moradia", "Transporte", "Saúde", "Educação", "Entretenimento", "Vestuário", "Beleza", "Assinaturas", "Serviços", "Investimentos", "Outros"] },
+                    categoria: { type: "string", enum: CATEGORIAS },
                     essencial: { type: "boolean" },
                     confianca: { type: "number" }
                   },
