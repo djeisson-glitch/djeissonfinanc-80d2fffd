@@ -265,32 +265,7 @@ export default function DashboardPage() {
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg flex items-center gap-2">
-              <TrendingDown className="h-5 w-5" />
-              Timeline de Parcelas
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            {parcelasChart.length === 0 ? (
-              <p className="text-sm text-muted-foreground">Nenhuma parcela futura</p>
-            ) : (
-              <ResponsiveContainer width="100%" height={200}>
-                <BarChart data={parcelasChart}>
-                  <XAxis dataKey="mes" tick={{ fontSize: 12 }} />
-                  <YAxis tick={{ fontSize: 12 }} tickFormatter={v => `${(v / 1000).toFixed(0)}k`} />
-                  <Tooltip formatter={(v: number) => formatCurrency(v)} />
-                  <Bar dataKey="valor" radius={[4, 4, 0, 0]}>
-                    {parcelasChart.map((_, i) => (
-                      <Cell key={i} fill="hsl(220, 13%, 22%)" />
-                    ))}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
-            )}
-          </CardContent>
-        </Card>
+        <ParcelasTimeline parcelas={parcelasFuturas || []} />
 
         <Card className="md:col-span-2">
           <CardHeader>
