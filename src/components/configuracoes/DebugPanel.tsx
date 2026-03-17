@@ -157,26 +157,11 @@ export function DebugPanel() {
     setSearchLoading(false);
   };
 
-  // Simple string similarity (Dice coefficient on bigrams)
-  const similarity = (a: string, b: string): number => {
-    if (a === b) return 1;
-    if (a.length < 2 || b.length < 2) return 0;
-    const bigrams = (s: string) => {
-      const set = new Map<string, number>();
-      for (let i = 0; i < s.length - 1; i++) {
-        const bi = s.substring(i, i + 2);
-        set.set(bi, (set.get(bi) || 0) + 1);
-      }
-      return set;
-    };
-    const aBi = bigrams(a);
-    const bBi = bigrams(b);
-    let intersection = 0;
-    aBi.forEach((count, bi) => {
-      intersection += Math.min(count, bBi.get(bi) || 0);
-    });
-    return (2 * intersection) / (a.length - 1 + b.length - 1);
-  };
+  // Normalize: lowercase, trim, collapse spaces
+  const normalize = (s: string) => s.toLowerCase().replace(/\s+/g, ' ').trim();
+
+  // First 15 chars prefix for matching
+  const prefix15 = (s: string) => normalize(s).substring(0, 15);
 
   const analyzeDuplicates = async () => {
     if (!user) return;
@@ -199,20 +184,18 @@ export function DebugPanel() {
         from += batchSize;
       }
 
-      const normalize = (s: string) => s.toLowerCase().replace(/\s+/g, ' ').trim();
-
-      // Group by coarse key first (value bucket + person + month + parcela)
+      // Group by: same account + same month + same person + same parcela + first 15 chars of description
       const coarseGroups: Record<string, any[]> = {};
       allTxs.forEach(t => {
         const month = t.data.substring(0, 7);
         const parcela = t.parcela_atual != null ? `${t.parcela_atual}/${t.parcela_total}` : 'none';
-        const valorBucket = Math.round(Number(t.valor));
-        const key = `${valorBucket}|${normalize(t.pessoa)}|${month}|${parcela}`;
+        const pref = prefix15(t.descricao);
+        const key = `${t.conta_id}|${month}|${normalize(t.pessoa)}|${parcela}|${pref}`;
         if (!coarseGroups[key]) coarseGroups[key] = [];
         coarseGroups[key].push(t);
       });
 
-      // Within each coarse group, cluster by description similarity >80%
+      // Within each group, cluster by value tolerance ≤ R$ 1.00
       const dupGroups: DupGroup[] = [];
 
       Object.entries(coarseGroups).forEach(([, items]) => {
@@ -224,12 +207,10 @@ export function DebugPanel() {
           if (assigned.has(i)) continue;
           const cluster = [items[i]];
           assigned.add(i);
-          const normI = normalize(items[i].descricao);
           for (let j = i + 1; j < items.length; j++) {
             if (assigned.has(j)) continue;
-            const normJ = normalize(items[j].descricao);
             const valDiff = Math.abs(Number(items[i].valor) - Number(items[j].valor));
-            if (similarity(normI, normJ) >= 0.8 && valDiff <= 0.5) {
+            if (valDiff <= 1.0) {
               cluster.push(items[j]);
               assigned.add(j);
             }
@@ -241,7 +222,7 @@ export function DebugPanel() {
           cluster.sort((a: any, b: any) => a.created_at.localeCompare(b.created_at));
           const first = cluster[0];
           dupGroups.push({
-            key: `${normalize(first.descricao)}|${Math.round(Number(first.valor))}`,
+            key: `${prefix15(first.descricao)}|${Math.round(Number(first.valor))}|${first.conta_id}`,
             descricao: first.descricao,
             valor: Number(first.valor),
             pessoa: first.pessoa,
