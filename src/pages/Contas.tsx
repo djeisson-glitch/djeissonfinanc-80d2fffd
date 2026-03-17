@@ -31,6 +31,7 @@ export default function ContasPage() {
   const [nome, setNome] = useState('');
   const [tipo, setTipo] = useState<'credito' | 'debito'>('debito');
   const [saldoInicial, setSaldoInicial] = useState(0);
+  const [paymentConta, setPaymentConta] = useState<{ id: string; nome: string; fatura: number } | null>(null);
 
   const now = new Date();
   const [month, setMonth] = useState(now.getMonth());
