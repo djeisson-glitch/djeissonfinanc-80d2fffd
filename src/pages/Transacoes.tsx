@@ -64,7 +64,7 @@ export default function TransacoesPage() {
         .from('transacoes')
         .select('*')
         .eq('user_id', user!.id)
-        .gte('data', start)
+        .gte('data', start < '2026-01-01' ? '2026-01-01' : start)
         .lte('data', end)
         .order('data', { ascending: false });
       return data || [];
