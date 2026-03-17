@@ -195,10 +195,20 @@ export function CsvImportDialog({ open, onOpenChange }: Props) {
     }
   };
 
-  const applyDueDate = (transactions: ParsedTransaction[]): ParsedTransaction[] => {
-    if (!isCredito || !dueConfirmed) return transactions;
+  const applyDueDate = (transactions: ParsedTransaction[]): (ParsedTransaction & { _data_original: string; _mes_competencia: string })[] => {
+    if (!isCredito || !dueConfirmed) {
+      return transactions.map(t => ({ ...t, _data_original: t.data, _mes_competencia: '' }));
+    }
     const dueDateStr = `${dueYear}-${String(dueMonth + 1).padStart(2, '0')}-01`;
-    return transactions.map(t => ({ ...t, data: dueDateStr }));
+    // mes_competencia = month before vencimento
+    const compDate = new Date(dueYear, dueMonth - 1, 1);
+    const mesCompetencia = `${compDate.getFullYear()}-${String(compDate.getMonth() + 1).padStart(2, '0')}`;
+    return transactions.map(t => ({
+      ...t,
+      _data_original: t.data,
+      _mes_competencia: mesCompetencia,
+      data: dueDateStr,
+    }));
   };
 
   const validateBeforeImport = () => {
