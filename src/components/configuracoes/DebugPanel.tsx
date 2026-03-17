@@ -11,8 +11,9 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { formatCurrency } from '@/lib/format';
-import { Bug, Search, BarChart3, Loader2, Trash2, Check, X, AlertTriangle } from 'lucide-react';
+import { Bug, Search, BarChart3, Loader2, Trash2, Check, X, AlertTriangle, CalendarPlus } from 'lucide-react';
 import { toast } from 'sonner';
+import { generateHash } from '@/lib/csv-parser';
 
 const MONTH_LABELS: Record<string, string> = {
   '01': 'Janeiro', '02': 'Fevereiro', '03': 'Março', '04': 'Abril',
@@ -112,6 +113,166 @@ function ResetContaSection({ contas, userId, queryClient }: { contas: any[]; use
               {deleting ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Trash2 className="h-4 w-4 mr-1" />}
               Deletar todas transações de "{contaNome}"
             </Button>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+function ProjectInstallmentsSection({ userId, queryClient }: { userId?: string; queryClient: any }) {
+  const [loading, setLoading] = useState(false);
+  const [resultMsg, setResultMsg] = useState<string | null>(null);
+
+  const handleProject = async () => {
+    if (!userId) return;
+    setLoading(true);
+    setResultMsg(null);
+
+    try {
+      // Fetch all installment transactions that are NOT the last installment
+      let allInstallments: any[] = [];
+      let from = 0;
+      const batchSize = 1000;
+      while (true) {
+        const { data } = await supabase
+          .from('transacoes')
+          .select('*')
+          .eq('user_id', userId)
+          .not('parcela_atual', 'is', null)
+          .not('parcela_total', 'is', null)
+          .order('data', { ascending: true })
+          .range(from, from + batchSize - 1);
+        if (!data || data.length === 0) break;
+        allInstallments = allInstallments.concat(data);
+        if (data.length < batchSize) break;
+        from += batchSize;
+      }
+
+      // For each unique group, find the latest parcela and project forward
+      // Group by: conta_id + descricao prefix (15 chars) + valor (±0.10) + pessoa + parcela_total
+      const groups = new Map<string, any[]>();
+      for (const t of allInstallments) {
+        const prefix = t.descricao.replace(/\(auto-projetada\)/g, '').trim().substring(0, 15).toLowerCase();
+        const key = `${t.conta_id}|${prefix}|${Math.round(Number(t.valor) * 100)}|${t.pessoa}|${t.parcela_total}`;
+        if (!groups.has(key)) groups.set(key, []);
+        groups.get(key)!.push(t);
+      }
+
+      const toInsert: any[] = [];
+
+      for (const [, items] of groups) {
+        // Find the highest parcela_atual in this group
+        items.sort((a: any, b: any) => (b.parcela_atual || 0) - (a.parcela_atual || 0));
+        const latest = items[0];
+        const maxParcela = latest.parcela_atual;
+        const totalParcelas = latest.parcela_total;
+
+        if (maxParcela >= totalParcelas) continue; // Already complete
+
+        // Existing parcela numbers in this group
+        const existingParcelas = new Set(items.map((t: any) => t.parcela_atual));
+
+        // Base description without "(auto-projetada)"
+        const baseDesc = latest.descricao.replace(/\s*\(auto-projetada\)/, '').trim();
+
+        for (let p = maxParcela + 1; p <= totalParcelas; p++) {
+          if (existingParcelas.has(p)) continue;
+
+          // Calculate future date: offset months from latest
+          const offset = p - latest.parcela_atual;
+          const futureDate = new Date(latest.data + 'T00:00:00');
+          futureDate.setMonth(futureDate.getMonth() + offset);
+          const isoDate = futureDate.toISOString().split('T')[0];
+
+          // Project data_original forward too
+          let projectedOriginal: string | null = null;
+          if (latest.data_original) {
+            const origDate = new Date(latest.data_original + 'T00:00:00');
+            origDate.setMonth(origDate.getMonth() + offset);
+            projectedOriginal = origDate.toISOString().split('T')[0];
+          }
+
+          // Project mes_competencia forward
+          let projectedCompetencia: string | null = null;
+          if (latest.mes_competencia) {
+            const [cy, cm] = latest.mes_competencia.split('-').map(Number);
+            const compDate = new Date(cy, cm - 1 + offset, 1);
+            projectedCompetencia = `${compDate.getFullYear()}-${String(compDate.getMonth() + 1).padStart(2, '0')}`;
+          }
+
+          const hash = generateHash(isoDate, baseDesc, Number(latest.valor), latest.pessoa) + `_p${p}`;
+
+          toInsert.push({
+            user_id: userId,
+            conta_id: latest.conta_id,
+            data: isoDate,
+            data_original: projectedOriginal,
+            mes_competencia: projectedCompetencia,
+            descricao: `${baseDesc} (auto-projetada)`,
+            valor: Number(latest.valor),
+            categoria: latest.categoria,
+            tipo: latest.tipo,
+            essencial: latest.essencial,
+            parcela_atual: p,
+            parcela_total: totalParcelas,
+            grupo_parcela: latest.grupo_parcela,
+            hash_transacao: hash,
+            pessoa: latest.pessoa,
+          });
+        }
+      }
+
+      if (toInsert.length === 0) {
+        setResultMsg('Nenhuma parcela futura para projetar. Tudo já está completo.');
+        toast.info('Nenhuma parcela futura para projetar');
+      } else {
+        // Upsert to avoid duplicates
+        let created = 0;
+        for (let i = 0; i < toInsert.length; i += 50) {
+          const batch = toInsert.slice(i, i + 50);
+          const { data, error } = await supabase
+            .from('transacoes')
+            .upsert(batch, { onConflict: 'user_id,hash_transacao' })
+            .select('id');
+          if (error) {
+            console.error('Upsert error:', error);
+          } else {
+            created += data?.length || 0;
+          }
+        }
+        setResultMsg(`${created} parcelas futuras projetadas com sucesso!`);
+        toast.success(`${created} parcelas futuras projetadas`);
+        queryClient.invalidateQueries();
+      }
+    } catch (err) {
+      console.error(err);
+      toast.error('Erro ao projetar parcelas');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <CardTitle className="text-base flex items-center gap-2">
+          <CalendarPlus className="h-4 w-4" />
+          Projeção de Parcelas Futuras
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <p className="text-xs text-muted-foreground">
+          Analisa todas as transações parceladas e cria projeções automáticas para as parcelas restantes.
+          Execute após importar todos os CSVs do período.
+        </p>
+        <Button onClick={handleProject} disabled={loading} size="sm">
+          {loading ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <CalendarPlus className="h-4 w-4 mr-1" />}
+          Calcular Parcelas Futuras
+        </Button>
+        {resultMsg && (
+          <div className="p-3 rounded-md bg-muted border text-xs">
+            <p className="font-medium text-foreground">{resultMsg}</p>
           </div>
         )}
       </CardContent>
@@ -679,6 +840,9 @@ export function DebugPanel() {
 
       {/* Section 4: Resetar Conta Específica */}
       <ResetContaSection contas={contas || []} userId={user?.id} queryClient={queryClient} />
+
+      {/* Section 5: Projeção de Parcelas */}
+      <ProjectInstallmentsSection userId={user?.id} queryClient={queryClient} />
 
       {/* Section 5: Stats */}
       <Card>
