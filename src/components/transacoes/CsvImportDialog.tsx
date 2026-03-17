@@ -282,14 +282,15 @@ export function CsvImportDialog({ open, onOpenChange }: Props) {
       });
 
       if (t.parcela_atual && t.parcela_total && grupo_parcela) {
-        const futures = generateFutureInstallments(t, grupo_parcela);
+        const dataCompBase = isCredito ? t._data_original : t.data;
+        const futures = generateFutureInstallments(t, grupo_parcela, dataCompBase);
         for (const ft of futures) {
           allTransactions.push({
             user_id: currentUserId,
             conta_id: contaId,
             data: ft.data,
-            data_original: null,
-            mes_competencia: null,
+            data_original: ft._data_original || null,
+            mes_competencia: isCredito ? t._mes_competencia : null,
             descricao: ft.descricao,
             valor: ft.valor,
             categoria,

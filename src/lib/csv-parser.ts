@@ -214,18 +214,27 @@ export function parseSicrediCSV(csvText: string): ParseResult {
 
 export function generateFutureInstallments(
   transaction: ParsedTransaction,
-  grupo_parcela: string
-): ParsedTransaction[] {
+  grupo_parcela: string,
+  dataCompetenciaBase?: string
+): (ParsedTransaction & { _data_original?: string })[] {
   if (!transaction.parcela_atual || !transaction.parcela_total) return [];
 
   const remaining = transaction.parcela_total - transaction.parcela_atual;
-  const future: ParsedTransaction[] = [];
+  const future: (ParsedTransaction & { _data_original?: string })[] = [];
 
   for (let i = 1; i <= remaining; i++) {
     const date = new Date(transaction.data);
     date.setMonth(date.getMonth() + i);
     const isoDate = date.toISOString().split('T')[0];
     const nextParcela = transaction.parcela_atual + i;
+
+    // Project data_competencia (data_original) forward by same offset
+    let projectedCompetencia: string | undefined;
+    if (dataCompetenciaBase) {
+      const compDate = new Date(dataCompetenciaBase + 'T00:00:00');
+      compDate.setMonth(compDate.getMonth() + i);
+      projectedCompetencia = compDate.toISOString().split('T')[0];
+    }
 
     future.push({
       data: isoDate,
@@ -238,6 +247,7 @@ export function generateFutureInstallments(
       hash_transacao: generateHash(isoDate, transaction.descricao, transaction.valor, transaction.pessoa) + `_p${nextParcela}`,
       source_line_number: transaction.source_line_number,
       source_line_content: transaction.source_line_content,
+      _data_original: projectedCompetencia,
     });
   }
 
