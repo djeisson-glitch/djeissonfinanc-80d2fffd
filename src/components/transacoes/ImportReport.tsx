@@ -5,7 +5,8 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/component
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Check, AlertTriangle, ChevronDown, ChevronRight, Eye, ArrowRight, TrendingDown, TrendingUp } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
+import { Check, AlertTriangle, ChevronDown, ChevronRight, Eye, ArrowRight, TrendingDown, TrendingUp, FileSearch } from 'lucide-react';
 import { formatCurrency, formatDate } from '@/lib/format';
 import { ScrollArea } from '@/components/ui/scroll-area';
 
@@ -35,6 +36,14 @@ export type SkippedLineInfo = {
   reason: string;
 };
 
+export type ImportLogEntryInfo = {
+  lineNumber: number;
+  content: string;
+  status: 'importada' | 'rejeitada' | 'duplicata' | 'ignorada';
+  reason?: string;
+  hash_transacao?: string;
+};
+
 export type ImportResult = {
   imported: number;
   duplicates: number;
@@ -45,6 +54,8 @@ export type ImportResult = {
   totalDespesas: number;
   totalReceitas: number;
   skippedLines: SkippedLineInfo[];
+  totalCsvLines: number;
+  logEntries: ImportLogEntryInfo[];
 };
 
 interface Props {
@@ -56,37 +67,49 @@ interface Props {
 
 export function ImportReport({ result, onClose, onForceImport, forceImporting }: Props) {
   const [detailsOpen, setDetailsOpen] = useState(false);
+  const [logOpen, setLogOpen] = useState(false);
   const [forceChecked, setForceChecked] = useState(false);
   const [detailHash, setDetailHash] = useState<DuplicateInfo | null>(null);
 
   const saldoLiquido = result.totalReceitas - result.totalDespesas;
 
+  const getStatusVariant = (status: ImportLogEntryInfo['status']) => {
+    if (status === 'importada') return 'secondary';
+    if (status === 'duplicata') return 'outline';
+    if (status === 'rejeitada') return 'destructive';
+    return 'outline';
+  };
+
   return (
     <div className="space-y-4">
-      {/* Summary */}
       <div className="text-center space-y-2">
         <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-muted">
-          <Check className="h-6 w-6 text-green-500" />
+          <Check className="h-6 w-6 text-primary" />
         </div>
         <p className="font-semibold text-lg">Resumo da Importação</p>
         <p className="text-sm text-muted-foreground">Conta: {result.contaNome}</p>
       </div>
 
       <div className="space-y-2">
-        <div className="flex items-center gap-2 p-3 rounded-lg bg-green-500/10 border border-green-500/20">
-          <Check className="h-4 w-4 text-green-500 shrink-0" />
+        <div className="flex items-center gap-2 p-3 rounded-lg bg-muted border">
+          <FileSearch className="h-4 w-4 text-muted-foreground shrink-0" />
+          <span className="text-sm font-medium">📄 {result.totalCsvLines} linhas lidas do CSV</span>
+        </div>
+
+        <div className="flex items-center gap-2 p-3 rounded-lg bg-muted border">
+          <Check className="h-4 w-4 text-primary shrink-0" />
           <span className="text-sm font-medium">✅ {result.originalItems.length} transações originais do CSV importadas</span>
         </div>
 
         {result.futureItems.length > 0 && (
-          <div className="flex items-center gap-2 p-3 rounded-lg bg-blue-500/10 border border-blue-500/20">
-            <ArrowRight className="h-4 w-4 text-blue-500 shrink-0" />
+          <div className="flex items-center gap-2 p-3 rounded-lg bg-muted border">
+            <ArrowRight className="h-4 w-4 text-primary shrink-0" />
             <span className="text-sm font-medium">🔄 {result.futureItems.length} parcelas futuras criadas automaticamente</span>
           </div>
         )}
 
-        <div className={`flex items-center gap-2 p-3 rounded-lg ${result.duplicates > 0 ? 'bg-yellow-500/10 border border-yellow-500/20' : 'bg-muted'}`}>
-          <AlertTriangle className={`h-4 w-4 shrink-0 ${result.duplicates > 0 ? 'text-yellow-500' : 'text-muted-foreground'}`} />
+        <div className="flex items-center gap-2 p-3 rounded-lg bg-muted border">
+          <AlertTriangle className="h-4 w-4 shrink-0 text-muted-foreground" />
           <span className="text-sm font-medium">⚠️ {result.duplicates} duplicatas ignoradas</span>
         </div>
 
@@ -95,27 +118,23 @@ export function ImportReport({ result, onClose, onForceImport, forceImporting }:
         </div>
       </div>
 
-      {/* Financial summary */}
       <div className="grid grid-cols-3 gap-2">
-        <div className="p-2 rounded-lg bg-destructive/10 text-center">
-          <TrendingDown className="h-3 w-3 text-destructive mx-auto mb-1" />
+        <div className="p-2 rounded-lg bg-muted text-center">
+          <TrendingDown className="h-3 w-3 text-muted-foreground mx-auto mb-1" />
           <p className="text-[10px] text-muted-foreground">Despesas</p>
-          <p className="text-xs font-bold text-destructive">{formatCurrency(result.totalDespesas)}</p>
+          <p className="text-xs font-bold">{formatCurrency(result.totalDespesas)}</p>
         </div>
-        <div className="p-2 rounded-lg bg-green-500/10 text-center">
-          <TrendingUp className="h-3 w-3 text-green-500 mx-auto mb-1" />
+        <div className="p-2 rounded-lg bg-muted text-center">
+          <TrendingUp className="h-3 w-3 text-muted-foreground mx-auto mb-1" />
           <p className="text-[10px] text-muted-foreground">Receitas</p>
-          <p className="text-xs font-bold text-green-500">{formatCurrency(result.totalReceitas)}</p>
+          <p className="text-xs font-bold">{formatCurrency(result.totalReceitas)}</p>
         </div>
-        <div className={`p-2 rounded-lg text-center ${saldoLiquido >= 0 ? 'bg-green-500/10' : 'bg-destructive/10'}`}>
+        <div className="p-2 rounded-lg bg-muted text-center">
           <p className="text-[10px] text-muted-foreground">Saldo Líquido</p>
-          <p className={`text-xs font-bold ${saldoLiquido >= 0 ? 'text-green-500' : 'text-destructive'}`}>
-            {formatCurrency(Math.abs(saldoLiquido))}
-          </p>
+          <p className="text-xs font-bold">{formatCurrency(Math.abs(saldoLiquido))}</p>
         </div>
       </div>
 
-      {/* Expandable details */}
       <Collapsible open={detailsOpen} onOpenChange={setDetailsOpen}>
         <CollapsibleTrigger asChild>
           <Button variant="ghost" className="w-full justify-between text-sm">
@@ -126,18 +145,10 @@ export function ImportReport({ result, onClose, onForceImport, forceImporting }:
         <CollapsibleContent>
           <Tabs defaultValue="originals" className="mt-2">
             <TabsList className="w-full grid grid-cols-4 h-8">
-              <TabsTrigger value="originals" className="text-[10px] px-1">
-                Originais ({result.originalItems.length})
-              </TabsTrigger>
-              <TabsTrigger value="futures" className="text-[10px] px-1">
-                Parcelas ({result.futureItems.length})
-              </TabsTrigger>
-              <TabsTrigger value="duplicates" className="text-[10px] px-1">
-                Duplicatas ({result.duplicateItems.length})
-              </TabsTrigger>
-              <TabsTrigger value="skipped" className="text-[10px] px-1">
-                Rejeitadas ({result.skippedLines.length})
-              </TabsTrigger>
+              <TabsTrigger value="originals" className="text-[10px] px-1">Originais ({result.originalItems.length})</TabsTrigger>
+              <TabsTrigger value="futures" className="text-[10px] px-1">Parcelas ({result.futureItems.length})</TabsTrigger>
+              <TabsTrigger value="duplicates" className="text-[10px] px-1">Duplicatas ({result.duplicateItems.length})</TabsTrigger>
+              <TabsTrigger value="skipped" className="text-[10px] px-1">Rejeitadas ({result.skippedLines.length})</TabsTrigger>
             </TabsList>
 
             <TabsContent value="originals">
@@ -156,12 +167,8 @@ export function ImportReport({ result, onClose, onForceImport, forceImporting }:
                       <TableRow key={i}>
                         <TableCell className="text-xs py-1.5">{formatDate(item.data)}</TableCell>
                         <TableCell className="text-xs py-1.5 max-w-[120px] truncate">{item.descricao}</TableCell>
-                        <TableCell className={`text-xs py-1.5 text-right ${item.tipo === 'receita' ? 'text-green-500' : 'text-destructive'}`}>
-                          {item.tipo === 'receita' ? '+' : '-'}{formatCurrency(item.valor)}
-                        </TableCell>
-                        <TableCell className="text-xs py-1.5 text-muted-foreground">
-                          {item.parcela_atual && item.parcela_total ? `${item.parcela_atual}/${item.parcela_total}` : '-'}
-                        </TableCell>
+                        <TableCell className="text-xs py-1.5 text-right">{item.tipo === 'receita' ? '+' : '-'}{formatCurrency(item.valor)}</TableCell>
+                        <TableCell className="text-xs py-1.5 text-muted-foreground">{item.parcela_atual && item.parcela_total ? `${item.parcela_atual}/${item.parcela_total}` : '-'}</TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
@@ -186,12 +193,8 @@ export function ImportReport({ result, onClose, onForceImport, forceImporting }:
                       {result.futureItems.map((item, i) => (
                         <TableRow key={i}>
                           <TableCell className="text-xs py-1.5 max-w-[140px] truncate">{item.descricao}</TableCell>
-                          <TableCell className="text-xs py-1.5 text-muted-foreground">
-                            {item.parcela_atual}/{item.parcela_total}
-                          </TableCell>
-                          <TableCell className="text-xs py-1.5 text-right text-destructive">
-                            {formatCurrency(item.valor)}
-                          </TableCell>
+                          <TableCell className="text-xs py-1.5 text-muted-foreground">{item.parcela_atual}/{item.parcela_total}</TableCell>
+                          <TableCell className="text-xs py-1.5 text-right">{formatCurrency(item.valor)}</TableCell>
                         </TableRow>
                       ))}
                     </TableBody>
@@ -231,20 +234,13 @@ export function ImportReport({ result, onClose, onForceImport, forceImporting }:
                       </TableBody>
                     </Table>
 
-                    {/* Force import */}
                     <div className="mt-3 space-y-2 border-t pt-3">
                       <label className="flex items-center gap-2 cursor-pointer">
                         <Checkbox checked={forceChecked} onCheckedChange={(v) => setForceChecked(!!v)} />
                         <span className="text-xs text-muted-foreground">Forçar importação de duplicatas</span>
                       </label>
                       {forceChecked && (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="w-full text-xs"
-                          disabled={forceImporting}
-                          onClick={() => onForceImport(result.duplicateItems)}
-                        >
+                        <Button size="sm" variant="outline" className="w-full text-xs" disabled={forceImporting} onClick={() => onForceImport(result.duplicateItems)}>
                           {forceImporting ? 'Importando...' : `Importar ${result.duplicateItems.length} duplicatas`}
                         </Button>
                       )}
@@ -253,10 +249,11 @@ export function ImportReport({ result, onClose, onForceImport, forceImporting }:
                 )}
               </ScrollArea>
             </TabsContent>
+
             <TabsContent value="skipped">
               <ScrollArea className="max-h-[200px]">
                 {result.skippedLines.length === 0 ? (
-                  <p className="text-center text-sm text-muted-foreground py-6">Todas as linhas foram processadas</p>
+                  <p className="text-center text-sm text-muted-foreground py-6">Todas as linhas válidas foram processadas</p>
                 ) : (
                   <Table>
                     <TableHeader>
@@ -271,7 +268,7 @@ export function ImportReport({ result, onClose, onForceImport, forceImporting }:
                         <TableRow key={i}>
                           <TableCell className="text-xs py-1.5 text-muted-foreground">{item.lineNumber}</TableCell>
                           <TableCell className="text-xs py-1.5 max-w-[140px] truncate" title={item.content}>{item.content}</TableCell>
-                          <TableCell className="text-xs py-1.5 text-yellow-600 dark:text-yellow-400">{item.reason}</TableCell>
+                          <TableCell className="text-xs py-1.5">{item.reason}</TableCell>
                         </TableRow>
                       ))}
                     </TableBody>
@@ -283,9 +280,45 @@ export function ImportReport({ result, onClose, onForceImport, forceImporting }:
         </CollapsibleContent>
       </Collapsible>
 
+      <Collapsible open={logOpen} onOpenChange={setLogOpen}>
+        <CollapsibleTrigger asChild>
+          <Button variant="ghost" className="w-full justify-between text-sm">
+            <span>Ver log completo ({result.logEntries.length} linhas)</span>
+            {logOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+          </Button>
+        </CollapsibleTrigger>
+        <CollapsibleContent>
+          <ScrollArea className="max-h-[320px] mt-2 border rounded-md">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="text-xs w-14">Linha</TableHead>
+                  <TableHead className="text-xs">Conteúdo</TableHead>
+                  <TableHead className="text-xs w-28">Status</TableHead>
+                  <TableHead className="text-xs">Motivo</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {result.logEntries.map((entry, index) => (
+                  <TableRow key={`${entry.lineNumber}-${index}`}>
+                    <TableCell className="text-xs py-1.5 font-mono">{entry.lineNumber}</TableCell>
+                    <TableCell className="text-xs py-1.5 max-w-[220px] truncate font-mono" title={entry.content}>{entry.content || '—'}</TableCell>
+                    <TableCell className="text-xs py-1.5">
+                      <Badge variant={getStatusVariant(entry.status)} className="text-[10px]">
+                        {entry.status}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-xs py-1.5">{entry.reason || '—'}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </ScrollArea>
+        </CollapsibleContent>
+      </Collapsible>
+
       <Button onClick={onClose} className="w-full">Fechar</Button>
 
-      {/* Hash detail dialog */}
       <Dialog open={!!detailHash} onOpenChange={() => setDetailHash(null)}>
         <DialogContent className="sm:max-w-sm">
           <DialogHeader>
@@ -311,10 +344,8 @@ export function ImportReport({ result, onClose, onForceImport, forceImporting }:
                 <span className="text-muted-foreground">Pessoa:</span>
                 <p className="font-medium">{detailHash.pessoa}</p>
               </div>
-              <div className="p-2 rounded bg-yellow-500/10 border border-yellow-500/20">
-                <p className="text-xs text-yellow-600 dark:text-yellow-400">
-                  Motivo: Transação idêntica já existe em {formatDate(detailHash.existing_data || detailHash.data)}
-                </p>
+              <div className="p-2 rounded bg-muted border">
+                <p className="text-xs">Motivo: Transação idêntica já existe em {formatDate(detailHash.existing_data || detailHash.data)}</p>
               </div>
             </div>
           )}
