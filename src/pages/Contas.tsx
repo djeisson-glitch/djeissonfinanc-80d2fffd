@@ -11,7 +11,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import { useState } from 'react';
-import { Plus, CreditCard, Banknote } from 'lucide-react';
+import { Plus, CreditCard, Banknote, DollarSign } from 'lucide-react';
+import { PaymentModal } from '@/components/contas/PaymentModal';
 import { MonthSelector } from '@/components/MonthSelector';
 
 function getInvoiceStatus(fatura: number, pagamento: number): { label: string; color: string; variant: 'default' | 'destructive' | 'outline' | 'secondary' } {
@@ -30,6 +31,7 @@ export default function ContasPage() {
   const [nome, setNome] = useState('');
   const [tipo, setTipo] = useState<'credito' | 'debito'>('debito');
   const [saldoInicial, setSaldoInicial] = useState(0);
+  const [paymentConta, setPaymentConta] = useState<{ id: string; nome: string; fatura: number } | null>(null);
 
   const now = new Date();
   const [month, setMonth] = useState(now.getMonth());
@@ -81,12 +83,15 @@ export default function ContasPage() {
         if (t.tipo === 'despesa') {
           faturas[t.conta_id].despesas += Number(t.valor);
         }
-        // Detect invoice payments
+        // Only count actual invoice payments, NOT devoluções
         const desc = t.descricao.toLowerCase();
-        if (desc.includes('pag fat') || desc.includes('pagamento fatura') || desc.includes('pag fat deb cc')) {
+        const isDevolution = desc.includes('devoluc') || desc.includes('devolução') || desc.includes('estorno');
+        if (!isDevolution && (desc.includes('pag fat') || desc.includes('pagamento fatura') || desc.includes('pag fat deb cc'))) {
           faturas[t.conta_id].pagamentos += Math.abs(Number(t.valor));
-        } else if (t.tipo === 'receita') {
-          faturas[t.conta_id].pagamentos += Number(t.valor);
+        }
+        // Devoluções reduce the invoice total instead
+        if (isDevolution && t.tipo === 'receita') {
+          faturas[t.conta_id].despesas -= Number(t.valor);
         }
       });
       return faturas;
@@ -184,6 +189,16 @@ export default function ContasPage() {
                         Pago: {formatCurrency(pagamentoTotal)} de {formatCurrency(faturaTotal)}
                       </p>
                     )}
+                    {faturaTotal > 0 && pagamentoTotal < faturaTotal && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="mt-2 w-full text-xs"
+                        onClick={(e) => { e.stopPropagation(); setPaymentConta({ id: conta.id, nome: conta.nome, fatura: faturaTotal - pagamentoTotal }); }}
+                      >
+                        <DollarSign className="h-3 w-3 mr-1" /> Registrar Pagamento
+                      </Button>
+                    )}
                   </>
                 ) : (
                   <>
@@ -234,6 +249,18 @@ export default function ContasPage() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {paymentConta && (
+        <PaymentModal
+          open={!!paymentConta}
+          onOpenChange={(open) => { if (!open) setPaymentConta(null); }}
+          contaId={paymentConta.id}
+          contaNome={paymentConta.nome}
+          faturaTotal={paymentConta.fatura}
+          month={month}
+          year={year}
+        />
+      )}
     </div>
   );
 }
