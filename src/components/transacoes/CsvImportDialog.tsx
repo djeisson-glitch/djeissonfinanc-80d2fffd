@@ -283,30 +283,7 @@ export function CsvImportDialog({ open, onOpenChange }: Props) {
         _isOriginal: true,
       });
 
-      if (t.parcela_atual && t.parcela_total && grupo_parcela) {
-        const dataCompBase = isCredito ? t._data_original : t.data;
-        const futures = generateFutureInstallments(t, grupo_parcela, dataCompBase);
-        for (const ft of futures) {
-          allTransactions.push({
-            user_id: currentUserId,
-            conta_id: contaId,
-            data: ft.data,
-            data_original: ft._data_original || null,
-            mes_competencia: isCredito ? t._mes_competencia : null,
-            descricao: ft.descricao,
-            valor: ft.valor,
-            categoria,
-            tipo: ft.tipo,
-            essencial,
-            parcela_atual: ft.parcela_atual,
-            parcela_total: ft.parcela_total,
-            grupo_parcela,
-            hash_transacao: ft.hash_transacao,
-            pessoa: ft.pessoa,
-            _isOriginal: false,
-          });
-        }
-      }
+      // Auto-projection removed: only the actual CSV line is imported
     }
 
     setProgress(50);
