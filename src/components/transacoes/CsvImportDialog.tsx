@@ -6,32 +6,12 @@ import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
-import { parseSicrediCSV, generateFutureInstallments } from '@/lib/csv-parser';
+import { parseSicrediCSV, generateFutureInstallments, type SkippedLine, type ParsedTransaction, type CsvLineLogEntry } from '@/lib/csv-parser';
 import { parseOFX } from '@/lib/ofx-parser';
 import { Progress } from '@/components/ui/progress';
 import { Upload, FileText, Check, AlertCircle, CreditCard, CalendarDays } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
-import { ImportReport, ImportResult, DuplicateInfo, ImportedItem, SkippedLineInfo } from './ImportReport';
-import { SkippedLine } from '@/lib/csv-parser';
-
-interface Props {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-}
-
-type ParsedTransaction = {
-  data: string;
-  descricao: string;
-  valor: number;
-  tipo: 'receita' | 'despesa';
-  parcela_atual: number | null;
-  parcela_total: number | null;
-  pessoa: string;
-  hash_transacao: string;
-};
-
-const MONTH_NAMES = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
-
+import { ImportReport, ImportResult, DuplicateInfo, ImportedItem } from './ImportReport';
 function getDefaultDueDate(transactions: ParsedTransaction[]): { month: number; year: number } {
   if (transactions.length === 0) {
     const now = new Date();
