@@ -354,14 +354,14 @@ export function CsvImportDialog({ open, onOpenChange }: Props) {
         qtd_total: allTransactions.length,
       });
 
-      await supabase.from('import_logs').insert({
+      await supabase.from('import_logs').insert([{
         user_id: user.id,
         arquivo: file.name,
         total_linhas_csv: parsedTotalLines,
         linhas_importadas: importedOriginals.length,
         linhas_rejeitadas: parsedSkippedLines.length,
-        detalhes_json: logEntries,
-      });
+        detalhes_json: logEntries as any,
+      }]);
 
       queryClient.invalidateQueries({ queryKey: ['transacoes'] });
       queryClient.invalidateQueries({ queryKey: ['dashboard'] });
