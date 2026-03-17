@@ -9,7 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { Skeleton } from '@/components/ui/skeleton';
-import { TrendingDown, AlertTriangle, BarChart3 } from 'lucide-react';
+import { TrendingDown, AlertTriangle, BarChart3, CreditCard } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import { MonthSelector } from '@/components/MonthSelector';
 
@@ -46,6 +46,49 @@ export default function DashboardPage() {
       return data || [];
     },
     enabled: !!user,
+  });
+
+  // Credit card invoice data
+  const { data: contas } = useQuery({
+    queryKey: ['contas', user?.id],
+    queryFn: async () => {
+      const { data } = await supabase.from('contas').select('*').eq('user_id', user!.id);
+      return data || [];
+    },
+    enabled: !!user,
+  });
+
+  const creditCards = contas?.filter(c => c.tipo === 'credito') || [];
+
+  const { data: faturaData } = useQuery({
+    queryKey: ['dashboard', 'faturas', user?.id, start, end],
+    queryFn: async () => {
+      if (creditCards.length === 0) return {};
+      const cardIds = creditCards.map(c => c.id);
+      const { data } = await supabase
+        .from('transacoes')
+        .select('conta_id, tipo, valor, descricao')
+        .eq('user_id', user!.id)
+        .in('conta_id', cardIds)
+        .gte('data', start)
+        .lte('data', end);
+
+      const faturas: Record<string, { despesas: number; pagamentos: number }> = {};
+      data?.forEach(t => {
+        if (!faturas[t.conta_id]) faturas[t.conta_id] = { despesas: 0, pagamentos: 0 };
+        if (t.tipo === 'despesa') {
+          faturas[t.conta_id].despesas += Number(t.valor);
+        }
+        const desc = t.descricao.toLowerCase();
+        if (desc.includes('pag fat') || desc.includes('pagamento fatura') || desc.includes('pag fat deb cc')) {
+          faturas[t.conta_id].pagamentos += Math.abs(Number(t.valor));
+        } else if (t.tipo === 'receita') {
+          faturas[t.conta_id].pagamentos += Number(t.valor);
+        }
+      });
+      return faturas;
+    },
+    enabled: !!user && creditCards.length > 0,
   });
 
   const { data: parcelasFuturas } = useQuery({
@@ -145,6 +188,49 @@ export default function DashboardPage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Credit Card Invoices */}
+      {creditCards.length > 0 && (
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+          {creditCards.map(card => {
+            const fatura = faturaData?.[card.id];
+            const faturaTotal = fatura?.despesas || 0;
+            const pagTotal = fatura?.pagamentos || 0;
+            const status = faturaTotal <= 0
+              ? { label: 'Sem fatura', emoji: '', color: '#9ca3af' }
+              : pagTotal >= faturaTotal
+                ? { label: 'Paga', emoji: '🟢', color: '#10b981' }
+                : pagTotal > 0
+                  ? { label: 'Parcialmente paga', emoji: '🟡', color: '#f59e0b' }
+                  : { label: 'Em aberto', emoji: '🔴', color: '#ef4444' };
+
+            return (
+              <Card key={card.id}>
+                <CardContent className="p-4">
+                  <div className="flex items-center gap-2 mb-2">
+                    <CreditCard className="h-4 w-4 text-muted-foreground" />
+                    <span className="text-sm font-medium">{card.nome}</span>
+                    <Badge
+                      variant="outline"
+                      className="ml-auto text-xs"
+                      style={{ borderColor: status.color, color: status.color }}
+                    >
+                      {status.emoji} {status.label}
+                    </Badge>
+                  </div>
+                  <p className="text-xs text-muted-foreground">Fatura atual</p>
+                  <p className="text-lg font-bold text-destructive">{formatCurrency(faturaTotal)}</p>
+                  {pagTotal > 0 && pagTotal < faturaTotal && (
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Pago: {formatCurrency(pagTotal)} de {formatCurrency(faturaTotal)}
+                    </p>
+                  )}
+                </CardContent>
+              </Card>
+            );
+          })}
+        </div>
+      )}
 
       <div className="grid gap-4 md:grid-cols-2">
         <Card>

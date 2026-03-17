@@ -1,17 +1,25 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
-import { formatCurrency } from '@/lib/format';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { formatCurrency, getMonthRange } from '@/lib/format';
+import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import { useState } from 'react';
-import { Plus, Pencil, CreditCard, Banknote } from 'lucide-react';
+import { Plus, CreditCard, Banknote } from 'lucide-react';
+import { MonthSelector } from '@/components/MonthSelector';
+
+function getInvoiceStatus(fatura: number, pagamento: number): { label: string; color: string; variant: 'default' | 'destructive' | 'outline' | 'secondary' } {
+  if (fatura <= 0) return { label: 'Sem fatura', color: '#9ca3af', variant: 'secondary' };
+  if (pagamento >= fatura) return { label: 'Paga', color: '#10b981', variant: 'default' };
+  if (pagamento > 0) return { label: 'Parcialmente paga', color: '#f59e0b', variant: 'outline' };
+  return { label: 'Em aberto', color: '#ef4444', variant: 'destructive' };
+}
 
 export default function ContasPage() {
   const { user } = useAuth();
@@ -23,6 +31,11 @@ export default function ContasPage() {
   const [tipo, setTipo] = useState<'credito' | 'debito'>('debito');
   const [saldoInicial, setSaldoInicial] = useState(0);
 
+  const now = new Date();
+  const [month, setMonth] = useState(now.getMonth());
+  const [year, setYear] = useState(now.getFullYear());
+  const { start, end } = getMonthRange(month, year);
+
   const { data: contas } = useQuery({
     queryKey: ['contas', user?.id],
     queryFn: async () => {
@@ -32,7 +45,6 @@ export default function ContasPage() {
     enabled: !!user,
   });
 
-  // Get saldo atual for each conta
   const { data: saldos } = useQuery({
     queryKey: ['saldos', user?.id],
     queryFn: async () => {
@@ -48,6 +60,36 @@ export default function ContasPage() {
         else saldoPorConta[t.conta_id] -= Number(t.valor);
       });
       return saldoPorConta;
+    },
+    enabled: !!user,
+  });
+
+  // Monthly invoice data for credit cards
+  const { data: faturaData } = useQuery({
+    queryKey: ['faturas', user?.id, start, end],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('transacoes')
+        .select('conta_id, tipo, valor, descricao')
+        .eq('user_id', user!.id)
+        .gte('data', start)
+        .lte('data', end);
+
+      const faturas: Record<string, { despesas: number; pagamentos: number }> = {};
+      data?.forEach(t => {
+        if (!faturas[t.conta_id]) faturas[t.conta_id] = { despesas: 0, pagamentos: 0 };
+        if (t.tipo === 'despesa') {
+          faturas[t.conta_id].despesas += Number(t.valor);
+        }
+        // Detect invoice payments
+        const desc = t.descricao.toLowerCase();
+        if (desc.includes('pag fat') || desc.includes('pagamento fatura') || desc.includes('pag fat deb cc')) {
+          faturas[t.conta_id].pagamentos += Math.abs(Number(t.valor));
+        } else if (t.tipo === 'receita') {
+          faturas[t.conta_id].pagamentos += Number(t.valor);
+        }
+      });
+      return faturas;
     },
     enabled: !!user,
   });
@@ -87,20 +129,29 @@ export default function ContasPage() {
     <div className="space-y-6 animate-fade-in">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">Contas</h1>
-        <Button onClick={() => { resetForm(); setDialogOpen(true); }}>
-          <Plus className="mr-2 h-4 w-4" /> Nova Conta
-        </Button>
+        <div className="flex items-center gap-2">
+          <MonthSelector month={month} year={year} onChange={(m, y) => { setMonth(m); setYear(y); }} />
+          <Button onClick={() => { resetForm(); setDialogOpen(true); }}>
+            <Plus className="mr-2 h-4 w-4" /> Nova Conta
+          </Button>
+        </div>
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
         {contas?.map(conta => {
           const saldoAtual = (conta.saldo_inicial || 0) + (saldos?.[conta.id] || 0);
+          const isCredito = conta.tipo === 'credito';
+          const fatura = faturaData?.[conta.id];
+          const faturaTotal = fatura?.despesas || 0;
+          const pagamentoTotal = fatura?.pagamentos || 0;
+          const status = isCredito ? getInvoiceStatus(faturaTotal, pagamentoTotal) : null;
+
           return (
             <Card key={conta.id} className="cursor-pointer hover:shadow-md transition-shadow" onClick={() => openEdit(conta)}>
               <CardContent className="p-4">
                 <div className="flex items-center justify-between mb-3">
                   <div className="flex items-center gap-2">
-                    {conta.tipo === 'credito' ? (
+                    {isCredito ? (
                       <CreditCard className="h-5 w-5 text-accent" />
                     ) : (
                       <Banknote className="h-5 w-5 text-primary" />
@@ -109,15 +160,44 @@ export default function ContasPage() {
                   </div>
                   <Badge variant="outline" className="capitalize">{conta.tipo}</Badge>
                 </div>
-                <div>
-                  <p className="text-sm text-muted-foreground">Saldo atual</p>
-                  <p className={`text-xl font-bold ${saldoAtual >= 0 ? 'text-primary' : 'text-destructive'}`}>
-                    {formatCurrency(saldoAtual)}
-                  </p>
-                </div>
-                <p className="text-xs text-muted-foreground mt-1">
-                  Saldo inicial: {formatCurrency(conta.saldo_inicial)}
-                </p>
+
+                {isCredito ? (
+                  <>
+                    <div className="mb-2">
+                      <p className="text-sm text-muted-foreground">Fatura atual</p>
+                      <p className="text-xl font-bold text-destructive">{formatCurrency(faturaTotal)}</p>
+                    </div>
+                    {status && (
+                      <Badge
+                        variant={status.variant}
+                        className="text-xs"
+                        style={status.variant === 'outline' ? { borderColor: status.color, color: status.color } : status.variant === 'default' ? { backgroundColor: status.color } : undefined}
+                      >
+                        {status.label === 'Paga' && '🟢 '}
+                        {status.label === 'Em aberto' && '🔴 '}
+                        {status.label === 'Parcialmente paga' && '🟡 '}
+                        {status.label}
+                      </Badge>
+                    )}
+                    {pagamentoTotal > 0 && pagamentoTotal < faturaTotal && (
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Pago: {formatCurrency(pagamentoTotal)} de {formatCurrency(faturaTotal)}
+                      </p>
+                    )}
+                  </>
+                ) : (
+                  <>
+                    <div>
+                      <p className="text-sm text-muted-foreground">Saldo atual</p>
+                      <p className={`text-xl font-bold ${saldoAtual >= 0 ? 'text-primary' : 'text-destructive'}`}>
+                        {formatCurrency(saldoAtual)}
+                      </p>
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Saldo inicial: {formatCurrency(conta.saldo_inicial)}
+                    </p>
+                  </>
+                )}
               </CardContent>
             </Card>
           );
