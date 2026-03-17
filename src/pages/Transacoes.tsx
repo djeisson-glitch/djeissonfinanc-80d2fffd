@@ -118,6 +118,7 @@ export default function TransacoesPage() {
 
   const filtered = transacoes?.filter(t => {
     if (filterCategoria !== 'all' && t.categoria !== filterCategoria) return false;
+    if (filterTipo !== 'all' && t.tipo !== filterTipo) return false;
     if (filterEssencial === 'true' && !t.essencial) return false;
     if (filterEssencial === 'false' && t.essencial) return false;
     if (filterConta !== 'all' && t.conta_id !== filterConta) return false;
