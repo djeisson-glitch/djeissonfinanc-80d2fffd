@@ -267,6 +267,7 @@ export default function DashboardPage() {
 
         <ParcelasTimeline parcelas={parcelasFuturas || []} />
 
+
         <Card className="md:col-span-2">
           <CardHeader>
             <CardTitle className="text-lg flex items-center gap-2">
