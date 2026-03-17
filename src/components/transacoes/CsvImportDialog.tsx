@@ -609,6 +609,26 @@ export function CsvImportDialog({ open, onOpenChange }: Props) {
 
     try {
       const plan = preparedPlan ?? await buildImportPlan(context.contaId, context.currentUserId);
+
+      // Step 1: Delete auto-projected duplicates from database
+      let deletedCount = 0;
+      if (plan.autoProjectedIdsToDelete.length > 0) {
+        for (let i = 0; i < plan.autoProjectedIdsToDelete.length; i += 100) {
+          const chunk = plan.autoProjectedIdsToDelete.slice(i, i + 100);
+          const { error } = await supabase
+            .from('transacoes')
+            .delete()
+            .in('id', chunk);
+          if (error) {
+            console.error('Error deleting auto-projected:', error);
+          } else {
+            deletedCount += chunk.length;
+          }
+        }
+        console.log(`Deleted ${deletedCount} auto-projected duplicates`);
+      }
+
+      // Step 2: Insert new transactions
       let imported = 0;
       const batchSize = 50;
 
