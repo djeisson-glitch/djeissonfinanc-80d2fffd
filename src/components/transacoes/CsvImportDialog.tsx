@@ -648,6 +648,7 @@ export function CsvImportDialog({ open, onOpenChange }: Props) {
       setResult({
         imported,
         duplicates: plan.duplicateTransactions.length,
+        deletedAutoProjected: deletedCount,
         contaNome: plan.contaNome,
         duplicateItems: plan.duplicateItems,
         originalItems: plan.importedOriginals,
