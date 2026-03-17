@@ -11,7 +11,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { formatCurrency } from '@/lib/format';
-import { Bug, Search, BarChart3, Loader2, Trash2, Check, X } from 'lucide-react';
+import { Bug, Search, BarChart3, Loader2, Trash2, Check, X, AlertTriangle } from 'lucide-react';
 import { toast } from 'sonner';
 
 const MONTH_LABELS: Record<string, string> = {
@@ -30,6 +30,93 @@ interface DupGroup {
   items: any[];
   keepId: string;
   removeIds: string[];
+}
+
+function ResetContaSection({ contas, userId, queryClient }: { contas: any[]; userId?: string; queryClient: any }) {
+  const [selectedContaId, setSelectedContaId] = useState('');
+  const [confirmText, setConfirmText] = useState('');
+  const [deleting, setDeleting] = useState(false);
+
+  const selectedConta = contas.find(c => c.id === selectedContaId);
+  const contaNome = selectedConta?.nome || '';
+  const confirmed = confirmText.trim().toLowerCase() === contaNome.toLowerCase() && contaNome !== '';
+
+  const handleReset = async () => {
+    if (!userId || !selectedContaId || !confirmed) return;
+    setDeleting(true);
+    try {
+      let deleted = 0;
+      // Delete in batches
+      while (true) {
+        const { data } = await supabase
+          .from('transacoes')
+          .select('id')
+          .eq('user_id', userId)
+          .eq('conta_id', selectedContaId)
+          .limit(500);
+        if (!data || data.length === 0) break;
+        deleted += data.length;
+        await supabase.from('transacoes').delete().in('id', data.map(t => t.id));
+      }
+      toast.success(`${deleted} transações da conta "${contaNome}" removidas`);
+      queryClient.invalidateQueries();
+      setSelectedContaId('');
+      setConfirmText('');
+    } catch (err) {
+      toast.error('Erro ao resetar conta');
+      console.error(err);
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  return (
+    <Card className="border-destructive/30">
+      <CardHeader className="pb-3">
+        <CardTitle className="text-base flex items-center gap-2 text-destructive">
+          <AlertTriangle className="h-4 w-4" />
+          Resetar Conta Específica
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <p className="text-xs text-muted-foreground">
+          Deleta TODAS as transações de uma conta específica. O saldo inicial e a conta são preservados.
+        </p>
+        <Select value={selectedContaId} onValueChange={(v) => { setSelectedContaId(v); setConfirmText(''); }}>
+          <SelectTrigger className="w-[220px] h-8 text-xs">
+            <SelectValue placeholder="Selecione a conta" />
+          </SelectTrigger>
+          <SelectContent>
+            {contas.map(c => (
+              <SelectItem key={c.id} value={c.id} className="text-xs">{c.nome}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        {selectedContaId && (
+          <div className="space-y-2">
+            <p className="text-xs">
+              Digite <strong className="text-destructive">{contaNome}</strong> para confirmar:
+            </p>
+            <Input
+              value={confirmText}
+              onChange={e => setConfirmText(e.target.value)}
+              placeholder={contaNome}
+              className="h-8 text-xs w-[220px]"
+            />
+            <Button
+              variant="destructive"
+              size="sm"
+              disabled={!confirmed || deleting}
+              onClick={handleReset}
+            >
+              {deleting ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Trash2 className="h-4 w-4 mr-1" />}
+              Deletar todas transações de "{contaNome}"
+            </Button>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
 }
 
 export function DebugPanel() {
@@ -590,7 +677,10 @@ export function DebugPanel() {
         </DialogContent>
       </Dialog>
 
-      {/* Section 4: Stats */}
+      {/* Section 4: Resetar Conta Específica */}
+      <ResetContaSection contas={contas || []} userId={user?.id} queryClient={queryClient} />
+
+      {/* Section 5: Stats */}
       <Card>
         <CardHeader className="pb-3">
           <CardTitle className="text-base flex items-center gap-2">
