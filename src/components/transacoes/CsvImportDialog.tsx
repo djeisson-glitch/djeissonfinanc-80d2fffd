@@ -282,197 +282,26 @@ export function CsvImportDialog({ open, onOpenChange }: Props) {
         pessoa: t.pessoa,
         _isOriginal: true,
       });
-
-      // Auto-projection removed: only the actual CSV line is imported
-    }
-
-    setProgress(50);
-
-    const allHashes = allTransactions.map(t => t.hash_transacao);
-    const existingHashes = new Map<string, string>();
-
-    for (let i = 0; i < allHashes.length; i += 100) {
-      const chunk = allHashes.slice(i, i + 100);
-      const { data: existing } = await supabase
-        .from('transacoes')
-        .select('hash_transacao, data')
-        .eq('user_id', currentUserId)
-        .in('hash_transacao', chunk);
-
-      existing?.forEach(existingItem => existingHashes.set(existingItem.hash_transacao, existingItem.data));
-    }
-
-    // --- Auto-projected installment duplicate detection ---
-    // For each installment transaction from the CSV (_isOriginal), find existing auto-projected
-    // matches by: description prefix (15 chars), valor ±R$1, parcela_atual, parcela_total, pessoa
-    const autoProjectedIdsToDelete: string[] = [];
-    const replacedTransactions: PlannedTransaction[] = [];
-    const installmentOriginals = allTransactions.filter(t => t._isOriginal && t.parcela_atual && t.parcela_total);
-
-    if (installmentOriginals.length > 0) {
-      // Fetch existing auto-projected transactions for this account
-      const { data: existingProjected } = await supabase
-        .from('transacoes')
-        .select('id, descricao, valor, parcela_atual, parcela_total, pessoa, data_original, hash_transacao')
-        .eq('user_id', currentUserId)
-        .eq('conta_id', contaId)
-        .like('descricao', '%(auto-projetada)%');
-
-      if (existingProjected && existingProjected.length > 0) {
-        for (const csvTx of installmentOriginals) {
-          // Skip if already detected as hash duplicate
-          if (existingHashes.has(csvTx.hash_transacao)) continue;
-
-          const csvPrefix = csvTx.descricao.substring(0, 15).toLowerCase();
-          const match = existingProjected.find(ep => {
-            const epPrefix = ep.descricao.substring(0, 15).toLowerCase();
-            const valDiff = Math.abs(Number(csvTx.valor) - Number(ep.valor));
-            return (
-              epPrefix === csvPrefix &&
-              valDiff <= 1.0 &&
-              ep.parcela_atual === csvTx.parcela_atual &&
-              ep.parcela_total === csvTx.parcela_total &&
-              ep.pessoa === csvTx.pessoa
-            );
-          });
-
-          if (match) {
-            autoProjectedIdsToDelete.push(match.id);
-            replacedTransactions.push(csvTx);
-            // Remove from existingProjected to avoid double-matching
-            const idx = existingProjected.indexOf(match);
-            if (idx > -1) existingProjected.splice(idx, 1);
-          }
-        }
-      }
-    }
-
-    // Also check for auto-projected future installments that match projected futures from this import
-    const installmentFutures = allTransactions.filter(t => !t._isOriginal && t.parcela_atual && t.parcela_total);
-    if (installmentFutures.length > 0) {
-      const { data: existingProjectedFutures } = await supabase
-        .from('transacoes')
-        .select('id, descricao, valor, parcela_atual, parcela_total, pessoa, data_original, hash_transacao')
-        .eq('user_id', currentUserId)
-        .eq('conta_id', contaId)
-        .like('descricao', '%(auto-projetada)%');
-
-      if (existingProjectedFutures && existingProjectedFutures.length > 0) {
-        for (const futureTx of installmentFutures) {
-          if (existingHashes.has(futureTx.hash_transacao)) continue;
-
-          const futurePrefix = futureTx.descricao.substring(0, 15).toLowerCase();
-          const match = existingProjectedFutures.find(ep => {
-            // Don't re-delete already scheduled for deletion
-            if (autoProjectedIdsToDelete.includes(ep.id)) return false;
-            const epPrefix = ep.descricao.substring(0, 15).toLowerCase();
-            const valDiff = Math.abs(Number(futureTx.valor) - Number(ep.valor));
-            return (
-              epPrefix === futurePrefix &&
-              valDiff <= 1.0 &&
-              ep.parcela_atual === futureTx.parcela_atual &&
-              ep.parcela_total === futureTx.parcela_total &&
-              ep.pessoa === futureTx.pessoa
-            );
-          });
-
-          if (match) {
-            autoProjectedIdsToDelete.push(match.id);
-            // Remove to avoid double-matching
-            const idx = existingProjectedFutures.indexOf(match);
-            if (idx > -1) existingProjectedFutures.splice(idx, 1);
-          }
-        }
-      }
-    }
-
-    // OFX receipt conciliation: for receitas, check if similar transaction exists (±R$1, ±3 days, same account)
-    const conciliatedHashes = new Set<string>();
-    if (fileType === 'ofx') {
-      const receitas = allTransactions.filter(t => t.tipo === 'receita' && t._isOriginal);
-      if (receitas.length > 0) {
-        const dates = receitas.map(r => r.data);
-        const minDate = dates.reduce((a, b) => a < b ? a : b);
-        const maxDate = dates.reduce((a, b) => a > b ? a : b);
-        const dMin = new Date(minDate + 'T00:00:00');
-        dMin.setDate(dMin.getDate() - 3);
-        const dMax = new Date(maxDate + 'T00:00:00');
-        dMax.setDate(dMax.getDate() + 3);
-        const rangeStart = dMin.toISOString().split('T')[0];
-        const rangeEnd = dMax.toISOString().split('T')[0];
-
-        const { data: existingReceitas } = await supabase
-          .from('transacoes')
-          .select('descricao, valor, data')
-          .eq('user_id', currentUserId)
-          .eq('conta_id', contaId)
-          .eq('tipo', 'receita')
-          .gte('data', rangeStart)
-          .lte('data', rangeEnd);
-
-        if (existingReceitas && existingReceitas.length > 0) {
-          for (const r of receitas) {
-            const rDate = new Date(r.data + 'T00:00:00');
-            const match = existingReceitas.find(er => {
-              const erDate = new Date(er.data + 'T00:00:00');
-              const dayDiff = Math.abs((rDate.getTime() - erDate.getTime()) / (1000 * 60 * 60 * 24));
-              const valDiff = Math.abs(Number(r.valor) - Number(er.valor));
-              return dayDiff <= 3 && valDiff <= 1.0;
-            });
-            if (match) {
-              conciliatedHashes.add(r.hash_transacao);
-            }
-          }
-        }
-      }
     }
 
     setProgress(75);
 
-    // Replaced transactions (auto-projected matched by installment logic) should be imported as new
-    const replacedHashes = new Set(replacedTransactions.map(t => t.hash_transacao));
-    const newTransactions = allTransactions.filter(t =>
-      (!existingHashes.has(t.hash_transacao) && !conciliatedHashes.has(t.hash_transacao)) ||
-      replacedHashes.has(t.hash_transacao)
-    );
-    const duplicateTransactions = allTransactions.filter(t =>
-      (existingHashes.has(t.hash_transacao) || conciliatedHashes.has(t.hash_transacao)) &&
-      !replacedHashes.has(t.hash_transacao)
-    );
+    // All transactions are imported directly — no duplicate detection
+    const newTransactions = allTransactions;
+    const duplicateTransactions: PlannedTransaction[] = [];
+    const duplicateItems: DuplicateInfo[] = [];
 
-    const duplicateItems: DuplicateInfo[] = duplicateTransactions.map(t => ({
+    const importedOriginals: ImportedItem[] = newTransactions.map(t => ({
       data: t.data,
       descricao: t.descricao,
       valor: t.valor,
+      tipo: t.tipo,
+      parcela_atual: t.parcela_atual,
+      parcela_total: t.parcela_total,
       pessoa: t.pessoa,
-      hash_transacao: t.hash_transacao,
-      existing_data: existingHashes.get(t.hash_transacao) || t.data,
     }));
 
-    const importedOriginals: ImportedItem[] = newTransactions
-      .filter(t => t._isOriginal)
-      .map(t => ({
-        data: t.data,
-        descricao: t.descricao,
-        valor: t.valor,
-        tipo: t.tipo,
-        parcela_atual: t.parcela_atual,
-        parcela_total: t.parcela_total,
-        pessoa: t.pessoa,
-      }));
-
-    const importedFutures: ImportedItem[] = newTransactions
-      .filter(t => !t._isOriginal)
-      .map(t => ({
-        data: t.data,
-        descricao: t.descricao,
-        valor: t.valor,
-        tipo: t.tipo,
-        parcela_atual: t.parcela_atual,
-        parcela_total: t.parcela_total,
-        pessoa: t.pessoa,
-        isFuture: true,
-      }));
+    const importedFutures: ImportedItem[] = [];
 
     const totalDespesas = newTransactions
       .filter(t => t.tipo === 'despesa')
@@ -482,53 +311,27 @@ export function CsvImportDialog({ open, onOpenChange }: Props) {
       .filter(t => t.tipo === 'receita')
       .reduce((sum, transaction) => sum + Number(transaction.valor), 0);
 
-    const duplicateHashes = new Set(duplicateTransactions.map(t => t.hash_transacao));
-
     const logEntries = parsedLineLogs.map((entry) => {
-      if (entry.hash_transacao && duplicateHashes.has(entry.hash_transacao)) {
-        return {
-          ...entry,
-          status: 'duplicata' as const,
-          reason: 'Transação idêntica já existe',
-        };
-      }
-
       if (entry.status === 'importada') {
-        return {
-          ...entry,
-          status: 'importada' as const,
-          reason: 'Importada com sucesso',
-        };
+        return { ...entry, status: 'importada' as const, reason: 'Importada com sucesso' };
       }
-
       return entry;
     });
 
     const previewEntries: CsvPreviewEntry[] = parsedLineLogs.map((entry) => {
-      if (entry.hash_transacao && duplicateHashes.has(entry.hash_transacao)) {
-        return {
-          lineNumber: entry.lineNumber,
-          content: entry.content,
-          status: 'duplicate',
-          reason: 'Transação idêntica já existe no banco',
-          hash_transacao: entry.hash_transacao,
-        };
-      }
-
       if (entry.status === 'importada') {
         return {
           lineNumber: entry.lineNumber,
           content: entry.content,
-          status: 'will_import',
+          status: 'will_import' as const,
           reason: 'Linha válida, será importada',
           hash_transacao: entry.hash_transacao,
         };
       }
-
       return {
         lineNumber: entry.lineNumber,
         content: entry.content,
-        status: 'rejected',
+        status: 'rejected' as const,
         reason: entry.reason || 'Linha não será importada',
         hash_transacao: entry.hash_transacao,
       };
@@ -548,8 +351,8 @@ export function CsvImportDialog({ open, onOpenChange }: Props) {
       totalReceitas,
       logEntries,
       previewEntries,
-      autoProjectedIdsToDelete,
-      replacedTransactions,
+      autoProjectedIdsToDelete: [],
+      replacedTransactions: [],
     };
   };
 
