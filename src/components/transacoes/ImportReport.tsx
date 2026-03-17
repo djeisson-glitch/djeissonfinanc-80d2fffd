@@ -47,6 +47,7 @@ export type ImportLogEntryInfo = {
 export type ImportResult = {
   imported: number;
   duplicates: number;
+  deletedAutoProjected?: number;
   contaNome: string;
   duplicateItems: DuplicateInfo[];
   originalItems: ImportedItem[];
