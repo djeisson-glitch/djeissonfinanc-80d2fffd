@@ -5,10 +5,15 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
-const CATEGORIAS = [
+const CATEGORIAS_DESPESA = [
   "Alimentação", "Assinatura", "Beleza", "Casa", "Compras", "Educação",
   "Empréstimos", "Lazer", "Operação bancária", "Outros", "Pais Maiara",
   "Presente", "Produtora", "Saúde", "Serviços", "Transporte", "Vestuário", "Viagem"
+];
+
+const CATEGORIAS_RECEITA = [
+  "Salário/Pró-labore", "Freelance/PJ", "Receita Produtora", "Investimentos",
+  "Vendas", "Reembolsos", "Devoluções", "Transferência entre contas", "Outras receitas"
 ];
 
 serve(async (req) => {
@@ -22,10 +27,14 @@ serve(async (req) => {
     const results = [];
 
     for (const tx of transacoes) {
+      const isReceita = tx.tipo === 'receita';
+      const categorias = isReceita ? CATEGORIAS_RECEITA : CATEGORIAS_DESPESA;
+
       const prompt = `Você é um assistente de categorização financeira. Analise a seguinte transação e retorne APENAS um objeto JSON (sem markdown, sem explicações):
 
 Descrição: "${tx.descricao}"
 Valor: R$ ${tx.valor}
+Tipo: ${isReceita ? 'RECEITA' : 'DESPESA'}
 
 Retorne:
 {
@@ -34,9 +43,9 @@ Retorne:
   "confianca": 0-100
 }
 
-Categorias disponíveis: ${CATEGORIAS.join(", ")}
+Categorias disponíveis: ${categorias.join(", ")}
 
-Critérios:
+Critérios para DESPESAS:
 - Alimentação: supermercados, restaurantes, delivery, fruteira
 - Casa: aluguel, condomínio, água, luz, internet, gás, móveis
 - Saúde: farmácia, consultas, plano de saúde, seguro de vida
@@ -44,11 +53,17 @@ Critérios:
 - Serviços: celular, serviços gerais
 - Assinatura: serviços recorrentes (Netflix, Spotify, etc)
 - Lazer: hobbys, entretenimento
-- Beleza: barbearia, salão
-- Operação bancária: taxas, transferências bancárias
-- Empréstimos: parcelas de empréstimo
-- Produtora: gastos relacionados a produtora
-- Essencial: necessário para sobrevivência/trabalho (Alimentação, Casa, Saúde, Transporte, Serviços, Educação)`;
+- Essencial: necessário para sobrevivência/trabalho
+
+Critérios para RECEITAS:
+- Salário/Pró-labore: salário fixo, pró-labore
+- Freelance/PJ: trabalhos avulsos, nota fiscal PJ
+- Receita Produtora: receitas de produtora de vídeo/conteúdo
+- Investimentos: dividendos, juros, rendimentos
+- Vendas: venda de produtos ou itens usados
+- Reembolsos: reembolso de despesas
+- Devoluções: estornos, devoluções de compras
+- Transferência entre contas: PIX/TED entre contas próprias`;
 
       try {
         const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
@@ -68,7 +83,7 @@ Critérios:
                 parameters: {
                   type: "object",
                   properties: {
-                    categoria: { type: "string", enum: CATEGORIAS },
+                    categoria: { type: "string", enum: categorias },
                     essencial: { type: "boolean" },
                     confianca: { type: "number" }
                   },
@@ -82,17 +97,17 @@ Critérios:
         });
 
         if (response.status === 429) {
-          results.push({ descricao: tx.descricao, categoria: "Outros", essencial: false, confianca: 0, error: "rate_limited" });
+          results.push({ descricao: tx.descricao, categoria: isReceita ? "Outras receitas" : "Outros", essencial: false, confianca: 0, error: "rate_limited" });
           continue;
         }
 
         if (response.status === 402) {
-          results.push({ descricao: tx.descricao, categoria: "Outros", essencial: false, confianca: 0, error: "payment_required" });
+          results.push({ descricao: tx.descricao, categoria: isReceita ? "Outras receitas" : "Outros", essencial: false, confianca: 0, error: "payment_required" });
           continue;
         }
 
         if (!response.ok) {
-          results.push({ descricao: tx.descricao, categoria: "Outros", essencial: false, confianca: 0 });
+          results.push({ descricao: tx.descricao, categoria: isReceita ? "Outras receitas" : "Outros", essencial: false, confianca: 0 });
           continue;
         }
 
@@ -102,10 +117,10 @@ Critérios:
           const args = JSON.parse(toolCall.function.arguments);
           results.push({ descricao: tx.descricao, ...args });
         } else {
-          results.push({ descricao: tx.descricao, categoria: "Outros", essencial: false, confianca: 0 });
+          results.push({ descricao: tx.descricao, categoria: isReceita ? "Outras receitas" : "Outros", essencial: false, confianca: 0 });
         }
       } catch {
-        results.push({ descricao: tx.descricao, categoria: "Outros", essencial: false, confianca: 0 });
+        results.push({ descricao: tx.descricao, categoria: isReceita ? "Outras receitas" : "Outros", essencial: false, confianca: 0 });
       }
     }
 
