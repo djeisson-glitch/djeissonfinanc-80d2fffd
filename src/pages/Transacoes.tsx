@@ -192,6 +192,27 @@ export default function TransacoesPage() {
         </CardContent>
       </Card>
 
+      {(filterCategoria !== 'all' || filterTipo !== 'all' || filterEssencial !== 'all') && (
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="text-sm text-muted-foreground">Filtros ativos:</span>
+          {filterTipo !== 'all' && (
+            <Badge variant="secondary" className="cursor-pointer" onClick={() => { setFilterTipo('all'); searchParams.delete('tipo'); setSearchParams(searchParams, { replace: true }); }}>
+              {filterTipo === 'receita' ? 'Receitas' : 'Despesas'} ✕
+            </Badge>
+          )}
+          {filterCategoria !== 'all' && (
+            <Badge variant="secondary" className="cursor-pointer" onClick={() => handleFilterCategoria('all')}>
+              {filterCategoria} ✕
+            </Badge>
+          )}
+          {filterEssencial !== 'all' && (
+            <Badge variant="secondary" className="cursor-pointer" onClick={() => { setFilterEssencial('all'); searchParams.delete('essencial'); setSearchParams(searchParams, { replace: true }); }}>
+              {filterEssencial === 'true' ? 'Essenciais' : 'Dispensáveis'} ✕
+            </Badge>
+          )}
+        </div>
+      )}
+
       <Card>
         <CardContent className="p-0">
           <Table>
