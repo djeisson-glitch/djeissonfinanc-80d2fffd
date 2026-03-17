@@ -288,6 +288,8 @@ export function CsvImportDialog({ open, onOpenChange }: Props) {
             user_id: currentUserId,
             conta_id: contaId,
             data: ft.data,
+            data_original: null,
+            mes_competencia: null,
             descricao: ft.descricao,
             valor: ft.valor,
             categoria,
