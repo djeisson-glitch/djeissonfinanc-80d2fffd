@@ -199,6 +199,7 @@ export default function ConfiguracoesPage() {
             Resetar Sistema Completo
           </Button>
         </CardContent>
+      </Card>
       </TabsContent>
 
         <TabsContent value="historico">
