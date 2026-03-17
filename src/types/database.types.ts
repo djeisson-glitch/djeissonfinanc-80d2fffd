@@ -196,6 +196,15 @@ export const CATEGORIAS_CONFIG: Record<string, CategoriaConfig> = {
 
 export const CATEGORIAS = Object.keys(CATEGORIAS_CONFIG);
 
+export const CATEGORIAS_DESPESA = CATEGORIAS.filter(c =>
+  !['Salário/Pró-labore', 'Freelance/PJ', 'Receita Produtora', 'Investimentos', 'Vendas', 'Reembolsos', 'Devoluções', 'Transferência entre contas', 'Outras receitas'].includes(c)
+);
+
+export const CATEGORIAS_RECEITA = [
+  'Salário/Pró-labore', 'Freelance/PJ', 'Receita Produtora', 'Investimentos',
+  'Vendas', 'Reembolsos', 'Devoluções', 'Transferência entre contas', 'Outras receitas',
+];
+
 export const getCategoriaColor = (categoria: string): string => {
   return CATEGORIAS_CONFIG[categoria]?.cor || '#9ca3af';
 };
