@@ -571,6 +571,8 @@ export function CsvImportDialog({ open, onOpenChange }: Props) {
       totalReceitas,
       logEntries,
       previewEntries,
+      autoProjectedIdsToDelete,
+      replacedTransactions,
     };
   };
 
