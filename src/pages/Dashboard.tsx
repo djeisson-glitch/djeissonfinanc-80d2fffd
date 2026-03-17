@@ -137,13 +137,6 @@ export default function DashboardPage() {
   const totalNaoEssencial = totalDespesas - totalEssencial;
   const pctEssencial = totalDespesas > 0 ? (totalEssencial / totalDespesas) * 100 : 0;
 
-  const parcelasPorMes: Record<string, number> = {};
-  parcelasFuturas?.forEach(p => {
-    const d = new Date(p.data);
-    const key = `${getMonthName(d.getMonth())}/${d.getFullYear().toString().slice(2)}`;
-    parcelasPorMes[key] = (parcelasPorMes[key] || 0) + Number(p.valor);
-  });
-  const parcelasChart = Object.entries(parcelasPorMes).map(([mes, valor]) => ({ mes, valor }));
 
   if (isLoading) {
     return (
