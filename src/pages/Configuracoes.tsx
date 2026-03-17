@@ -108,6 +108,7 @@ export default function ConfiguracoesPage() {
         <TabsList>
           <TabsTrigger value="geral">Geral</TabsTrigger>
           <TabsTrigger value="historico">Histórico de Importações</TabsTrigger>
+          <TabsTrigger value="debug">Debug</TabsTrigger>
         </TabsList>
 
         <TabsContent value="geral" className="space-y-6">
