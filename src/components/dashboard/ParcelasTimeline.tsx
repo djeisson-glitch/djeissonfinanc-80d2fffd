@@ -86,9 +86,9 @@ export function ParcelasTimeline({ parcelas }: ParcelasTimelineProps) {
     );
   };
 
-  const getIntensityClasses = (count: number) => {
-    if (count >= 8) return 'bg-emerald-700 text-emerald-50';
-    if (count >= 4) return 'bg-emerald-500 text-emerald-50';
+  const getIntensityClasses = (valor: number) => {
+    if (valor > 1500) return 'bg-emerald-700 text-emerald-50';
+    if (valor >= 500) return 'bg-emerald-500 text-emerald-50';
     return 'bg-emerald-200 text-emerald-900';
   };
 
@@ -120,7 +120,6 @@ export function ParcelasTimeline({ parcelas }: ParcelasTimelineProps) {
         </CardContent>
       </Card>
 
-      {/* Scorecards */}
       {endingMonths.length > 0 && (
         <Card className="md:col-span-2">
           <CardHeader>
@@ -129,16 +128,17 @@ export function ParcelasTimeline({ parcelas }: ParcelasTimelineProps) {
           <CardContent>
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
               {endingMonths.map(m => {
+                const economia = m.terminam.reduce((s, t) => s + t.valor, 0);
                 const count = m.terminam.length;
                 return (
                   <button
                     key={m.mesKey}
                     onClick={() => setSelectedEnding(m)}
-                    className={`rounded-lg p-3 text-center transition-transform hover:scale-105 cursor-pointer ${getIntensityClasses(count)}`}
+                    className={`rounded-lg px-3 py-4 text-center transition-transform hover:scale-105 cursor-pointer ${getIntensityClasses(economia)}`}
                   >
-                    <p className="text-xs font-medium opacity-80">{m.mes}</p>
-                    <p className="text-3xl font-bold">{count}</p>
-                    <p className="text-xs opacity-70">parcela{count > 1 ? 's' : ''}</p>
+                    <p className="text-[11px] font-medium opacity-70">{m.mes}</p>
+                    <p className="text-lg font-bold mt-1">{formatCurrency(economia)}</p>
+                    <p className="text-[11px] opacity-60">{count} parcela{count > 1 ? 's' : ''}</p>
                   </button>
                 );
               })}
