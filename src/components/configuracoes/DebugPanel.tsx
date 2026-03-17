@@ -8,9 +8,22 @@ import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { formatCurrency } from '@/lib/format';
-import { Bug, Search, BarChart3, Loader2, Trash2 } from 'lucide-react';
+import { Bug, Search, BarChart3, Loader2, Trash2, Check, X } from 'lucide-react';
 import { toast } from 'sonner';
+
+interface DupGroup {
+  key: string;
+  descricao: string;
+  valor: number;
+  pessoa: string;
+  month: string;
+  parcela: string;
+  items: any[];
+  keepId: string;
+  removeIds: string[];
+}
 
 export function DebugPanel() {
   const { user } = useAuth();
@@ -21,6 +34,9 @@ export function DebugPanel() {
   const [searchResults, setSearchResults] = useState<any[] | null>(null);
   const [searchLoading, setSearchLoading] = useState(false);
   const [dedupLoading, setDedupLoading] = useState(false);
+  const [dedupGroups, setDedupGroups] = useState<DupGroup[] | null>(null);
+  const [dedupModalOpen, setDedupModalOpen] = useState(false);
+  const [dedupDeleting, setDedupDeleting] = useState(false);
 
   const { data: contas } = useQuery({
     queryKey: ['debug-contas', user?.id],
@@ -65,15 +81,12 @@ export function DebugPanel() {
   const runDiagnostic = async () => {
     if (!user) return;
     setDiagLoading(true);
-
-    // Find Black account
     const blackConta = contas?.find(c => c.nome.toLowerCase().includes('black'));
     if (!blackConta) {
       setDiagData([]);
       setDiagLoading(false);
       return;
     }
-
     const { data } = await supabase
       .from('transacoes')
       .select('*')
@@ -82,7 +95,6 @@ export function DebugPanel() {
       .gte('data', '2026-01-01')
       .lte('data', '2026-01-31')
       .order('data', { ascending: true });
-
     setDiagData(data || []);
     setDiagLoading(false);
   };
@@ -90,7 +102,6 @@ export function DebugPanel() {
   const handleSearch = async () => {
     if (!user || !searchTerm.trim()) return;
     setSearchLoading(true);
-
     const numericTerm = Number(searchTerm.replace(',', '.'));
     let query = supabase
       .from('transacoes')
@@ -98,24 +109,20 @@ export function DebugPanel() {
       .eq('user_id', user.id)
       .order('data', { ascending: false })
       .limit(100);
-
     if (!Number.isNaN(numericTerm) && searchTerm.trim() !== '') {
       query = query.or(`descricao.ilike.%${searchTerm}%,valor.eq.${numericTerm}`);
     } else {
       query = query.ilike('descricao', `%${searchTerm}%`);
     }
-
     const { data } = await query;
-
     setSearchResults(data || []);
     setSearchLoading(false);
   };
 
-  const handleDedup = async () => {
+  const analyzeDuplicates = async () => {
     if (!user) return;
     setDedupLoading(true);
     try {
-      // Fetch all transactions in batches to avoid 1000 row limit
       let allTxs: any[] = [];
       let from = 0;
       const batchSize = 1000;
@@ -132,49 +139,73 @@ export function DebugPanel() {
         from += batchSize;
       }
 
-      // Group by: normalized description + valor ±0.50 + pessoa + month + parcela
       const normalize = (s: string) => s.toLowerCase().replace(/\s+/g, ' ').trim();
       const groups: Record<string, any[]> = {};
 
       allTxs.forEach(t => {
         const month = t.data.substring(0, 7);
         const parcela = t.parcela_atual != null ? `${t.parcela_atual}/${t.parcela_total}` : 'none';
-        // Round valor to nearest integer for grouping (±0.50 tolerance)
         const valorBucket = Math.round(Number(t.valor));
         const key = `${normalize(t.descricao)}|${valorBucket}|${normalize(t.pessoa)}|${month}|${parcela}`;
         if (!groups[key]) groups[key] = [];
         groups[key].push(t);
       });
 
-      const idsToDelete: string[] = [];
-      Object.values(groups).forEach(group => {
-        if (group.length > 1) {
-          // Keep oldest (first by created_at), delete rest
-          group.sort((a: any, b: any) => a.created_at.localeCompare(b.created_at));
-          for (let i = 1; i < group.length; i++) {
-            idsToDelete.push(group[i].id);
-          }
+      const dupGroups: DupGroup[] = [];
+      Object.entries(groups).forEach(([key, items]) => {
+        if (items.length > 1) {
+          items.sort((a: any, b: any) => a.created_at.localeCompare(b.created_at));
+          dupGroups.push({
+            key,
+            descricao: items[0].descricao,
+            valor: Number(items[0].valor),
+            pessoa: items[0].pessoa,
+            month: items[0].data.substring(0, 7),
+            parcela: items[0].parcela_atual != null ? `${items[0].parcela_atual}/${items[0].parcela_total}` : '-',
+            items,
+            keepId: items[0].id,
+            removeIds: items.slice(1).map((i: any) => i.id),
+          });
         }
       });
 
-      if (idsToDelete.length === 0) {
+      if (dupGroups.length === 0) {
         toast.info('Nenhuma duplicata encontrada');
       } else {
-        // Delete in batches of 100
-        for (let i = 0; i < idsToDelete.length; i += 100) {
-          const batch = idsToDelete.slice(i, i + 100);
-          await supabase.from('transacoes').delete().in('id', batch);
-        }
-        toast.success(`${idsToDelete.length} duplicata(s) removida(s)`);
-        queryClient.invalidateQueries();
+        setDedupGroups(dupGroups);
+        setDedupModalOpen(true);
       }
     } catch (err) {
-      toast.error('Erro ao limpar duplicatas');
+      toast.error('Erro ao analisar duplicatas');
       console.error(err);
     } finally {
       setDedupLoading(false);
     }
   };
+
+  const confirmDeleteDuplicates = async () => {
+    if (!dedupGroups) return;
+    setDedupDeleting(true);
+    try {
+      const allIds = dedupGroups.flatMap(g => g.removeIds);
+      for (let i = 0; i < allIds.length; i += 100) {
+        const batch = allIds.slice(i, i + 100);
+        await supabase.from('transacoes').delete().in('id', batch);
+      }
+      toast.success(`${allIds.length} duplicata(s) removida(s)`);
+      queryClient.invalidateQueries();
+      setDedupModalOpen(false);
+      setDedupGroups(null);
+    } catch (err) {
+      toast.error('Erro ao remover duplicatas');
+      console.error(err);
+    } finally {
+      setDedupDeleting(false);
+    }
+  };
+
+  const totalToRemove = dedupGroups?.reduce((s, g) => s + g.removeIds.length, 0) || 0;
+  const totalToKeep = dedupGroups?.length || 0;
 
   const diagDespesas = diagData?.filter(t => t.tipo === 'despesa').reduce((s, t) => s + Number(t.valor), 0) || 0;
   const diagReceitas = diagData?.filter(t => t.tipo === 'receita').reduce((s, t) => s + Number(t.valor), 0) || 0;
@@ -317,7 +348,7 @@ export function DebugPanel() {
         </CardContent>
       </Card>
 
-      {/* Section 3: Dedup */}
+      {/* Section 3: Dedup with preview */}
       <Card>
         <CardHeader className="pb-3">
           <CardTitle className="text-base flex items-center gap-2">
@@ -327,14 +358,74 @@ export function DebugPanel() {
         </CardHeader>
         <CardContent className="space-y-3">
           <p className="text-xs text-muted-foreground">
-            Busca transações com descrição similar, valor ±R$ 0,50, mesma pessoa, mesmo mês e mesma parcela. Mantém a mais antiga e remove as demais.
+            Busca transações com descrição similar, valor ±R$ 0,50, mesma pessoa, mesmo mês e mesma parcela. Mostra prévia antes de remover.
           </p>
-          <Button onClick={handleDedup} disabled={dedupLoading} size="sm" variant="destructive">
+          <Button onClick={analyzeDuplicates} disabled={dedupLoading} size="sm" variant="destructive">
             {dedupLoading ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Trash2 className="h-4 w-4 mr-1" />}
-            Limpar Duplicatas
+            Analisar Duplicatas
           </Button>
         </CardContent>
       </Card>
+
+      {/* Dedup Preview Modal */}
+      <Dialog open={dedupModalOpen} onOpenChange={setDedupModalOpen}>
+        <DialogContent className="max-w-2xl max-h-[80vh] flex flex-col">
+          <DialogHeader>
+            <DialogTitle>Duplicatas Encontradas</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            {totalToRemove} transações serão removidas, {totalToKeep} serão mantidas.
+          </p>
+          <ScrollArea className="flex-1 max-h-[50vh]">
+            <div className="space-y-4 pr-4">
+              {dedupGroups?.map((group, idx) => (
+                <div key={group.key} className="border rounded-lg p-3 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <p className="text-sm font-medium">
+                      Grupo {idx + 1}: {group.descricao}
+                    </p>
+                    <Badge variant="outline" className="text-xs">
+                      {formatCurrency(group.valor)} · {group.items.length} transações
+                    </Badge>
+                  </div>
+                  <div className="space-y-1">
+                    {group.items.map((item: any) => {
+                      const isKeep = item.id === group.keepId;
+                      return (
+                        <div
+                          key={item.id}
+                          className={`flex items-center gap-2 text-xs p-1.5 rounded ${
+                            isKeep ? 'bg-emerald-500/10' : 'bg-destructive/10'
+                          }`}
+                        >
+                          {isKeep ? (
+                            <Check className="h-3 w-3 text-emerald-500 shrink-0" />
+                          ) : (
+                            <X className="h-3 w-3 text-destructive shrink-0" />
+                          )}
+                          <span className="font-mono text-muted-foreground">{item.id.slice(0, 8)}</span>
+                          <span>{item.data}</span>
+                          <span className="text-muted-foreground">{formatCurrency(Number(item.valor))}</span>
+                          <span className="ml-auto text-muted-foreground">
+                            {isKeep ? 'mantém' : 'remove'}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </ScrollArea>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDedupModalOpen(false)}>Cancelar</Button>
+            <Button variant="destructive" onClick={confirmDeleteDuplicates} disabled={dedupDeleting}>
+              {dedupDeleting ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Trash2 className="h-4 w-4 mr-1" />}
+              Remover {totalToRemove} duplicata(s)
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Section 4: Stats */}
       <Card>
