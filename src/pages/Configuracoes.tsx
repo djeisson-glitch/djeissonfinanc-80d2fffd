@@ -207,6 +207,10 @@ export default function ConfiguracoesPage() {
         <TabsContent value="historico">
           <ImportHistory />
         </TabsContent>
+
+        <TabsContent value="debug">
+          <DebugPanel />
+        </TabsContent>
       </Tabs>
 
       <Dialog open={resetDialogOpen} onOpenChange={setResetDialogOpen}>
