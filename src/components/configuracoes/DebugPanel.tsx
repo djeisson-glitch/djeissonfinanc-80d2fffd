@@ -44,6 +44,7 @@ export function DebugPanel() {
   const [dedupGroups, setDedupGroups] = useState<DupGroup[] | null>(null);
   const [dedupModalOpen, setDedupModalOpen] = useState(false);
   const [dedupDeleting, setDedupDeleting] = useState(false);
+  const [dedupSummary, setDedupSummary] = useState<string | null>(null);
   const [selectedMonth, setSelectedMonth] = useState('');
   const [selectedConta, setSelectedConta] = useState('');
 
