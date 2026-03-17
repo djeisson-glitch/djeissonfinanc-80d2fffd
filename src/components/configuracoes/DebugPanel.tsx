@@ -317,7 +317,26 @@ export function DebugPanel() {
         </CardContent>
       </Card>
 
-      {/* Section 3: Stats */}
+      {/* Section 3: Dedup */}
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base flex items-center gap-2">
+            <Trash2 className="h-4 w-4" />
+            Limpar Duplicatas
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <p className="text-xs text-muted-foreground">
+            Busca transações com descrição similar, valor ±R$ 0,50, mesma pessoa, mesmo mês e mesma parcela. Mantém a mais antiga e remove as demais.
+          </p>
+          <Button onClick={handleDedup} disabled={dedupLoading} size="sm" variant="destructive">
+            {dedupLoading ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Trash2 className="h-4 w-4 mr-1" />}
+            Limpar Duplicatas
+          </Button>
+        </CardContent>
+      </Card>
+
+      {/* Section 4: Stats */}
       <Card>
         <CardHeader className="pb-3">
           <CardTitle className="text-base flex items-center gap-2">
