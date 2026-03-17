@@ -22,9 +22,16 @@ interface ParsedTransaction {
   hash_transacao: string;
 }
 
+export interface SkippedLine {
+  lineNumber: number;
+  content: string;
+  reason: string;
+}
+
 interface ParseResult {
   contaDetectada: string | null;
   transactions: ParsedTransaction[];
+  skippedLines: SkippedLine[];
 }
 
 function parseDate(dateStr: string): string {
