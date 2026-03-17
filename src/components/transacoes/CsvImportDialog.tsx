@@ -446,6 +446,8 @@ export function CsvImportDialog({ open, onOpenChange }: Props) {
     setDetectedAccountType(null);
     setParsedTransactions([]);
     setParsedSkippedLines([]);
+    setParsedTotalLines(0);
+    setParsedLineLogs([]);
     setForceImporting(false);
     setDueConfirmed(false);
     onOpenChange(false);
