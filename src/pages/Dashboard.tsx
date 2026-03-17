@@ -9,9 +9,9 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { Skeleton } from '@/components/ui/skeleton';
-import { TrendingDown, AlertTriangle, BarChart3, CreditCard } from 'lucide-react';
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
+import { AlertTriangle, BarChart3, CreditCard } from 'lucide-react';
 import { MonthSelector } from '@/components/MonthSelector';
+import { ParcelasTimeline } from '@/components/dashboard/ParcelasTimeline';
 
 export default function DashboardPage() {
   const { user } = useAuth();
@@ -137,13 +137,6 @@ export default function DashboardPage() {
   const totalNaoEssencial = totalDespesas - totalEssencial;
   const pctEssencial = totalDespesas > 0 ? (totalEssencial / totalDespesas) * 100 : 0;
 
-  const parcelasPorMes: Record<string, number> = {};
-  parcelasFuturas?.forEach(p => {
-    const d = new Date(p.data);
-    const key = `${getMonthName(d.getMonth())}/${d.getFullYear().toString().slice(2)}`;
-    parcelasPorMes[key] = (parcelasPorMes[key] || 0) + Number(p.valor);
-  });
-  const parcelasChart = Object.entries(parcelasPorMes).map(([mes, valor]) => ({ mes, valor }));
 
   if (isLoading) {
     return (
@@ -272,32 +265,7 @@ export default function DashboardPage() {
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg flex items-center gap-2">
-              <TrendingDown className="h-5 w-5" />
-              Timeline de Parcelas
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            {parcelasChart.length === 0 ? (
-              <p className="text-sm text-muted-foreground">Nenhuma parcela futura</p>
-            ) : (
-              <ResponsiveContainer width="100%" height={200}>
-                <BarChart data={parcelasChart}>
-                  <XAxis dataKey="mes" tick={{ fontSize: 12 }} />
-                  <YAxis tick={{ fontSize: 12 }} tickFormatter={v => `${(v / 1000).toFixed(0)}k`} />
-                  <Tooltip formatter={(v: number) => formatCurrency(v)} />
-                  <Bar dataKey="valor" radius={[4, 4, 0, 0]}>
-                    {parcelasChart.map((_, i) => (
-                      <Cell key={i} fill="hsl(220, 13%, 22%)" />
-                    ))}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
-            )}
-          </CardContent>
-        </Card>
+        <ParcelasTimeline parcelas={parcelasFuturas || []} />
 
         <Card className="md:col-span-2">
           <CardHeader>
