@@ -1,8 +1,10 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { getMonthRange, formatCurrency, getMonthName } from '@/lib/format';
+import { CATEGORIAS_CONFIG, getCategoriaColor } from '@/types/database.types';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
@@ -13,6 +15,7 @@ import { MonthSelector } from '@/components/MonthSelector';
 
 export default function DashboardPage() {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const now = new Date();
   const [month, setMonth] = useState(now.getMonth());
   const [year, setYear] = useState(now.getFullYear());
@@ -156,19 +159,24 @@ export default function DashboardPage() {
               <p className="text-sm text-muted-foreground">Nenhuma despesa este mês</p>
             ) : (
               <div className="space-y-3">
-                {categoryRanking.map(({ cat, total, essencial, pct }) => (
-                  <div key={cat} className="flex items-center justify-between">
+                {categoryRanking.map(({ cat, total, pct }) => (
+                  <button
+                    key={cat}
+                    className="flex items-center justify-between w-full hover:bg-muted/50 rounded-lg p-2 -m-2 transition-colors cursor-pointer text-left"
+                    onClick={() => navigate(`/transacoes?categoria=${encodeURIComponent(cat)}`)}
+                  >
                     <div className="flex items-center gap-2">
+                      <div
+                        className="w-3 h-3 rounded-full shrink-0"
+                        style={{ backgroundColor: getCategoriaColor(cat) }}
+                      />
                       <span className="text-sm font-medium">{cat}</span>
-                      <Badge variant={essencial ? 'default' : 'secondary'} className="text-xs">
-                        {essencial ? 'Essencial' : 'Dispensável'}
-                      </Badge>
                     </div>
                     <div className="text-right">
                       <span className="text-sm font-medium">{formatCurrency(total)}</span>
                       <span className="text-xs text-muted-foreground ml-2">{pct.toFixed(0)}%</span>
                     </div>
-                  </div>
+                  </button>
                 ))}
               </div>
             )}
