@@ -270,10 +270,11 @@ export function CsvImportDialog({ open, onOpenChange }: Props) {
       const newTransactions = allTransactions.filter(t => !existingHashes.has(t.hash_transacao));
       const duplicateTransactions = allTransactions.filter(t => existingHashes.has(t.hash_transacao));
 
+      // Strip internal _isOriginal before inserting
       let imported = 0;
       const batchSize = 50;
       for (let i = 0; i < newTransactions.length; i += batchSize) {
-        const batch = newTransactions.slice(i, i + batchSize);
+        const batch = newTransactions.slice(i, i + batchSize).map(({ _isOriginal, ...rest }: any) => rest);
         const { error, data } = await supabase
           .from('transacoes')
           .insert(batch)
@@ -293,6 +294,17 @@ export function CsvImportDialog({ open, onOpenChange }: Props) {
         existing_data: existingHashes.get(t.hash_transacao) || t.data,
       }));
 
+      // Build report items from successfully imported
+      const importedOriginals: ImportedItem[] = newTransactions
+        .filter((t: any) => t._isOriginal)
+        .map((t: any) => ({ data: t.data, descricao: t.descricao, valor: t.valor, tipo: t.tipo, parcela_atual: t.parcela_atual, parcela_total: t.parcela_total, pessoa: t.pessoa }));
+      const importedFutures: ImportedItem[] = newTransactions
+        .filter((t: any) => !t._isOriginal)
+        .map((t: any) => ({ data: t.data, descricao: t.descricao, valor: t.valor, tipo: t.tipo, parcela_atual: t.parcela_atual, parcela_total: t.parcela_total, pessoa: t.pessoa, isFuture: true }));
+
+      const totalDespesas = newTransactions.filter((t: any) => t.tipo === 'despesa').reduce((s: number, t: any) => s + Number(t.valor), 0);
+      const totalReceitas = newTransactions.filter((t: any) => t.tipo === 'receita').reduce((s: number, t: any) => s + Number(t.valor), 0);
+
       const contaNome = contas.find(c => c.id === contaId)?.nome || '';
 
       setResult({
@@ -300,6 +312,10 @@ export function CsvImportDialog({ open, onOpenChange }: Props) {
         duplicates: duplicateTransactions.length,
         contaNome,
         duplicateItems,
+        originalItems: importedOriginals,
+        futureItems: importedFutures,
+        totalDespesas,
+        totalReceitas,
       });
 
       // Save import log
