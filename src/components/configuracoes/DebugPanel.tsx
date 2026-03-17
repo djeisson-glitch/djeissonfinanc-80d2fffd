@@ -174,7 +174,7 @@ export function DebugPanel() {
       while (true) {
         const { data } = await supabase
           .from('transacoes')
-          .select('id, descricao, valor, pessoa, data, conta_id, parcela_atual, parcela_total, created_at, tipo')
+          .select('id, descricao, valor, pessoa, data, data_original, conta_id, parcela_atual, parcela_total, created_at, tipo')
           .eq('user_id', user.id)
           .order('created_at', { ascending: true })
           .range(from, from + batchSize - 1);
@@ -188,15 +188,17 @@ export function DebugPanel() {
       const isInstallment = (t: any) => t.parcela_atual != null && t.parcela_total != null;
       const isAutoProjected = (t: any) => t.descricao?.includes('(auto-projetada)');
 
-      // Group key: for installments ignore date (month); for non-installments include month
+      // Group key: for installments use data_original (competencia) if available; for non-installments include month
       const coarseGroups: Record<string, any[]> = {};
       allTxs.forEach(t => {
         const pref = prefix15(t.descricao);
         const pessoa = normalize(t.pessoa);
         let key: string;
         if (isInstallment(t)) {
-          // Installments: group by conta + pessoa + parcela + prefix (NO month)
-          key = `INST|${t.conta_id}|${pessoa}|${t.parcela_atual}/${t.parcela_total}|${pref}`;
+          // Installments: group by conta + pessoa + parcela + prefix + data_original (competencia)
+          // data_original allows exact matching; if missing, use 'any' to still group across months
+          const comp = t.data_original || 'any';
+          key = `INST|${t.conta_id}|${pessoa}|${t.parcela_atual}/${t.parcela_total}|${pref}|${comp}`;
         } else {
           // Non-installments: group by conta + month + pessoa + prefix
           const month = t.data.substring(0, 7);
