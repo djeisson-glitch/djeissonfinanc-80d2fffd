@@ -44,6 +44,8 @@ export function CsvImportDialog({ open, onOpenChange }: Props) {
   const [result, setResult] = useState<ImportResult | null>(null);
   const [parsedTransactions, setParsedTransactions] = useState<ParsedTransaction[]>([]);
   const [parsedSkippedLines, setParsedSkippedLines] = useState<SkippedLine[]>([]);
+  const [parsedTotalLines, setParsedTotalLines] = useState(0);
+  const [parsedLineLogs, setParsedLineLogs] = useState<CsvLineLogEntry[]>([]);
   const [forceImporting, setForceImporting] = useState(false);
 
   // Credit card due date
