@@ -125,7 +125,7 @@ export function ImportReport({ result, onClose, onForceImport, forceImporting }:
         </CollapsibleTrigger>
         <CollapsibleContent>
           <Tabs defaultValue="originals" className="mt-2">
-            <TabsList className="w-full grid grid-cols-3 h-8">
+            <TabsList className="w-full grid grid-cols-4 h-8">
               <TabsTrigger value="originals" className="text-[10px] px-1">
                 Originais ({result.originalItems.length})
               </TabsTrigger>
@@ -134,6 +134,9 @@ export function ImportReport({ result, onClose, onForceImport, forceImporting }:
               </TabsTrigger>
               <TabsTrigger value="duplicates" className="text-[10px] px-1">
                 Duplicatas ({result.duplicateItems.length})
+              </TabsTrigger>
+              <TabsTrigger value="skipped" className="text-[10px] px-1">
+                Rejeitadas ({result.skippedLines.length})
               </TabsTrigger>
             </TabsList>
 
