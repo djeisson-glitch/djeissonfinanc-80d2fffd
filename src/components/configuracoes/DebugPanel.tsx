@@ -11,8 +11,9 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { formatCurrency } from '@/lib/format';
-import { Bug, Search, BarChart3, Loader2, Trash2, Check, X, AlertTriangle } from 'lucide-react';
+import { Bug, Search, BarChart3, Loader2, Trash2, Check, X, AlertTriangle, CalendarPlus } from 'lucide-react';
 import { toast } from 'sonner';
+import { generateHash } from '@/lib/csv-parser';
 
 const MONTH_LABELS: Record<string, string> = {
   '01': 'Janeiro', '02': 'Fevereiro', '03': 'Março', '04': 'Abril',
