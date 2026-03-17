@@ -1,146 +1,190 @@
 import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
-import { useAuth } from '@/hooks/useAuth';
-import { formatCurrency, getMonthName } from '@/lib/format';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { formatCurrency } from '@/lib/format';
+import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Calculator, CheckCircle, AlertTriangle, XCircle } from 'lucide-react';
+import { useToast } from '@/hooks/use-toast';
+import { CategoryTable } from '@/components/orcamento/CategoryTable';
+import {
+  type BudgetData,
+  type BudgetItem,
+  type CategoryKey,
+  CATEGORIES,
+  categoryConfig,
+  calculateItemTotal,
+  calculateSupplierTotal,
+  createEmptyBudget,
+} from '@/components/orcamento/types';
 
 export default function CalculadoraPage() {
-  const { user } = useAuth();
-  const [valor, setValor] = useState(0);
-  const [parcelas, setParcelas] = useState(1);
-  const [resultado, setResultado] = useState<null | { status: 'ok' | 'aperta' | 'nao'; mensagem: string; detalhes: string }>(null);
+  const { toast } = useToast();
+  const [budget, setBudget] = useState<BudgetData>(createEmptyBudget());
 
-  const { data: config } = useQuery({
-    queryKey: ['config', user?.id],
-    queryFn: async () => {
-      const { data } = await supabase.from('configuracoes').select('*').eq('user_id', user!.id).single();
-      return data;
-    },
-    enabled: !!user,
-  });
+  const updateItems = (category: CategoryKey, items: BudgetItem[]) => {
+    setBudget(prev => ({
+      ...prev,
+      items: { ...prev.items, [category]: items },
+    }));
+  };
 
-  const { data: parcelasFuturas } = useQuery({
-    queryKey: ['parcelas-futuras-calc', user?.id],
-    queryFn: async () => {
-      const today = new Date();
-      const future = new Date(today);
-      future.setMonth(future.getMonth() + 12);
-      const { data } = await supabase
-        .from('transacoes')
-        .select('data, valor')
-        .eq('user_id', user!.id)
-        .eq('tipo', 'despesa')
-        .gte('data', today.toISOString().split('T')[0])
-        .lte('data', future.toISOString().split('T')[0]);
-      return data || [];
-    },
-    enabled: !!user,
-  });
+  // Calculations
+  const subtotal1 = CATEGORIES.reduce((sum, cat) => {
+    const config = categoryConfig[cat];
+    return sum + budget.items[cat].reduce((s, item) => s + calculateItemTotal(item, config), 0);
+  }, 0);
 
-  const calcular = () => {
-    if (!config || valor <= 0) return;
+  const supplierCost = CATEGORIES.reduce((sum, cat) => {
+    const config = categoryConfig[cat];
+    return sum + budget.items[cat]
+      .filter(i => i.hasSupplier)
+      .reduce((s, item) => s + calculateSupplierTotal(item, config), 0);
+  }, 0);
 
-    const receita = config.receita_mensal_fixa;
-    const reserva = config.reserva_minima;
-    const valorParcela = valor / parcelas;
+  const markupValue = subtotal1 * (budget.markupPercent / 100);
+  const subtotal2 = subtotal1 + markupValue;
+  const impostosValue = subtotal2 * (budget.impostoPercent / 100);
+  const bvValue = subtotal2 * (budget.bvPercent / 100);
+  const comissaoValue = subtotal2 * (budget.comissaoPercent / 100);
+  const total = subtotal2 + impostosValue + bvValue + comissaoValue;
+  const margem = total - supplierCost;
+  const margemPercent = total > 0 ? (margem / total) * 100 : 0;
 
-    // Calculate projected balance for each of the next N months
-    const hoje = new Date();
-    let pioresaldo = Infinity;
-    let piorMes = '';
-
-    for (let i = 0; i < parcelas; i++) {
-      const mes = new Date(hoje);
-      mes.setMonth(mes.getMonth() + i + 1);
-      const mesKey = `${mes.getFullYear()}-${String(mes.getMonth() + 1).padStart(2, '0')}`;
-
-      // Sum existing commitments for this month
-      const compromissosMes = parcelasFuturas
-        ?.filter(p => p.data.startsWith(mesKey))
-        .reduce((s, p) => s + Number(p.valor), 0) || 0;
-
-      const saldoMes = receita - compromissosMes - valorParcela;
-      if (saldoMes < pioresaldo) {
-        pioresaldo = saldoMes;
-        piorMes = `${getMonthName(mes.getMonth())}/${mes.getFullYear()}`;
-      }
-    }
-
-    if (pioresaldo >= reserva * 1.5) {
-      setResultado({
-        status: 'ok',
-        mensagem: 'Pode comprar!',
-        detalhes: `Sobrará ${formatCurrency(pioresaldo)} mesmo com essa compra.`,
-      });
-    } else if (pioresaldo >= reserva) {
-      setResultado({
-        status: 'aperta',
-        mensagem: 'Aperta, mas dá.',
-        detalhes: `Saldo mínimo será ${formatCurrency(pioresaldo)} em ${piorMes}.`,
-      });
-    } else {
-      const falta = reserva - pioresaldo;
-      setResultado({
-        status: 'nao',
-        mensagem: 'Não cabe no orçamento.',
-        detalhes: `Faltarão ${formatCurrency(falta)} em ${piorMes}.`,
-      });
-    }
+  const getMargemColor = () => {
+    if (margemPercent >= 70) return 'text-emerald-500';
+    if (margemPercent >= 40) return 'text-amber-500';
+    return 'text-red-500';
   };
 
   return (
-    <div className="space-y-6 animate-fade-in max-w-lg mx-auto">
-      <h1 className="text-2xl font-bold">Calculadora de Compra</h1>
+    <div className="space-y-3 animate-fade-in max-w-5xl mx-auto">
+      {/* Header */}
+      <div className="flex items-center justify-between flex-wrap gap-2">
+        <div>
+          <h1 className="text-lg font-bold">Orçamento #{budget.id}</h1>
+          <div className="flex gap-3 mt-1">
+            <div className="flex items-center gap-1.5">
+              <Label className="text-xs text-muted-foreground">Cliente:</Label>
+              <Input
+                value={budget.cliente}
+                onChange={e => setBudget(prev => ({ ...prev, cliente: e.target.value }))}
+                className="h-6 text-xs w-[180px] border-none bg-muted/50 px-2"
+                placeholder="Nome do cliente"
+              />
+            </div>
+            <div className="flex items-center gap-1.5">
+              <Label className="text-xs text-muted-foreground">Projeto:</Label>
+              <Input
+                value={budget.projeto}
+                onChange={e => setBudget(prev => ({ ...prev, projeto: e.target.value }))}
+                className="h-6 text-xs w-[200px] border-none bg-muted/50 px-2"
+                placeholder="Nome do projeto"
+              />
+            </div>
+          </div>
+        </div>
+      </div>
 
+      {/* Category Tables */}
+      {CATEGORIES.map(cat => (
+        <CategoryTable
+          key={cat}
+          category={cat}
+          items={budget.items[cat]}
+          onUpdate={items => updateItems(cat, items)}
+        />
+      ))}
+
+      {/* Profitability Summary */}
       <Card>
-        <CardHeader>
-          <CardTitle className="text-lg flex items-center gap-2">
-            <Calculator className="h-5 w-5" />
-            Posso comprar?
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="space-y-2">
-            <Label>Valor da compra (R$)</Label>
-            <Input type="number" value={valor || ''} onChange={e => setValor(Number(e.target.value))} placeholder="0,00" />
+        <CardContent className="p-3">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-x-6 gap-y-1 text-xs">
+            <div className="md:col-span-2 font-bold text-sm mb-1">RENTABILIDADE</div>
+            <div className="md:col-span-2" />
+
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Sub-Total 1:</span>
+              <span className="font-medium">{formatCurrency(subtotal1)}</span>
+            </div>
+            <div className="flex items-center gap-1">
+              <span className="text-muted-foreground">+ Markup</span>
+              <Input
+                type="number"
+                value={budget.markupPercent || ''}
+                onChange={e => setBudget(prev => ({ ...prev, markupPercent: Number(e.target.value) }))}
+                className="h-5 text-xs text-center w-[40px] px-1"
+              />
+              <span className="text-muted-foreground">%:</span>
+              <span className="font-medium ml-auto">{formatCurrency(markupValue)}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Sub-Total 2:</span>
+              <span className="font-medium">{formatCurrency(subtotal2)}</span>
+            </div>
+            <div className="flex items-center gap-1">
+              <span className="text-muted-foreground">+ Impostos</span>
+              <Input
+                type="number"
+                value={budget.impostoPercent || ''}
+                onChange={e => setBudget(prev => ({ ...prev, impostoPercent: Number(e.target.value) }))}
+                className="h-5 text-xs text-center w-[40px] px-1"
+              />
+              <span className="text-muted-foreground">%:</span>
+              <span className="font-medium ml-auto">{formatCurrency(impostosValue)}</span>
+            </div>
+
+            <div className="flex items-center gap-1">
+              <span className="text-muted-foreground">+ BV</span>
+              <Input
+                type="number"
+                value={budget.bvPercent || ''}
+                onChange={e => setBudget(prev => ({ ...prev, bvPercent: Number(e.target.value) }))}
+                className="h-5 text-xs text-center w-[40px] px-1"
+              />
+              <span className="text-muted-foreground">%:</span>
+              <span className="font-medium ml-auto">{formatCurrency(bvValue)}</span>
+            </div>
+            <div className="flex items-center gap-1">
+              <span className="text-muted-foreground">+ Comissão</span>
+              <Input
+                type="number"
+                value={budget.comissaoPercent || ''}
+                onChange={e => setBudget(prev => ({ ...prev, comissaoPercent: Number(e.target.value) }))}
+                className="h-5 text-xs text-center w-[40px] px-1"
+              />
+              <span className="text-muted-foreground">%:</span>
+              <span className="font-medium ml-auto">{formatCurrency(comissaoValue)}</span>
+            </div>
+
+            <div className="col-span-2 md:col-span-4 border-t border-border mt-1 pt-2 flex items-center justify-between">
+              <span className="font-bold text-sm">TOTAL: {formatCurrency(total)}</span>
+              <span className={`font-bold text-sm ${getMargemColor()}`}>
+                Margem: {formatCurrency(margem)} ({margemPercent.toFixed(1)}%)
+                {margemPercent >= 50 ? ' ✅' : margemPercent >= 20 ? ' ⚠️' : ' ❌'}
+              </span>
+            </div>
           </div>
-          <div className="space-y-2">
-            <Label>Parcelas</Label>
-            <Select value={String(parcelas)} onValueChange={v => setParcelas(Number(v))}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>
-                {Array.from({ length: 12 }, (_, i) => i + 1).map(n => (
-                  <SelectItem key={n} value={String(n)}>{n}x de {valor > 0 ? formatCurrency(valor / n) : 'R$ 0'}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <Button onClick={calcular} className="w-full" disabled={valor <= 0}>
-            Calcular
-          </Button>
         </CardContent>
       </Card>
 
-      {resultado && (
-        <Card className={`border-2 ${
-          resultado.status === 'ok' ? 'border-primary' :
-          resultado.status === 'aperta' ? 'border-accent' : 'border-destructive'
-        }`}>
-          <CardContent className="p-6 text-center space-y-3">
-            {resultado.status === 'ok' && <CheckCircle className="h-12 w-12 text-primary mx-auto" />}
-            {resultado.status === 'aperta' && <AlertTriangle className="h-12 w-12 text-accent mx-auto" />}
-            {resultado.status === 'nao' && <XCircle className="h-12 w-12 text-destructive mx-auto" />}
-            <p className="text-xl font-bold">{resultado.mensagem}</p>
-            <p className="text-sm text-muted-foreground">{resultado.detalhes}</p>
-          </CardContent>
-        </Card>
-      )}
+      {/* Actions */}
+      <div className="flex gap-2 justify-end">
+        <Button
+          variant="outline"
+          size="sm"
+          className="text-xs"
+          onClick={() => toast({ title: 'Rascunho salvo (em breve)' })}
+        >
+          Salvar Rascunho
+        </Button>
+        <Button
+          size="sm"
+          className="text-xs"
+          onClick={() => toast({ title: 'Enviado para aprovação (em breve)' })}
+        >
+          Enviar Aprovação
+        </Button>
+      </div>
     </div>
   );
 }
