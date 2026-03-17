@@ -645,7 +645,7 @@ export function CsvImportDialog({ open, onOpenChange }: Props) {
                   </div>
 
                   {detectedConta && (
-                    <p className="text-sm text-green-500">
+                    <p className="text-sm text-primary">
                       <Check className="inline h-4 w-4 mr-1" />
                       Conta detectada: <strong>{detectedConta}</strong>
                       {isCredito && (
