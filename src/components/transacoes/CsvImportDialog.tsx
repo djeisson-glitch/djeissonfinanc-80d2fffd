@@ -325,16 +325,98 @@ export function CsvImportDialog({ open, onOpenChange }: Props) {
       existing?.forEach(existingItem => existingHashes.set(existingItem.hash_transacao, existingItem.data));
     }
 
+    // --- Auto-projected installment duplicate detection ---
+    // For each installment transaction from the CSV (_isOriginal), find existing auto-projected
+    // matches by: description prefix (15 chars), valor ±R$1, parcela_atual, parcela_total, pessoa
+    const autoProjectedIdsToDelete: string[] = [];
+    const replacedTransactions: PlannedTransaction[] = [];
+    const installmentOriginals = allTransactions.filter(t => t._isOriginal && t.parcela_atual && t.parcela_total);
+
+    if (installmentOriginals.length > 0) {
+      // Fetch existing auto-projected transactions for this account
+      const { data: existingProjected } = await supabase
+        .from('transacoes')
+        .select('id, descricao, valor, parcela_atual, parcela_total, pessoa, data_original, hash_transacao')
+        .eq('user_id', currentUserId)
+        .eq('conta_id', contaId)
+        .like('descricao', '%(auto-projetada)%');
+
+      if (existingProjected && existingProjected.length > 0) {
+        for (const csvTx of installmentOriginals) {
+          // Skip if already detected as hash duplicate
+          if (existingHashes.has(csvTx.hash_transacao)) continue;
+
+          const csvPrefix = csvTx.descricao.substring(0, 15).toLowerCase();
+          const match = existingProjected.find(ep => {
+            const epPrefix = ep.descricao.substring(0, 15).toLowerCase();
+            const valDiff = Math.abs(Number(csvTx.valor) - Number(ep.valor));
+            return (
+              epPrefix === csvPrefix &&
+              valDiff <= 1.0 &&
+              ep.parcela_atual === csvTx.parcela_atual &&
+              ep.parcela_total === csvTx.parcela_total &&
+              ep.pessoa === csvTx.pessoa
+            );
+          });
+
+          if (match) {
+            autoProjectedIdsToDelete.push(match.id);
+            replacedTransactions.push(csvTx);
+            // Remove from existingProjected to avoid double-matching
+            const idx = existingProjected.indexOf(match);
+            if (idx > -1) existingProjected.splice(idx, 1);
+          }
+        }
+      }
+    }
+
+    // Also check for auto-projected future installments that match projected futures from this import
+    const installmentFutures = allTransactions.filter(t => !t._isOriginal && t.parcela_atual && t.parcela_total);
+    if (installmentFutures.length > 0) {
+      const { data: existingProjectedFutures } = await supabase
+        .from('transacoes')
+        .select('id, descricao, valor, parcela_atual, parcela_total, pessoa, data_original, hash_transacao')
+        .eq('user_id', currentUserId)
+        .eq('conta_id', contaId)
+        .like('descricao', '%(auto-projetada)%');
+
+      if (existingProjectedFutures && existingProjectedFutures.length > 0) {
+        for (const futureTx of installmentFutures) {
+          if (existingHashes.has(futureTx.hash_transacao)) continue;
+
+          const futurePrefix = futureTx.descricao.substring(0, 15).toLowerCase();
+          const match = existingProjectedFutures.find(ep => {
+            // Don't re-delete already scheduled for deletion
+            if (autoProjectedIdsToDelete.includes(ep.id)) return false;
+            const epPrefix = ep.descricao.substring(0, 15).toLowerCase();
+            const valDiff = Math.abs(Number(futureTx.valor) - Number(ep.valor));
+            return (
+              epPrefix === futurePrefix &&
+              valDiff <= 1.0 &&
+              ep.parcela_atual === futureTx.parcela_atual &&
+              ep.parcela_total === futureTx.parcela_total &&
+              ep.pessoa === futureTx.pessoa
+            );
+          });
+
+          if (match) {
+            autoProjectedIdsToDelete.push(match.id);
+            // Remove to avoid double-matching
+            const idx = existingProjectedFutures.indexOf(match);
+            if (idx > -1) existingProjectedFutures.splice(idx, 1);
+          }
+        }
+      }
+    }
+
     // OFX receipt conciliation: for receitas, check if similar transaction exists (±R$1, ±3 days, same account)
     const conciliatedHashes = new Set<string>();
     if (fileType === 'ofx') {
       const receitas = allTransactions.filter(t => t.tipo === 'receita' && t._isOriginal);
       if (receitas.length > 0) {
-        // Get existing receitas from this account in the date range
         const dates = receitas.map(r => r.data);
         const minDate = dates.reduce((a, b) => a < b ? a : b);
         const maxDate = dates.reduce((a, b) => a > b ? a : b);
-        // Expand range by 3 days
         const dMin = new Date(minDate + 'T00:00:00');
         dMin.setDate(dMin.getDate() - 3);
         const dMax = new Date(maxDate + 'T00:00:00');
@@ -370,8 +452,16 @@ export function CsvImportDialog({ open, onOpenChange }: Props) {
 
     setProgress(75);
 
-    const newTransactions = allTransactions.filter(t => !existingHashes.has(t.hash_transacao) && !conciliatedHashes.has(t.hash_transacao));
-    const duplicateTransactions = allTransactions.filter(t => existingHashes.has(t.hash_transacao) || conciliatedHashes.has(t.hash_transacao));
+    // Replaced transactions (auto-projected matched by installment logic) should be imported as new
+    const replacedHashes = new Set(replacedTransactions.map(t => t.hash_transacao));
+    const newTransactions = allTransactions.filter(t =>
+      (!existingHashes.has(t.hash_transacao) && !conciliatedHashes.has(t.hash_transacao)) ||
+      replacedHashes.has(t.hash_transacao)
+    );
+    const duplicateTransactions = allTransactions.filter(t =>
+      (existingHashes.has(t.hash_transacao) || conciliatedHashes.has(t.hash_transacao)) &&
+      !replacedHashes.has(t.hash_transacao)
+    );
 
     const duplicateItems: DuplicateInfo[] = duplicateTransactions.map(t => ({
       data: t.data,
