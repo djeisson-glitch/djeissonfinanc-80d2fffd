@@ -8,10 +8,12 @@ import { Label } from '@/components/ui/label';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Save, Trash2, Settings, AlertTriangle } from 'lucide-react';
+import { ImportHistory } from '@/components/configuracoes/ImportHistory';
 
 export default function ConfiguracoesPage() {
   const { user } = useAuth();
