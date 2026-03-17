@@ -9,9 +9,9 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { Skeleton } from '@/components/ui/skeleton';
-import { TrendingDown, AlertTriangle, BarChart3, CreditCard } from 'lucide-react';
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
+import { AlertTriangle, BarChart3, CreditCard } from 'lucide-react';
 import { MonthSelector } from '@/components/MonthSelector';
+import { ParcelasTimeline } from '@/components/dashboard/ParcelasTimeline';
 
 export default function DashboardPage() {
   const { user } = useAuth();
