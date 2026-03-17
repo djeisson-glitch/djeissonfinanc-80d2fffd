@@ -249,19 +249,38 @@ export function DebugPanel() {
 
   return (
     <div className="space-y-4">
-      {/* Section 1: Janeiro 2026 - Black */}
+      {/* Section 1: Diagnóstico Dinâmico */}
       <Card>
         <CardHeader className="pb-3">
           <CardTitle className="text-base flex items-center gap-2">
             <Bug className="h-4 w-4" />
-            Diagnóstico: Janeiro 2026 — Black
+            Diagnóstico: {selectedMonth ? formatMonthLabel(selectedMonth) : '...'} — {selectedContaNome || '...'}
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
-          <Button onClick={runDiagnostic} disabled={diagLoading} size="sm">
-            {diagLoading ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : null}
-            Executar Diagnóstico
-          </Button>
+          <div className="flex gap-2 flex-wrap">
+            <Select value={selectedMonth} onValueChange={setSelectedMonth}>
+              <SelectTrigger className="w-[180px] h-8 text-xs">
+                <SelectValue placeholder="Mês" />
+              </SelectTrigger>
+              <SelectContent>
+                {availableMonths.map(ym => (
+                  <SelectItem key={ym} value={ym} className="text-xs">{formatMonthLabel(ym)}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select value={selectedConta} onValueChange={setSelectedConta}>
+              <SelectTrigger className="w-[180px] h-8 text-xs">
+                <SelectValue placeholder="Conta" />
+              </SelectTrigger>
+              <SelectContent>
+                {contas?.map(c => (
+                  <SelectItem key={c.id} value={c.id} className="text-xs">{c.nome}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {diagLoading && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground self-center" />}
+          </div>
 
           {diagData && (
             <>
