@@ -12,7 +12,13 @@ import { Progress } from '@/components/ui/progress';
 import { Upload, FileText, Check, AlertCircle, CreditCard, CalendarDays } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { ImportReport, ImportResult, DuplicateInfo, ImportedItem } from './ImportReport';
-function getDefaultDueDate(transactions: ParsedTransaction[]): { month: number; year: number } {
+
+interface Props {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}
+
+const MONTH_NAMES = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
   if (transactions.length === 0) {
     const now = new Date();
     return { month: now.getMonth(), year: now.getFullYear() };
