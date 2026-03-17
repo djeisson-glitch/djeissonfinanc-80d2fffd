@@ -158,8 +158,16 @@ export default function TransacoesPage() {
                 ))}
               </SelectContent>
             </Select>
-            <Select value={filterEssencial} onValueChange={setFilterEssencial}>
-              <SelectTrigger><SelectValue placeholder="Tipo" /></SelectTrigger>
+            <Select value={filterTipo} onValueChange={v => { setFilterTipo(v); if (v === 'all') { searchParams.delete('tipo'); } else { searchParams.set('tipo', v); } setSearchParams(searchParams, { replace: true }); }}>
+              <SelectTrigger><SelectValue placeholder="Receita/Despesa" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Receita/Despesa</SelectItem>
+                <SelectItem value="receita">Receitas</SelectItem>
+                <SelectItem value="despesa">Despesas</SelectItem>
+              </SelectContent>
+            </Select>
+            <Select value={filterEssencial} onValueChange={v => { setFilterEssencial(v); if (v === 'all') { searchParams.delete('essencial'); } else { searchParams.set('essencial', v); } setSearchParams(searchParams, { replace: true }); }}>
+              <SelectTrigger><SelectValue placeholder="Essencial" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">Todos</SelectItem>
                 <SelectItem value="true">Essenciais</SelectItem>
