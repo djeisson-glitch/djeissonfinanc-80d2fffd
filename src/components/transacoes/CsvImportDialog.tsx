@@ -11,7 +11,8 @@ import { parseOFX } from '@/lib/ofx-parser';
 import { Progress } from '@/components/ui/progress';
 import { Upload, FileText, Check, AlertCircle, CreditCard, CalendarDays } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
-import { ImportReport, ImportResult, DuplicateInfo, ImportedItem } from './ImportReport';
+import { ImportReport, ImportResult, DuplicateInfo, ImportedItem, SkippedLineInfo } from './ImportReport';
+import { SkippedLine } from '@/lib/csv-parser';
 
 interface Props {
   open: boolean;
