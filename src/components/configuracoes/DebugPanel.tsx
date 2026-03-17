@@ -163,7 +163,92 @@ export function DebugPanel() {
   // First 15 chars prefix for matching
   const prefix15 = (s: string) => normalize(s).substring(0, 15);
 
-/* analyzeDuplicates is defined above inside the new block */
+  const analyzeDuplicates = async () => {
+    if (!user) return;
+    setDedupLoading(true);
+    setDedupSummary(null);
+    try {
+      let allTxs: any[] = [];
+      let from = 0;
+      const batchSize = 1000;
+      while (true) {
+        const { data } = await supabase
+          .from('transacoes')
+          .select('id, descricao, valor, pessoa, data, conta_id, parcela_atual, parcela_total, created_at, tipo')
+          .eq('user_id', user.id)
+          .order('created_at', { ascending: true })
+          .range(from, from + batchSize - 1);
+        if (!data || data.length === 0) break;
+        allTxs = allTxs.concat(data);
+        if (data.length < batchSize) break;
+        from += batchSize;
+      }
+
+      // Group by: same account + same month + same person + same parcela + first 15 chars
+      const coarseGroups: Record<string, any[]> = {};
+      allTxs.forEach(t => {
+        const month = t.data.substring(0, 7);
+        const parcela = t.parcela_atual != null ? `${t.parcela_atual}/${t.parcela_total}` : 'none';
+        const pref = prefix15(t.descricao);
+        const key = `${t.conta_id}|${month}|${normalize(t.pessoa)}|${parcela}|${pref}`;
+        if (!coarseGroups[key]) coarseGroups[key] = [];
+        coarseGroups[key].push(t);
+      });
+
+      // Within each group, cluster by value tolerance ≤ R$ 1.00
+      const dupGroups: DupGroup[] = [];
+
+      Object.entries(coarseGroups).forEach(([, items]) => {
+        if (items.length < 2) return;
+        const clusters: any[][] = [];
+        const assigned = new Set<number>();
+
+        for (let i = 0; i < items.length; i++) {
+          if (assigned.has(i)) continue;
+          const cluster = [items[i]];
+          assigned.add(i);
+          for (let j = i + 1; j < items.length; j++) {
+            if (assigned.has(j)) continue;
+            const valDiff = Math.abs(Number(items[i].valor) - Number(items[j].valor));
+            if (valDiff <= 1.0) {
+              cluster.push(items[j]);
+              assigned.add(j);
+            }
+          }
+          if (cluster.length > 1) clusters.push(cluster);
+        }
+
+        clusters.forEach(cluster => {
+          cluster.sort((a: any, b: any) => a.created_at.localeCompare(b.created_at));
+          const first = cluster[0];
+          dupGroups.push({
+            key: `${prefix15(first.descricao)}|${Math.round(Number(first.valor))}|${first.conta_id}`,
+            descricao: first.descricao,
+            valor: Number(first.valor),
+            pessoa: first.pessoa,
+            month: first.data.substring(0, 7),
+            parcela: first.parcela_atual != null ? `${first.parcela_atual}/${first.parcela_total}` : '-',
+            items: cluster,
+            keepId: first.id,
+            removeIds: cluster.slice(1).map((i: any) => i.id),
+          });
+        });
+      });
+
+      if (dupGroups.length === 0) {
+        toast.info('Nenhuma duplicata encontrada');
+      } else {
+        dupGroups.sort((a, b) => b.removeIds.length - a.removeIds.length);
+        setDedupGroups(dupGroups);
+        setDedupModalOpen(true);
+      }
+    } catch (err) {
+      toast.error('Erro ao analisar duplicatas');
+      console.error(err);
+    } finally {
+      setDedupLoading(false);
+    }
+  };
 
   const confirmDeleteDuplicates = async () => {
     if (!dedupGroups) return;
