@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -9,15 +9,18 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { formatCurrency } from '@/lib/format';
-import { Bug, Search, BarChart3, Loader2 } from 'lucide-react';
+import { Bug, Search, BarChart3, Loader2, Trash2 } from 'lucide-react';
+import { toast } from 'sonner';
 
 export function DebugPanel() {
   const { user } = useAuth();
+  const queryClient = useQueryClient();
   const [diagData, setDiagData] = useState<any[] | null>(null);
   const [diagLoading, setDiagLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [searchResults, setSearchResults] = useState<any[] | null>(null);
   const [searchLoading, setSearchLoading] = useState(false);
+  const [dedupLoading, setDedupLoading] = useState(false);
 
   const { data: contas } = useQuery({
     queryKey: ['debug-contas', user?.id],
@@ -106,6 +109,71 @@ export function DebugPanel() {
 
     setSearchResults(data || []);
     setSearchLoading(false);
+  };
+
+  const handleDedup = async () => {
+    if (!user) return;
+    setDedupLoading(true);
+    try {
+      // Fetch all transactions in batches to avoid 1000 row limit
+      let allTxs: any[] = [];
+      let from = 0;
+      const batchSize = 1000;
+      while (true) {
+        const { data } = await supabase
+          .from('transacoes')
+          .select('id, descricao, valor, pessoa, data, parcela_atual, parcela_total, created_at')
+          .eq('user_id', user.id)
+          .order('created_at', { ascending: true })
+          .range(from, from + batchSize - 1);
+        if (!data || data.length === 0) break;
+        allTxs = allTxs.concat(data);
+        if (data.length < batchSize) break;
+        from += batchSize;
+      }
+
+      // Group by: normalized description + valor ±0.50 + pessoa + month + parcela
+      const normalize = (s: string) => s.toLowerCase().replace(/\s+/g, ' ').trim();
+      const groups: Record<string, any[]> = {};
+
+      allTxs.forEach(t => {
+        const month = t.data.substring(0, 7);
+        const parcela = t.parcela_atual != null ? `${t.parcela_atual}/${t.parcela_total}` : 'none';
+        // Round valor to nearest integer for grouping (±0.50 tolerance)
+        const valorBucket = Math.round(Number(t.valor));
+        const key = `${normalize(t.descricao)}|${valorBucket}|${normalize(t.pessoa)}|${month}|${parcela}`;
+        if (!groups[key]) groups[key] = [];
+        groups[key].push(t);
+      });
+
+      const idsToDelete: string[] = [];
+      Object.values(groups).forEach(group => {
+        if (group.length > 1) {
+          // Keep oldest (first by created_at), delete rest
+          group.sort((a: any, b: any) => a.created_at.localeCompare(b.created_at));
+          for (let i = 1; i < group.length; i++) {
+            idsToDelete.push(group[i].id);
+          }
+        }
+      });
+
+      if (idsToDelete.length === 0) {
+        toast.info('Nenhuma duplicata encontrada');
+      } else {
+        // Delete in batches of 100
+        for (let i = 0; i < idsToDelete.length; i += 100) {
+          const batch = idsToDelete.slice(i, i + 100);
+          await supabase.from('transacoes').delete().in('id', batch);
+        }
+        toast.success(`${idsToDelete.length} duplicata(s) removida(s)`);
+        queryClient.invalidateQueries();
+      }
+    } catch (err) {
+      toast.error('Erro ao limpar duplicatas');
+      console.error(err);
+    } finally {
+      setDedupLoading(false);
+    }
   };
 
   const diagDespesas = diagData?.filter(t => t.tipo === 'despesa').reduce((s, t) => s + Number(t.valor), 0) || 0;
@@ -249,7 +317,26 @@ export function DebugPanel() {
         </CardContent>
       </Card>
 
-      {/* Section 3: Stats */}
+      {/* Section 3: Dedup */}
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base flex items-center gap-2">
+            <Trash2 className="h-4 w-4" />
+            Limpar Duplicatas
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <p className="text-xs text-muted-foreground">
+            Busca transações com descrição similar, valor ±R$ 0,50, mesma pessoa, mesmo mês e mesma parcela. Mantém a mais antiga e remove as demais.
+          </p>
+          <Button onClick={handleDedup} disabled={dedupLoading} size="sm" variant="destructive">
+            {dedupLoading ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Trash2 className="h-4 w-4 mr-1" />}
+            Limpar Duplicatas
+          </Button>
+        </CardContent>
+      </Card>
+
+      {/* Section 4: Stats */}
       <Card>
         <CardHeader className="pb-3">
           <CardTitle className="text-base flex items-center gap-2">
