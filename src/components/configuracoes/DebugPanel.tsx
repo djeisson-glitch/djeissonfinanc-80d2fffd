@@ -14,11 +14,13 @@ import { toast } from 'sonner';
 
 export function DebugPanel() {
   const { user } = useAuth();
+  const queryClient = useQueryClient();
   const [diagData, setDiagData] = useState<any[] | null>(null);
   const [diagLoading, setDiagLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [searchResults, setSearchResults] = useState<any[] | null>(null);
   const [searchLoading, setSearchLoading] = useState(false);
+  const [dedupLoading, setDedupLoading] = useState(false);
 
   const { data: contas } = useQuery({
     queryKey: ['debug-contas', user?.id],
