@@ -189,6 +189,49 @@ export default function DashboardPage() {
         </Card>
       </div>
 
+      {/* Credit Card Invoices */}
+      {creditCards.length > 0 && (
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+          {creditCards.map(card => {
+            const fatura = faturaData?.[card.id];
+            const faturaTotal = fatura?.despesas || 0;
+            const pagTotal = fatura?.pagamentos || 0;
+            const status = faturaTotal <= 0
+              ? { label: 'Sem fatura', emoji: '', color: '#9ca3af' }
+              : pagTotal >= faturaTotal
+                ? { label: 'Paga', emoji: '🟢', color: '#10b981' }
+                : pagTotal > 0
+                  ? { label: 'Parcialmente paga', emoji: '🟡', color: '#f59e0b' }
+                  : { label: 'Em aberto', emoji: '🔴', color: '#ef4444' };
+
+            return (
+              <Card key={card.id}>
+                <CardContent className="p-4">
+                  <div className="flex items-center gap-2 mb-2">
+                    <CreditCard className="h-4 w-4 text-muted-foreground" />
+                    <span className="text-sm font-medium">{card.nome}</span>
+                    <Badge
+                      variant="outline"
+                      className="ml-auto text-xs"
+                      style={{ borderColor: status.color, color: status.color }}
+                    >
+                      {status.emoji} {status.label}
+                    </Badge>
+                  </div>
+                  <p className="text-xs text-muted-foreground">Fatura atual</p>
+                  <p className="text-lg font-bold text-destructive">{formatCurrency(faturaTotal)}</p>
+                  {pagTotal > 0 && pagTotal < faturaTotal && (
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Pago: {formatCurrency(pagTotal)} de {formatCurrency(faturaTotal)}
+                    </p>
+                  )}
+                </CardContent>
+              </Card>
+            );
+          })}
+        </div>
+      )}
+
       <div className="grid gap-4 md:grid-cols-2">
         <Card>
           <CardHeader>
