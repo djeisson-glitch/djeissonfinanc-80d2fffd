@@ -10,6 +10,7 @@ import { parseOFX } from '@/lib/ofx-parser';
 import { Progress } from '@/components/ui/progress';
 import { Upload, FileText, Check, AlertCircle } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
+import { ImportReport, ImportResult, DuplicateInfo } from './ImportReport';
 
 interface Props {
   open: boolean;
@@ -39,8 +40,9 @@ export function CsvImportDialog({ open, onOpenChange }: Props) {
   const [needsManualSelect, setNeedsManualSelect] = useState(false);
   const [importing, setImporting] = useState(false);
   const [progress, setProgress] = useState(0);
-  const [result, setResult] = useState<{ imported: number; duplicates: number; contaNome: string } | null>(null);
+  const [result, setResult] = useState<ImportResult | null>(null);
   const [parsedTransactions, setParsedTransactions] = useState<ParsedTransaction[]>([]);
+  const [forceImporting, setForceImporting] = useState(false);
 
   const loadContas = useCallback(async () => {
     if (!user) return;
@@ -85,7 +87,6 @@ export function CsvImportDialog({ open, onOpenChange }: Props) {
     setDetectedConta(contaDetectada);
     setParsedTransactions(transactions);
 
-    // Try to auto-match conta
     if (contaDetectada && contasList) {
       const match = contasList.find(c => c.nome.toLowerCase().includes(contaDetectada!.toLowerCase()));
       if (match) {
@@ -112,16 +113,13 @@ export function CsvImportDialog({ open, onOpenChange }: Props) {
     setProgress(10);
 
     try {
-      // Load categorization rules
       const { data: rules } = await supabase
         .from('regras_categorizacao')
         .select('*')
         .eq('user_id', user.id);
 
-      setProgress(30);
+      setProgress(20);
 
-      let imported = 0;
-      let duplicates = 0;
       const allTransactions: any[] = [];
 
       for (const t of parsedTransactions) {
@@ -137,7 +135,7 @@ export function CsvImportDialog({ open, onOpenChange }: Props) {
 
         const grupo_parcela = t.parcela_atual ? crypto.randomUUID() : null;
 
-        const mainTx = {
+        allTransactions.push({
           user_id: user.id,
           conta_id: contaId,
           data: t.data,
@@ -151,9 +149,7 @@ export function CsvImportDialog({ open, onOpenChange }: Props) {
           grupo_parcela,
           hash_transacao: t.hash_transacao,
           pessoa: t.pessoa,
-        };
-
-        allTransactions.push(mainTx);
+        });
 
         if (t.parcela_atual && t.parcela_total && grupo_parcela) {
           const futures = generateFutureInstallments(t, grupo_parcela);
@@ -177,28 +173,58 @@ export function CsvImportDialog({ open, onOpenChange }: Props) {
         }
       }
 
-      setProgress(60);
+      setProgress(40);
 
-      // Insert in batches
+      // Check which hashes already exist
+      const allHashes = allTransactions.map(t => t.hash_transacao);
+      const existingHashes = new Map<string, string>();
+      
+      // Query in chunks of 100
+      for (let i = 0; i < allHashes.length; i += 100) {
+        const chunk = allHashes.slice(i, i + 100);
+        const { data: existing } = await supabase
+          .from('transacoes')
+          .select('hash_transacao, data')
+          .eq('user_id', user.id)
+          .in('hash_transacao', chunk);
+        
+        existing?.forEach(e => existingHashes.set(e.hash_transacao, e.data));
+      }
+
+      setProgress(55);
+
+      const newTransactions = allTransactions.filter(t => !existingHashes.has(t.hash_transacao));
+      const duplicateTransactions = allTransactions.filter(t => existingHashes.has(t.hash_transacao));
+
+      // Insert only new ones
+      let imported = 0;
       const batchSize = 50;
-      for (let i = 0; i < allTransactions.length; i += batchSize) {
-        const batch = allTransactions.slice(i, i + batchSize);
+      for (let i = 0; i < newTransactions.length; i += batchSize) {
+        const batch = newTransactions.slice(i, i + batchSize);
         const { error, data } = await supabase
           .from('transacoes')
-          .upsert(batch, { onConflict: 'user_id,hash_transacao', ignoreDuplicates: true })
+          .insert(batch)
           .select('id');
 
         if (error) console.error('Insert error:', error);
-        const insertedCount = data?.length || 0;
-        imported += insertedCount;
-        duplicates += batch.length - insertedCount;
-        setProgress(60 + (40 * (i + batch.length)) / allTransactions.length);
+        imported += data?.length || 0;
+        setProgress(55 + (45 * (i + batch.length)) / Math.max(newTransactions.length, 1));
       }
+
+      const duplicateItems: DuplicateInfo[] = duplicateTransactions.map(t => ({
+        data: t.data,
+        descricao: t.descricao,
+        valor: t.valor,
+        pessoa: t.pessoa,
+        hash_transacao: t.hash_transacao,
+        existing_data: existingHashes.get(t.hash_transacao) || t.data,
+      }));
 
       setResult({
         imported,
-        duplicates,
+        duplicates: duplicateTransactions.length,
         contaNome: contas.find(c => c.id === contaId)?.nome || '',
+        duplicateItems,
       });
 
       queryClient.invalidateQueries({ queryKey: ['transacoes'] });
@@ -212,6 +238,70 @@ export function CsvImportDialog({ open, onOpenChange }: Props) {
     setProgress(100);
   };
 
+  const handleForceImport = async (items: DuplicateInfo[]) => {
+    if (!user || !selectedConta) return;
+    setForceImporting(true);
+
+    try {
+      // Re-build full transaction objects for duplicates
+      const { data: rules } = await supabase
+        .from('regras_categorizacao')
+        .select('*')
+        .eq('user_id', user.id);
+
+      const txs = items.map(item => {
+        let categoria = 'Outros';
+        let essencial = false;
+        const matchedRule = rules?.find(r =>
+          item.descricao.toLowerCase().includes(r.padrao.toLowerCase())
+        );
+        if (matchedRule) {
+          categoria = matchedRule.categoria;
+          essencial = matchedRule.essencial;
+        }
+
+        return {
+          user_id: user.id,
+          conta_id: selectedConta,
+          data: item.data,
+          descricao: item.descricao,
+          valor: item.valor,
+          categoria,
+          tipo: item.valor > 0 ? 'despesa' : 'receita',
+          essencial,
+          parcela_atual: null,
+          parcela_total: null,
+          grupo_parcela: null,
+          hash_transacao: item.hash_transacao + '_force_' + Date.now(),
+          pessoa: item.pessoa,
+        };
+      });
+
+      const { data, error } = await supabase.from('transacoes').insert(txs).select('id');
+      if (error) throw error;
+
+      const forceImported = data?.length || 0;
+      toast({ title: `${forceImported} duplicatas importadas com sucesso` });
+
+      if (result) {
+        setResult({
+          ...result,
+          imported: result.imported + forceImported,
+          duplicates: 0,
+          duplicateItems: [],
+        });
+      }
+
+      queryClient.invalidateQueries({ queryKey: ['transacoes'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] });
+    } catch (err) {
+      console.error(err);
+      toast({ title: 'Erro ao importar duplicatas', variant: 'destructive' });
+    }
+
+    setForceImporting(false);
+  };
+
   const handleClose = () => {
     setFile(null);
     setFileType(null);
@@ -221,6 +311,7 @@ export function CsvImportDialog({ open, onOpenChange }: Props) {
     setSelectedConta('');
     setDetectedConta(null);
     setParsedTransactions([]);
+    setForceImporting(false);
     onOpenChange(false);
   };
 
@@ -254,7 +345,7 @@ export function CsvImportDialog({ open, onOpenChange }: Props) {
                 </div>
 
                 {detectedConta && (
-                  <p className="text-sm text-success">
+                  <p className="text-sm text-green-500">
                     <Check className="inline h-4 w-4 mr-1" />
                     Conta detectada: <strong>{detectedConta}</strong>
                   </p>
@@ -288,19 +379,12 @@ export function CsvImportDialog({ open, onOpenChange }: Props) {
             )}
           </div>
         ) : (
-          <div className="space-y-4 text-center">
-            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-muted">
-              <Check className="h-6 w-6 text-success" />
-            </div>
-            <div>
-              <p className="font-medium">{result.imported} transações importadas</p>
-              {result.duplicates > 0 && (
-                <p className="text-sm text-muted-foreground">{result.duplicates} duplicatas ignoradas</p>
-              )}
-              <p className="text-sm text-muted-foreground">Conta: {result.contaNome}</p>
-            </div>
-            <Button onClick={handleClose} className="w-full">Fechar</Button>
-          </div>
+          <ImportReport
+            result={result}
+            onClose={handleClose}
+            onForceImport={handleForceImport}
+            forceImporting={forceImporting}
+          />
         )}
       </DialogContent>
     </Dialog>
