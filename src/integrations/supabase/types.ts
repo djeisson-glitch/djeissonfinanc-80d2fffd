@@ -68,6 +68,45 @@ export type Database = {
         }
         Relationships: []
       }
+      historico_importacoes: {
+        Row: {
+          conta_id: string
+          conta_nome: string
+          created_at: string
+          id: string
+          nome_arquivo: string
+          qtd_duplicadas: number
+          qtd_importada: number
+          qtd_total: number
+          tipo_arquivo: string
+          user_id: string
+        }
+        Insert: {
+          conta_id: string
+          conta_nome: string
+          created_at?: string
+          id?: string
+          nome_arquivo: string
+          qtd_duplicadas?: number
+          qtd_importada?: number
+          qtd_total?: number
+          tipo_arquivo?: string
+          user_id: string
+        }
+        Update: {
+          conta_id?: string
+          conta_nome?: string
+          created_at?: string
+          id?: string
+          nome_arquivo?: string
+          qtd_duplicadas?: number
+          qtd_importada?: number
+          qtd_total?: number
+          tipo_arquivo?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       regras_categorizacao: {
         Row: {
           aprendido_auto: boolean

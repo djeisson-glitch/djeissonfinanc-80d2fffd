@@ -8,10 +8,12 @@ import { Label } from '@/components/ui/label';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Save, Trash2, Settings, AlertTriangle } from 'lucide-react';
+import { ImportHistory } from '@/components/configuracoes/ImportHistory';
 
 export default function ConfiguracoesPage() {
   const { user } = useAuth();
@@ -101,6 +103,13 @@ export default function ConfiguracoesPage() {
     <div className="space-y-6 animate-fade-in">
       <h1 className="text-2xl font-bold">Configurações</h1>
 
+      <Tabs defaultValue="geral" className="space-y-4">
+        <TabsList>
+          <TabsTrigger value="geral">Geral</TabsTrigger>
+          <TabsTrigger value="historico">Histórico de Importações</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="geral" className="space-y-6">
       <Card>
         <CardHeader>
           <CardTitle className="text-lg flex items-center gap-2">
@@ -191,6 +200,12 @@ export default function ConfiguracoesPage() {
           </Button>
         </CardContent>
       </Card>
+      </TabsContent>
+
+        <TabsContent value="historico">
+          <ImportHistory />
+        </TabsContent>
+      </Tabs>
 
       <Dialog open={resetDialogOpen} onOpenChange={setResetDialogOpen}>
         <DialogContent className="sm:max-w-md">
