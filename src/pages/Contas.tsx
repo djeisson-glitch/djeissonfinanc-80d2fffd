@@ -81,12 +81,15 @@ export default function ContasPage() {
         if (t.tipo === 'despesa') {
           faturas[t.conta_id].despesas += Number(t.valor);
         }
-        // Detect invoice payments
+        // Only count actual invoice payments, NOT devoluções
         const desc = t.descricao.toLowerCase();
-        if (desc.includes('pag fat') || desc.includes('pagamento fatura') || desc.includes('pag fat deb cc')) {
+        const isDevolution = desc.includes('devoluc') || desc.includes('devolução') || desc.includes('estorno');
+        if (!isDevolution && (desc.includes('pag fat') || desc.includes('pagamento fatura') || desc.includes('pag fat deb cc'))) {
           faturas[t.conta_id].pagamentos += Math.abs(Number(t.valor));
-        } else if (t.tipo === 'receita') {
-          faturas[t.conta_id].pagamentos += Number(t.valor);
+        }
+        // Devoluções reduce the invoice total instead
+        if (isDevolution && t.tipo === 'receita') {
+          faturas[t.conta_id].despesas -= Number(t.valor);
         }
       });
       return faturas;

@@ -66,16 +66,39 @@ export function parseSicrediCSV(csvText: string): ParseResult {
     .filter(line => line.trim() && !line.toLowerCase().includes('total'))
     .map(line => {
       const parts = line.split(';').map(p => p.trim());
-      if (parts.length < 4) return null;
+      // Allow lines with 3+ parts (some lines like devoluções may have empty fields)
+      if (parts.length < 3) return null;
       
-      const [data, descricao, parcela, valorStr] = parts;
+      const [data, descricao] = parts;
+      // Value can be in position 2 (no parcela) or position 3
+      let valorStr = '';
+      let parcela = '';
+      if (parts.length >= 4) {
+        parcela = parts[2];
+        valorStr = parts[3];
+      } else {
+        valorStr = parts[2];
+      }
       const pessoa = parts.length >= 7 ? (parts[6] || 'Djeisson Mauss') : 'Djeisson Mauss';
       
-      if (!data || !descricao || !valorStr) return null;
+      if (!data || !descricao) return null;
       
-      // Parse value
-      const cleanVal = valorStr.replace('R$', '').replace(/\s/g, '').replace(/\./g, '').replace(',', '.').trim();
-      const valor = parseFloat(cleanVal);
+      // Parse value - try current position, fall back to finding any value-like field
+      let cleanVal = valorStr.replace('R$', '').replace(/\s/g, '').replace(/\./g, '').replace(',', '.').trim();
+      let valor = parseFloat(cleanVal);
+      
+      // If valor is empty/NaN, try finding value in other positions
+      if (isNaN(valor) || !valorStr) {
+        for (let pi = 2; pi < parts.length; pi++) {
+          const candidate = parts[pi].replace('R$', '').replace(/\s/g, '').replace(/\./g, '').replace(',', '.').trim();
+          const parsed = parseFloat(candidate);
+          if (!isNaN(parsed) && parsed !== 0) {
+            valor = parsed;
+            break;
+          }
+        }
+      }
+      
       if (isNaN(valor)) return null;
       
       // Parse parcela
