@@ -29,6 +29,12 @@ export type ImportedItem = {
   isFuture?: boolean;
 };
 
+export type SkippedLineInfo = {
+  lineNumber: number;
+  content: string;
+  reason: string;
+};
+
 export type ImportResult = {
   imported: number;
   duplicates: number;
@@ -38,6 +44,7 @@ export type ImportResult = {
   futureItems: ImportedItem[];
   totalDespesas: number;
   totalReceitas: number;
+  skippedLines: SkippedLineInfo[];
 };
 
 interface Props {
@@ -118,7 +125,7 @@ export function ImportReport({ result, onClose, onForceImport, forceImporting }:
         </CollapsibleTrigger>
         <CollapsibleContent>
           <Tabs defaultValue="originals" className="mt-2">
-            <TabsList className="w-full grid grid-cols-3 h-8">
+            <TabsList className="w-full grid grid-cols-4 h-8">
               <TabsTrigger value="originals" className="text-[10px] px-1">
                 Originais ({result.originalItems.length})
               </TabsTrigger>
@@ -127,6 +134,9 @@ export function ImportReport({ result, onClose, onForceImport, forceImporting }:
               </TabsTrigger>
               <TabsTrigger value="duplicates" className="text-[10px] px-1">
                 Duplicatas ({result.duplicateItems.length})
+              </TabsTrigger>
+              <TabsTrigger value="skipped" className="text-[10px] px-1">
+                Rejeitadas ({result.skippedLines.length})
               </TabsTrigger>
             </TabsList>
 
@@ -240,6 +250,32 @@ export function ImportReport({ result, onClose, onForceImport, forceImporting }:
                       )}
                     </div>
                   </>
+                )}
+              </ScrollArea>
+            </TabsContent>
+            <TabsContent value="skipped">
+              <ScrollArea className="max-h-[200px]">
+                {result.skippedLines.length === 0 ? (
+                  <p className="text-center text-sm text-muted-foreground py-6">Todas as linhas foram processadas</p>
+                ) : (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="text-xs w-12">Linha</TableHead>
+                        <TableHead className="text-xs">Conteúdo</TableHead>
+                        <TableHead className="text-xs">Motivo</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {result.skippedLines.map((item, i) => (
+                        <TableRow key={i}>
+                          <TableCell className="text-xs py-1.5 text-muted-foreground">{item.lineNumber}</TableCell>
+                          <TableCell className="text-xs py-1.5 max-w-[140px] truncate" title={item.content}>{item.content}</TableCell>
+                          <TableCell className="text-xs py-1.5 text-yellow-600 dark:text-yellow-400">{item.reason}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
                 )}
               </ScrollArea>
             </TabsContent>

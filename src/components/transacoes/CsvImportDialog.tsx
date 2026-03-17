@@ -11,7 +11,8 @@ import { parseOFX } from '@/lib/ofx-parser';
 import { Progress } from '@/components/ui/progress';
 import { Upload, FileText, Check, AlertCircle, CreditCard, CalendarDays } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
-import { ImportReport, ImportResult, DuplicateInfo, ImportedItem } from './ImportReport';
+import { ImportReport, ImportResult, DuplicateInfo, ImportedItem, SkippedLineInfo } from './ImportReport';
+import { SkippedLine } from '@/lib/csv-parser';
 
 interface Props {
   open: boolean;
@@ -62,6 +63,7 @@ export function CsvImportDialog({ open, onOpenChange }: Props) {
   const [progress, setProgress] = useState(0);
   const [result, setResult] = useState<ImportResult | null>(null);
   const [parsedTransactions, setParsedTransactions] = useState<ParsedTransaction[]>([]);
+  const [parsedSkippedLines, setParsedSkippedLines] = useState<SkippedLine[]>([]);
   const [forceImporting, setForceImporting] = useState(false);
 
   // Credit card due date
@@ -120,6 +122,7 @@ export function CsvImportDialog({ open, onOpenChange }: Props) {
     let contaDetectada: string | null = null;
     let transactions: ParsedTransaction[] = [];
     let accountType: 'corrente' | 'credito' | null = null;
+    let skippedLines: SkippedLine[] = [];
 
     if (ext === 'ofx') {
       const parsed = parseOFX(text);
@@ -130,7 +133,7 @@ export function CsvImportDialog({ open, onOpenChange }: Props) {
       const parsed = parseSicrediCSV(text);
       contaDetectada = parsed.contaDetectada;
       transactions = parsed.transactions;
-      // Detect credit card from conta name
+      skippedLines = parsed.skippedLines;
       if (contaDetectada && ['black', 'mercado pago'].some(n => contaDetectada!.toLowerCase().includes(n))) {
         accountType = 'credito';
       }
@@ -139,6 +142,7 @@ export function CsvImportDialog({ open, onOpenChange }: Props) {
     setDetectedConta(contaDetectada);
     setDetectedAccountType(accountType);
     setParsedTransactions(transactions);
+    setParsedSkippedLines(skippedLines);
 
     // Set default due date
     const defaultDue = getDefaultDueDate(transactions);
@@ -316,6 +320,7 @@ export function CsvImportDialog({ open, onOpenChange }: Props) {
         futureItems: importedFutures,
         totalDespesas,
         totalReceitas,
+        skippedLines: parsedSkippedLines,
       });
 
       // Save import log
@@ -415,6 +420,7 @@ export function CsvImportDialog({ open, onOpenChange }: Props) {
     setDetectedConta(null);
     setDetectedAccountType(null);
     setParsedTransactions([]);
+    setParsedSkippedLines([]);
     setForceImporting(false);
     setDueConfirmed(false);
     onOpenChange(false);

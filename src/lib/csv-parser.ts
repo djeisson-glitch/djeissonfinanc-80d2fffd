@@ -22,9 +22,16 @@ interface ParsedTransaction {
   hash_transacao: string;
 }
 
+export interface SkippedLine {
+  lineNumber: number;
+  content: string;
+  reason: string;
+}
+
 interface ParseResult {
   contaDetectada: string | null;
   transactions: ParsedTransaction[];
+  skippedLines: SkippedLine[];
 }
 
 function parseDate(dateStr: string): string {
@@ -56,73 +63,93 @@ export function parseSicrediCSV(csvText: string): ParseResult {
   );
   
   if (headerIndex === -1) {
-    // Try alternative: just skip non-data lines
-    return { contaDetectada, transactions: [] };
+    return { contaDetectada, transactions: [], skippedLines: [{ lineNumber: 0, content: '', reason: 'Cabeçalho não encontrado no arquivo' }] };
   }
   
   const dataLines = lines.slice(headerIndex + 1);
+  const skippedLines: SkippedLine[] = [];
+  const transactions: ParsedTransaction[] = [];
+  const hashCounts = new Map<string, number>();
   
-  const transactions: ParsedTransaction[] = dataLines
-    .filter(line => line.trim() && !line.toLowerCase().includes('total'))
-    .map(line => {
-      const parts = line.split(';').map(p => p.trim());
-      // Allow lines with 3+ parts (some lines like devoluções may have empty fields)
-      if (parts.length < 3) return null;
-      
-      const [data, descricao] = parts;
-      // Value can be in position 2 (no parcela) or position 3
-      let valorStr = '';
-      let parcela = '';
-      if (parts.length >= 4) {
-        parcela = parts[2];
-        valorStr = parts[3];
-      } else {
-        valorStr = parts[2];
-      }
-      const pessoa = parts.length >= 7 ? (parts[6] || 'Djeisson Mauss') : 'Djeisson Mauss';
-      
-      if (!data || !descricao) return null;
-      
-      // Parse value - try current position, fall back to finding any value-like field
-      let cleanVal = valorStr.replace('R$', '').replace(/\s/g, '').replace(/\./g, '').replace(',', '.').trim();
-      let valor = parseFloat(cleanVal);
-      
-      // If valor is empty/NaN, try finding value in other positions
-      if (isNaN(valor) || !valorStr) {
-        for (let pi = 2; pi < parts.length; pi++) {
-          const candidate = parts[pi].replace('R$', '').replace(/\s/g, '').replace(/\./g, '').replace(',', '.').trim();
-          const parsed = parseFloat(candidate);
-          if (!isNaN(parsed) && parsed !== 0) {
-            valor = parsed;
-            break;
-          }
+  dataLines.forEach((line, idx) => {
+    const lineNumber = headerIndex + 2 + idx; // 1-indexed
+    const trimmed = line.trim();
+    
+    if (!trimmed) return; // empty line, skip silently
+    if (trimmed.toLowerCase().includes('total')) {
+      skippedLines.push({ lineNumber, content: trimmed, reason: 'Linha de total (ignorada)' });
+      return;
+    }
+    
+    const parts = trimmed.split(';').map(p => p.trim());
+    if (parts.length < 3) {
+      skippedLines.push({ lineNumber, content: trimmed, reason: `Poucos campos (${parts.length} encontrados, mínimo 3)` });
+      return;
+    }
+    
+    const [data, descricao] = parts;
+    let valorStr = '';
+    let parcela = '';
+    if (parts.length >= 4) {
+      parcela = parts[2];
+      valorStr = parts[3];
+    } else {
+      valorStr = parts[2];
+    }
+    const pessoa = parts.length >= 7 ? (parts[6] || 'Djeisson Mauss') : 'Djeisson Mauss';
+    
+    if (!data || !descricao) {
+      skippedLines.push({ lineNumber, content: trimmed, reason: 'Data ou descrição vazia' });
+      return;
+    }
+    
+    // Parse value
+    let cleanVal = valorStr.replace('R$', '').replace(/\s/g, '').replace(/\./g, '').replace(',', '.').trim();
+    let valor = parseFloat(cleanVal);
+    
+    if (isNaN(valor) || !valorStr) {
+      for (let pi = 2; pi < parts.length; pi++) {
+        const candidate = parts[pi].replace('R$', '').replace(/\s/g, '').replace(/\./g, '').replace(',', '.').trim();
+        const parsed = parseFloat(candidate);
+        if (!isNaN(parsed) && parsed !== 0) {
+          valor = parsed;
+          break;
         }
       }
-      
-      if (isNaN(valor)) return null;
-      
-      // Parse parcela
-      const parcelaMatch = parcela?.match(/\((\d+)\/(\d+)\)/);
-      const parcela_atual = parcelaMatch ? parseInt(parcelaMatch[1]) : null;
-      const parcela_total = parcelaMatch ? parseInt(parcelaMatch[2]) : null;
-      
-      const tipo = valor < 0 ? 'receita' as const : 'despesa' as const;
-      const isoDate = parseDate(data);
-      
-      return {
-        data: isoDate,
-        descricao,
-        valor: Math.abs(valor),
-        tipo,
-        parcela_atual,
-        parcela_total,
-        pessoa: pessoa || 'Djeisson Mauss',
-        hash_transacao: generateHash(isoDate, descricao, Math.abs(valor), pessoa || 'Djeisson Mauss'),
-      };
-    })
-    .filter(Boolean) as ParsedTransaction[];
+    }
+    
+    if (isNaN(valor)) {
+      skippedLines.push({ lineNumber, content: trimmed, reason: 'Valor não encontrado ou inválido' });
+      return;
+    }
+    
+    const parcelaMatch = parcela?.match(/\((\d+)\/(\d+)\)/);
+    const parcela_atual = parcelaMatch ? parseInt(parcelaMatch[1]) : null;
+    const parcela_total = parcelaMatch ? parseInt(parcelaMatch[2]) : null;
+    
+    const tipo = valor < 0 ? 'receita' as const : 'despesa' as const;
+    const isoDate = parseDate(data);
+    const finalPessoa = pessoa || 'Djeisson Mauss';
+    
+    // Generate hash with sequence counter for identical transactions
+    let baseHash = generateHash(isoDate, descricao, Math.abs(valor), finalPessoa);
+    const count = hashCounts.get(baseHash) || 0;
+    hashCounts.set(baseHash, count + 1);
+    const hash_transacao = count > 0 ? `${baseHash}_seq${count}` : baseHash;
+    
+    transactions.push({
+      data: isoDate,
+      descricao,
+      valor: Math.abs(valor),
+      tipo,
+      parcela_atual,
+      parcela_total,
+      pessoa: finalPessoa,
+      hash_transacao,
+    });
+  });
   
-  return { contaDetectada, transactions };
+  return { contaDetectada, transactions, skippedLines };
 }
 
 export function generateFutureInstallments(
