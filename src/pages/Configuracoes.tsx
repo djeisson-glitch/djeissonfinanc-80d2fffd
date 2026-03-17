@@ -199,7 +199,12 @@ export default function ConfiguracoesPage() {
             Resetar Sistema Completo
           </Button>
         </CardContent>
-      </Card>
+      </TabsContent>
+
+        <TabsContent value="historico">
+          <ImportHistory />
+        </TabsContent>
+      </Tabs>
 
       <Dialog open={resetDialogOpen} onOpenChange={setResetDialogOpen}>
         <DialogContent className="sm:max-w-md">
