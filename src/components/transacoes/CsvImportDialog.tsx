@@ -416,7 +416,7 @@ export function CsvImportDialog({ open, onOpenChange }: Props) {
         const batch = plan.newTransactions.slice(i, i + batchSize).map(({ _isOriginal, ...rest }) => rest as any);
         const { error, data } = await supabase
           .from('transacoes')
-          .insert(batch)
+          .upsert(batch, { onConflict: 'user_id,hash_transacao' })
           .select('id');
 
         if (error) throw error;
