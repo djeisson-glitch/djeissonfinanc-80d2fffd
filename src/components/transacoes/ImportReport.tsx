@@ -29,6 +29,12 @@ export type ImportedItem = {
   isFuture?: boolean;
 };
 
+export type SkippedLineInfo = {
+  lineNumber: number;
+  content: string;
+  reason: string;
+};
+
 export type ImportResult = {
   imported: number;
   duplicates: number;
@@ -38,6 +44,7 @@ export type ImportResult = {
   futureItems: ImportedItem[];
   totalDespesas: number;
   totalReceitas: number;
+  skippedLines: SkippedLineInfo[];
 };
 
 interface Props {
