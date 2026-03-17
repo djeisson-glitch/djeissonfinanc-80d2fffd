@@ -841,6 +841,9 @@ export function DebugPanel() {
       {/* Section 4: Resetar Conta Específica */}
       <ResetContaSection contas={contas || []} userId={user?.id} queryClient={queryClient} />
 
+      {/* Section 5: Projeção de Parcelas */}
+      <ProjectInstallmentsSection userId={user?.id} queryClient={queryClient} />
+
       {/* Section 5: Stats */}
       <Card>
         <CardHeader className="pb-3">
