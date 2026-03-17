@@ -122,6 +122,7 @@ export function CsvImportDialog({ open, onOpenChange }: Props) {
     let contaDetectada: string | null = null;
     let transactions: ParsedTransaction[] = [];
     let accountType: 'corrente' | 'credito' | null = null;
+    let skippedLines: SkippedLine[] = [];
 
     if (ext === 'ofx') {
       const parsed = parseOFX(text);
@@ -132,7 +133,7 @@ export function CsvImportDialog({ open, onOpenChange }: Props) {
       const parsed = parseSicrediCSV(text);
       contaDetectada = parsed.contaDetectada;
       transactions = parsed.transactions;
-      // Detect credit card from conta name
+      skippedLines = parsed.skippedLines;
       if (contaDetectada && ['black', 'mercado pago'].some(n => contaDetectada!.toLowerCase().includes(n))) {
         accountType = 'credito';
       }
@@ -141,6 +142,7 @@ export function CsvImportDialog({ open, onOpenChange }: Props) {
     setDetectedConta(contaDetectada);
     setDetectedAccountType(accountType);
     setParsedTransactions(transactions);
+    setParsedSkippedLines(skippedLines);
 
     // Set default due date
     const defaultDue = getDefaultDueDate(transactions);
