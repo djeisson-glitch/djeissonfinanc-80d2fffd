@@ -105,6 +105,8 @@ export function CsvImportDialog({ open, onOpenChange }: Props) {
     let transactions: ParsedTransaction[] = [];
     let accountType: 'corrente' | 'credito' | null = null;
     let skippedLines: SkippedLine[] = [];
+    let totalLines = 0;
+    let lineLogs: CsvLineLogEntry[] = [];
 
     if (ext === 'ofx') {
       const parsed = parseOFX(text);
@@ -116,6 +118,8 @@ export function CsvImportDialog({ open, onOpenChange }: Props) {
       contaDetectada = parsed.contaDetectada;
       transactions = parsed.transactions;
       skippedLines = parsed.skippedLines;
+      totalLines = parsed.totalLines;
+      lineLogs = parsed.lineLogs;
       if (contaDetectada && ['black', 'mercado pago'].some(n => contaDetectada!.toLowerCase().includes(n))) {
         accountType = 'credito';
       }
@@ -125,6 +129,8 @@ export function CsvImportDialog({ open, onOpenChange }: Props) {
     setDetectedAccountType(accountType);
     setParsedTransactions(transactions);
     setParsedSkippedLines(skippedLines);
+    setParsedTotalLines(totalLines);
+    setParsedLineLogs(lineLogs);
 
     // Set default due date
     const defaultDue = getDefaultDueDate(transactions);

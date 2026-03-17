@@ -88,13 +88,21 @@ export function DebugPanel() {
     if (!user || !searchTerm.trim()) return;
     setSearchLoading(true);
 
-    const { data } = await supabase
+    const numericTerm = Number(searchTerm.replace(',', '.'));
+    let query = supabase
       .from('transacoes')
       .select('*')
       .eq('user_id', user.id)
-      .ilike('descricao', `%${searchTerm}%`)
       .order('data', { ascending: false })
       .limit(100);
+
+    if (!Number.isNaN(numericTerm) && searchTerm.trim() !== '') {
+      query = query.or(`descricao.ilike.%${searchTerm}%,valor.eq.${numericTerm}`);
+    } else {
+      query = query.ilike('descricao', `%${searchTerm}%`);
+    }
+
+    const { data } = await query;
 
     setSearchResults(data || []);
     setSearchLoading(false);
