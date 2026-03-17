@@ -518,7 +518,7 @@ export function CsvImportDialog({ open, onOpenChange }: Props) {
       const batchSize = 50;
 
       for (let i = 0; i < plan.newTransactions.length; i += batchSize) {
-        const batch = plan.newTransactions.slice(i, i + batchSize).map(({ _isOriginal, ...rest }) => rest);
+        const batch = plan.newTransactions.slice(i, i + batchSize).map(({ _isOriginal, ...rest }) => rest as any);
         const { error, data } = await supabase
           .from('transacoes')
           .insert(batch)
