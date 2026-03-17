@@ -1,9 +1,9 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { formatCurrency, getMonthName } from '@/lib/format';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { TrendingDown } from 'lucide-react';
+import { TrendingDown, X } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
-import { Tooltip as UITooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 
 interface Parcela {
   data: string;
@@ -18,19 +18,21 @@ interface ParcelasTimelineProps {
   parcelas: Parcela[];
 }
 
-interface MonthData {
+interface MonthGroup {
   mes: string;
   mesKey: string;
-  continua: number;
-  economia: number;
+  total: number;
+  items: Parcela[];
   terminam: { descricao: string; valor: number; parcelaInfo: string }[];
 }
 
 export function ParcelasTimeline({ parcelas }: ParcelasTimelineProps) {
-  const chartData = useMemo(() => {
+  const [selectedMonth, setSelectedMonth] = useState<MonthGroup | null>(null);
+  const [selectedEnding, setSelectedEnding] = useState<MonthGroup | null>(null);
+
+  const monthGroups = useMemo(() => {
     if (!parcelas || parcelas.length === 0) return [];
 
-    // Group parcelas by month key
     const porMes: Record<string, { total: number; items: Parcela[] }> = {};
     parcelas.forEach(p => {
       const d = new Date(p.data + 'T00:00:00');
@@ -40,44 +42,29 @@ export function ParcelasTimeline({ parcelas }: ParcelasTimelineProps) {
       porMes[key].items.push(p);
     });
 
-    const sortedKeys = Object.keys(porMes).sort();
-
-    // For each month, find parcelas that are the LAST installment (parcela_atual === parcela_total)
-    const result: MonthData[] = sortedKeys.map((key, idx) => {
+    return Object.keys(porMes).sort().map(key => {
       const d = new Date(key + '-01T00:00:00');
       const label = `${getMonthName(d.getMonth())}/${d.getFullYear().toString().slice(2)}`;
       const { total, items } = porMes[key];
-
-      // Find parcelas ending THIS month (last installment)
       const ending = items.filter(p => p.parcela_atual != null && p.parcela_total != null && p.parcela_atual === p.parcela_total);
-
-      const economiaValor = ending.reduce((s, p) => s + Number(p.valor), 0);
-
       const terminam = ending.map(p => ({
         descricao: p.descricao,
         valor: Number(p.valor),
         parcelaInfo: `${p.parcela_atual}/${p.parcela_total}`,
       }));
-
-      return {
-        mes: label,
-        mesKey: key,
-        continua: total - economiaValor,
-        economia: economiaValor,
-        terminam,
-      };
+      return { mes: label, mesKey: key, total, items, terminam } as MonthGroup;
     });
-
-    return result;
   }, [parcelas]);
 
-  if (chartData.length === 0) {
+  const endingMonths = monthGroups.filter(m => m.terminam.length > 0);
+
+  if (monthGroups.length === 0) {
     return (
       <Card>
         <CardHeader>
           <CardTitle className="text-lg flex items-center gap-2">
             <TrendingDown className="h-5 w-5" />
-            Timeline de Parcelas
+            Parcelas por Mês
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -87,83 +74,128 @@ export function ParcelasTimeline({ parcelas }: ParcelasTimelineProps) {
     );
   }
 
-  const CustomTooltipContent = ({ active, payload, label }: any) => {
-    if (!active || !payload?.length) return null;
-    const data = chartData.find(d => d.mes === label);
-    const total = (payload[0]?.value || 0) + (payload[1]?.value || 0);
+  const chartData = monthGroups.map(m => ({ mes: m.mes, total: m.total, mesKey: m.mesKey }));
 
+  const ChartTooltip = ({ active, payload, label }: any) => {
+    if (!active || !payload?.length) return null;
     return (
-      <div className="rounded-lg border bg-popover p-3 shadow-md text-popover-foreground text-sm space-y-1">
+      <div className="rounded-lg border bg-popover p-3 shadow-md text-popover-foreground text-sm">
         <p className="font-semibold">{label}</p>
-        <p>Total: {formatCurrency(total)}</p>
-        {data && data.economia > 0 && (
-          <>
-            <p className="text-success">
-              ✅ No mês seguinte você terá {formatCurrency(data.economia)} a menos em parcelas
-            </p>
-            {data.terminam.map((t, i) => (
-              <p key={i} className="text-xs text-muted-foreground">
-                • {t.descricao} ({t.parcelaInfo})
-              </p>
-            ))}
-          </>
-        )}
+        <p>Total: {formatCurrency(payload[0]?.value || 0)}</p>
       </div>
     );
   };
 
+  const getIntensityClasses = (count: number) => {
+    if (count >= 8) return 'bg-emerald-700 text-emerald-50';
+    if (count >= 4) return 'bg-emerald-500 text-emerald-50';
+    return 'bg-emerald-200 text-emerald-900';
+  };
+
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="text-lg flex items-center gap-2">
-          <TrendingDown className="h-5 w-5" />
-          Timeline de Parcelas
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        <ResponsiveContainer width="100%" height={200}>
-          <BarChart data={chartData}>
-            <XAxis dataKey="mes" tick={{ fontSize: 12 }} />
-            <YAxis tick={{ fontSize: 12 }} tickFormatter={v => `${(v / 1000).toFixed(0)}k`} />
-            <Tooltip content={<CustomTooltipContent />} />
-            <Bar dataKey="continua" stackId="a" radius={[0, 0, 0, 0]} fill="hsl(var(--foreground) / 0.25)" name="Continua" />
-            <Bar dataKey="economia" stackId="a" radius={[4, 4, 0, 0]} fill="hsl(142, 71%, 45%)" name="Termina" />
-          </BarChart>
-        </ResponsiveContainer>
+    <>
+      {/* Chart */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-lg flex items-center gap-2">
+            <TrendingDown className="h-5 w-5" />
+            Parcelas por Mês
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <ResponsiveContainer width="100%" height={200}>
+            <BarChart data={chartData}>
+              <XAxis dataKey="mes" tick={{ fontSize: 12 }} />
+              <YAxis tick={{ fontSize: 12 }} tickFormatter={v => `${(v / 1000).toFixed(0)}k`} />
+              <Tooltip content={<ChartTooltip />} />
+              <Bar
+                dataKey="total"
+                radius={[4, 4, 0, 0]}
+                fill="hsl(var(--foreground) / 0.3)"
+                cursor="pointer"
+                onClick={(_: any, index: number) => setSelectedMonth(monthGroups[index])}
+              />
+            </BarChart>
+          </ResponsiveContainer>
+        </CardContent>
+      </Card>
 
-        {/* Details of ending parcelas below chart */}
-        <TooltipProvider>
+      {/* Scorecards */}
+      {endingMonths.length > 0 && (
+        <Card className="md:col-span-2">
+          <CardHeader>
+            <CardTitle className="text-lg">Parcelas que Terminam</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+              {endingMonths.map(m => {
+                const count = m.terminam.length;
+                return (
+                  <button
+                    key={m.mesKey}
+                    onClick={() => setSelectedEnding(m)}
+                    className={`rounded-lg p-3 text-center transition-transform hover:scale-105 cursor-pointer ${getIntensityClasses(count)}`}
+                  >
+                    <p className="text-xs font-medium opacity-80">{m.mes}</p>
+                    <p className="text-3xl font-bold">{count}</p>
+                    <p className="text-xs opacity-70">parcela{count > 1 ? 's' : ''}</p>
+                  </button>
+                );
+              })}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Modal: parcelas do mês */}
+      <Dialog open={!!selectedMonth} onOpenChange={() => setSelectedMonth(null)}>
+        <DialogContent className="max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Parcelas em {selectedMonth?.mes}</DialogTitle>
+          </DialogHeader>
           <div className="space-y-2">
-            {chartData.filter(d => d.economia > 0).map(d => {
-              // Next month label
-              const parts = d.mesKey.split('-');
-              const nextDate = new Date(Number(parts[0]), Number(parts[1]) - 1 + 1, 1);
-              const nextLabel = `${getMonthName(nextDate.getMonth())}/${nextDate.getFullYear().toString().slice(2)}`;
-
-              return (
-                <UITooltip key={d.mesKey}>
-                  <TooltipTrigger asChild>
-                    <div className="flex items-start gap-2 text-xs p-2 rounded-md bg-muted/50 cursor-default">
-                      <span className="shrink-0">❌</span>
-                      <div>
-                        <span className="font-medium">
-                          Termina em {nextLabel}: {formatCurrency(d.economia)} ({d.terminam.length} parcela{d.terminam.length > 1 ? 's' : ''})
-                        </span>
-                        <p className="text-muted-foreground mt-0.5">
-                          {d.terminam.map(t => `${t.descricao} ${t.parcelaInfo}`).join(', ')}
-                        </p>
-                      </div>
-                    </div>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    <p>Em {nextLabel} você terá {formatCurrency(d.economia)} a menos em parcelas</p>
-                  </TooltipContent>
-                </UITooltip>
-              );
-            })}
+            {selectedMonth?.items.map((p, i) => (
+              <div key={i} className="flex justify-between items-center p-2 rounded-md bg-muted/50 text-sm">
+                <div>
+                  <p className="font-medium">{p.descricao}</p>
+                  {p.parcela_atual && p.parcela_total && (
+                    <p className="text-xs text-muted-foreground">{p.parcela_atual}/{p.parcela_total}</p>
+                  )}
+                </div>
+                <span className="font-medium">{formatCurrency(p.valor)}</span>
+              </div>
+            ))}
+            <div className="flex justify-between pt-2 border-t font-semibold text-sm">
+              <span>Total</span>
+              <span>{formatCurrency(selectedMonth?.total || 0)}</span>
+            </div>
           </div>
-        </TooltipProvider>
-      </CardContent>
-    </Card>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal: parcelas que terminam */}
+      <Dialog open={!!selectedEnding} onOpenChange={() => setSelectedEnding(null)}>
+        <DialogContent className="max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Parcelas que terminam em {selectedEnding?.mes}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-2">
+            {selectedEnding?.terminam.map((t, i) => (
+              <div key={i} className="flex justify-between items-center p-2 rounded-md bg-muted/50 text-sm">
+                <div>
+                  <p className="font-medium">{t.descricao}</p>
+                  <p className="text-xs text-muted-foreground">{t.parcelaInfo}</p>
+                </div>
+                <span className="font-medium">{formatCurrency(t.valor)}</span>
+              </div>
+            ))}
+            <div className="flex justify-between pt-2 border-t font-semibold text-sm">
+              <span>Economia no mês seguinte</span>
+              <span className="text-emerald-600">{formatCurrency(selectedEnding?.terminam.reduce((s, t) => s + t.valor, 0) || 0)}</span>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
