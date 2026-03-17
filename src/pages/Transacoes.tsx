@@ -4,7 +4,7 @@ import { useSearchParams } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { formatCurrency, formatDate, getMonthRange } from '@/lib/format';
-import { CATEGORIAS, CATEGORIAS_CONFIG, getCategoriaColor, getSubcategorias } from '@/types/database.types';
+import { CATEGORIAS, CATEGORIAS_DESPESA, CATEGORIAS_RECEITA, CATEGORIAS_CONFIG, getCategoriaColor, getSubcategorias } from '@/types/database.types';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -157,14 +157,33 @@ export default function TransacoesPage() {
               <SelectTrigger><SelectValue placeholder="Categoria" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">Todas categorias</SelectItem>
-                {CATEGORIAS.map(c => (
-                  <SelectItem key={c} value={c}>
-                    <div className="flex items-center gap-2">
-                      <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: getCategoriaColor(c) }} />
-                      {c}
-                    </div>
-                  </SelectItem>
-                ))}
+                {filterTipo === 'receita'
+                  ? CATEGORIAS_RECEITA.map(c => (
+                    <SelectItem key={c} value={c}>
+                      <div className="flex items-center gap-2">
+                        <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: getCategoriaColor(c) }} />
+                        {c}
+                      </div>
+                    </SelectItem>
+                  ))
+                  : filterTipo === 'despesa'
+                    ? CATEGORIAS_DESPESA.map(c => (
+                      <SelectItem key={c} value={c}>
+                        <div className="flex items-center gap-2">
+                          <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: getCategoriaColor(c) }} />
+                          {c}
+                        </div>
+                      </SelectItem>
+                    ))
+                    : CATEGORIAS.map(c => (
+                      <SelectItem key={c} value={c}>
+                        <div className="flex items-center gap-2">
+                          <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: getCategoriaColor(c) }} />
+                          {c}
+                        </div>
+                      </SelectItem>
+                    ))
+                }
               </SelectContent>
             </Select>
             <Select value={filterTipo} onValueChange={v => { setFilterTipo(v); if (v === 'all') { searchParams.delete('tipo'); } else { searchParams.set('tipo', v); } setSearchParams(searchParams, { replace: true }); }}>
@@ -311,7 +330,7 @@ export default function TransacoesPage() {
                 >
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    {CATEGORIAS.map(c => (
+                    {(editingTx.tipo === 'receita' ? CATEGORIAS_RECEITA : CATEGORIAS_DESPESA).map(c => (
                       <SelectItem key={c} value={c}>
                         <div className="flex items-center gap-2">
                           <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: getCategoriaColor(c) }} />
