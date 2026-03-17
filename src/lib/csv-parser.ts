@@ -139,14 +139,7 @@ export function parseSicrediCSV(csvText: string): ParseResult {
       return;
     }
 
-    // Reject pre-2026 transactions
-    const isoDateCheck = parseDate(data);
-    if (isoDateCheck < '2026-01-01') {
-      const reason = 'Data anterior a 2026';
-      skippedLines.push({ lineNumber, content: trimmed, reason });
-      lineLogs.push({ lineNumber, content, status: 'rejeitada', reason });
-      return;
-    }
+    // No date filter — credit card CSVs may have 2025 dates for installments due in 2026
 
     let cleanVal = valorStr.replace('R$', '').replace(/\s/g, '').replace(/\./g, '').replace(',', '.').trim();
     let valor = parseFloat(cleanVal);
