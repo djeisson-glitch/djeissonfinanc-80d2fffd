@@ -306,10 +306,53 @@ export function CsvImportDialog({ open, onOpenChange }: Props) {
       existing?.forEach(existingItem => existingHashes.set(existingItem.hash_transacao, existingItem.data));
     }
 
+    // OFX receipt conciliation: for receitas, check if similar transaction exists (±R$1, ±3 days, same account)
+    const conciliatedHashes = new Set<string>();
+    if (fileType === 'ofx') {
+      const receitas = allTransactions.filter(t => t.tipo === 'receita' && t._isOriginal);
+      if (receitas.length > 0) {
+        // Get existing receitas from this account in the date range
+        const dates = receitas.map(r => r.data);
+        const minDate = dates.reduce((a, b) => a < b ? a : b);
+        const maxDate = dates.reduce((a, b) => a > b ? a : b);
+        // Expand range by 3 days
+        const dMin = new Date(minDate + 'T00:00:00');
+        dMin.setDate(dMin.getDate() - 3);
+        const dMax = new Date(maxDate + 'T00:00:00');
+        dMax.setDate(dMax.getDate() + 3);
+        const rangeStart = dMin.toISOString().split('T')[0];
+        const rangeEnd = dMax.toISOString().split('T')[0];
+
+        const { data: existingReceitas } = await supabase
+          .from('transacoes')
+          .select('descricao, valor, data')
+          .eq('user_id', currentUserId)
+          .eq('conta_id', contaId)
+          .eq('tipo', 'receita')
+          .gte('data', rangeStart)
+          .lte('data', rangeEnd);
+
+        if (existingReceitas && existingReceitas.length > 0) {
+          for (const r of receitas) {
+            const rDate = new Date(r.data + 'T00:00:00');
+            const match = existingReceitas.find(er => {
+              const erDate = new Date(er.data + 'T00:00:00');
+              const dayDiff = Math.abs((rDate.getTime() - erDate.getTime()) / (1000 * 60 * 60 * 24));
+              const valDiff = Math.abs(Number(r.valor) - Number(er.valor));
+              return dayDiff <= 3 && valDiff <= 1.0;
+            });
+            if (match) {
+              conciliatedHashes.add(r.hash_transacao);
+            }
+          }
+        }
+      }
+    }
+
     setProgress(75);
 
-    const newTransactions = allTransactions.filter(t => !existingHashes.has(t.hash_transacao));
-    const duplicateTransactions = allTransactions.filter(t => existingHashes.has(t.hash_transacao));
+    const newTransactions = allTransactions.filter(t => !existingHashes.has(t.hash_transacao) && !conciliatedHashes.has(t.hash_transacao));
+    const duplicateTransactions = allTransactions.filter(t => existingHashes.has(t.hash_transacao) || conciliatedHashes.has(t.hash_transacao));
 
     const duplicateItems: DuplicateInfo[] = duplicateTransactions.map(t => ({
       data: t.data,
