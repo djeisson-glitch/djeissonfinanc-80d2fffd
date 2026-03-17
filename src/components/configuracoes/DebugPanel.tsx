@@ -174,7 +174,7 @@ export function DebugPanel() {
       while (true) {
         const { data } = await supabase
           .from('transacoes')
-          .select('id, descricao, valor, pessoa, data, conta_id, parcela_atual, parcela_total, created_at, tipo')
+          .select('id, descricao, valor, pessoa, data, data_original, conta_id, parcela_atual, parcela_total, created_at, tipo')
           .eq('user_id', user.id)
           .order('created_at', { ascending: true })
           .range(from, from + batchSize - 1);
