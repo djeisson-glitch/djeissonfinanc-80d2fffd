@@ -184,13 +184,24 @@ export function DebugPanel() {
         from += batchSize;
       }
 
-      // Group by: same account + same month + same person + same parcela + first 15 chars
+      // Separate installment vs non-installment transactions
+      const isInstallment = (t: any) => t.parcela_atual != null && t.parcela_total != null;
+      const isAutoProjected = (t: any) => t.descricao?.includes('(auto-projetada)');
+
+      // Group key: for installments ignore date (month); for non-installments include month
       const coarseGroups: Record<string, any[]> = {};
       allTxs.forEach(t => {
-        const month = t.data.substring(0, 7);
-        const parcela = t.parcela_atual != null ? `${t.parcela_atual}/${t.parcela_total}` : 'none';
         const pref = prefix15(t.descricao);
-        const key = `${t.conta_id}|${month}|${normalize(t.pessoa)}|${parcela}|${pref}`;
+        const pessoa = normalize(t.pessoa);
+        let key: string;
+        if (isInstallment(t)) {
+          // Installments: group by conta + pessoa + parcela + prefix (NO month)
+          key = `INST|${t.conta_id}|${pessoa}|${t.parcela_atual}/${t.parcela_total}|${pref}`;
+        } else {
+          // Non-installments: group by conta + month + pessoa + prefix
+          const month = t.data.substring(0, 7);
+          key = `NORM|${t.conta_id}|${month}|${pessoa}|${pref}`;
+        }
         if (!coarseGroups[key]) coarseGroups[key] = [];
         coarseGroups[key].push(t);
       });
@@ -219,18 +230,38 @@ export function DebugPanel() {
         }
 
         clusters.forEach(cluster => {
-          cluster.sort((a: any, b: any) => a.created_at.localeCompare(b.created_at));
-          const first = cluster[0];
+          // Decide which to keep:
+          // For installments: prefer non-auto-projected (real), then oldest
+          // For non-installments: keep oldest
+          const hasInstallments = cluster.some(isInstallment);
+          let keepItem: any;
+
+          if (hasInstallments) {
+            const realOnes = cluster.filter((t: any) => !isAutoProjected(t));
+            if (realOnes.length > 0) {
+              realOnes.sort((a: any, b: any) => a.created_at.localeCompare(b.created_at));
+              keepItem = realOnes[0];
+            } else {
+              cluster.sort((a: any, b: any) => a.created_at.localeCompare(b.created_at));
+              keepItem = cluster[0];
+            }
+          } else {
+            cluster.sort((a: any, b: any) => a.created_at.localeCompare(b.created_at));
+            keepItem = cluster[0];
+          }
+
+          const removeIds = cluster.filter((t: any) => t.id !== keepItem.id).map((t: any) => t.id);
+
           dupGroups.push({
-            key: `${prefix15(first.descricao)}|${Math.round(Number(first.valor))}|${first.conta_id}`,
-            descricao: first.descricao,
-            valor: Number(first.valor),
-            pessoa: first.pessoa,
-            month: first.data.substring(0, 7),
-            parcela: first.parcela_atual != null ? `${first.parcela_atual}/${first.parcela_total}` : '-',
+            key: `${prefix15(keepItem.descricao)}|${Math.round(Number(keepItem.valor))}|${keepItem.conta_id}`,
+            descricao: keepItem.descricao,
+            valor: Number(keepItem.valor),
+            pessoa: keepItem.pessoa,
+            month: keepItem.data.substring(0, 7),
+            parcela: keepItem.parcela_atual != null ? `${keepItem.parcela_atual}/${keepItem.parcela_total}` : '-',
             items: cluster,
-            keepId: first.id,
-            removeIds: cluster.slice(1).map((i: any) => i.id),
+            keepId: keepItem.id,
+            removeIds,
           });
         });
       });
