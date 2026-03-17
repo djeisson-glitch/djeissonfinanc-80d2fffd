@@ -111,6 +111,71 @@ export function DebugPanel() {
     setSearchLoading(false);
   };
 
+  const handleDedup = async () => {
+    if (!user) return;
+    setDedupLoading(true);
+    try {
+      // Fetch all transactions in batches to avoid 1000 row limit
+      let allTxs: any[] = [];
+      let from = 0;
+      const batchSize = 1000;
+      while (true) {
+        const { data } = await supabase
+          .from('transacoes')
+          .select('id, descricao, valor, pessoa, data, parcela_atual, parcela_total, created_at')
+          .eq('user_id', user.id)
+          .order('created_at', { ascending: true })
+          .range(from, from + batchSize - 1);
+        if (!data || data.length === 0) break;
+        allTxs = allTxs.concat(data);
+        if (data.length < batchSize) break;
+        from += batchSize;
+      }
+
+      // Group by: normalized description + valor ±0.50 + pessoa + month + parcela
+      const normalize = (s: string) => s.toLowerCase().replace(/\s+/g, ' ').trim();
+      const groups: Record<string, any[]> = {};
+
+      allTxs.forEach(t => {
+        const month = t.data.substring(0, 7);
+        const parcela = t.parcela_atual != null ? `${t.parcela_atual}/${t.parcela_total}` : 'none';
+        // Round valor to nearest integer for grouping (±0.50 tolerance)
+        const valorBucket = Math.round(Number(t.valor));
+        const key = `${normalize(t.descricao)}|${valorBucket}|${normalize(t.pessoa)}|${month}|${parcela}`;
+        if (!groups[key]) groups[key] = [];
+        groups[key].push(t);
+      });
+
+      const idsToDelete: string[] = [];
+      Object.values(groups).forEach(group => {
+        if (group.length > 1) {
+          // Keep oldest (first by created_at), delete rest
+          group.sort((a: any, b: any) => a.created_at.localeCompare(b.created_at));
+          for (let i = 1; i < group.length; i++) {
+            idsToDelete.push(group[i].id);
+          }
+        }
+      });
+
+      if (idsToDelete.length === 0) {
+        toast.info('Nenhuma duplicata encontrada');
+      } else {
+        // Delete in batches of 100
+        for (let i = 0; i < idsToDelete.length; i += 100) {
+          const batch = idsToDelete.slice(i, i + 100);
+          await supabase.from('transacoes').delete().in('id', batch);
+        }
+        toast.success(`${idsToDelete.length} duplicata(s) removida(s)`);
+        queryClient.invalidateQueries();
+      }
+    } catch (err) {
+      toast.error('Erro ao limpar duplicatas');
+      console.error(err);
+    } finally {
+      setDedupLoading(false);
+    }
+  };
+
   const diagDespesas = diagData?.filter(t => t.tipo === 'despesa').reduce((s, t) => s + Number(t.valor), 0) || 0;
   const diagReceitas = diagData?.filter(t => t.tipo === 'receita').reduce((s, t) => s + Number(t.valor), 0) || 0;
 
