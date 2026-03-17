@@ -189,6 +189,16 @@ export default function ContasPage() {
                         Pago: {formatCurrency(pagamentoTotal)} de {formatCurrency(faturaTotal)}
                       </p>
                     )}
+                    {faturaTotal > 0 && pagamentoTotal < faturaTotal && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="mt-2 w-full text-xs"
+                        onClick={(e) => { e.stopPropagation(); setPaymentConta({ id: conta.id, nome: conta.nome, fatura: faturaTotal - pagamentoTotal }); }}
+                      >
+                        <DollarSign className="h-3 w-3 mr-1" /> Registrar Pagamento
+                      </Button>
+                    )}
                   </>
                 ) : (
                   <>
