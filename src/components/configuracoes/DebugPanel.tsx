@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -9,9 +9,16 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { formatCurrency } from '@/lib/format';
 import { Bug, Search, BarChart3, Loader2, Trash2, Check, X } from 'lucide-react';
 import { toast } from 'sonner';
+
+const MONTH_LABELS: Record<string, string> = {
+  '01': 'Janeiro', '02': 'Fevereiro', '03': 'Março', '04': 'Abril',
+  '05': 'Maio', '06': 'Junho', '07': 'Julho', '08': 'Agosto',
+  '09': 'Setembro', '10': 'Outubro', '11': 'Novembro', '12': 'Dezembro',
+};
 
 interface DupGroup {
   key: string;
@@ -37,6 +44,8 @@ export function DebugPanel() {
   const [dedupGroups, setDedupGroups] = useState<DupGroup[] | null>(null);
   const [dedupModalOpen, setDedupModalOpen] = useState(false);
   const [dedupDeleting, setDedupDeleting] = useState(false);
+  const [selectedMonth, setSelectedMonth] = useState('');
+  const [selectedConta, setSelectedConta] = useState('');
 
   const { data: contas } = useQuery({
     queryKey: ['debug-contas', user?.id],
@@ -76,28 +85,56 @@ export function DebugPanel() {
     enabled: !!user,
   });
 
+  // Available months from stats
+  const availableMonths = useMemo(() => {
+    if (!stats?.byMonth) return [];
+    return Object.keys(stats.byMonth).sort();
+  }, [stats]);
+
+  // Set defaults when data loads
+  useEffect(() => {
+    if (availableMonths.length > 0 && !selectedMonth) {
+      setSelectedMonth(availableMonths[0]);
+    }
+  }, [availableMonths, selectedMonth]);
+
+  useEffect(() => {
+    if (contas && contas.length > 0 && !selectedConta) {
+      setSelectedConta(contas[0].id);
+    }
+  }, [contas, selectedConta]);
+
   const getContaNome = (id: string) => contas?.find(c => c.id === id)?.nome || id.slice(0, 8);
 
-  const runDiagnostic = async () => {
-    if (!user) return;
-    setDiagLoading(true);
-    const blackConta = contas?.find(c => c.nome.toLowerCase().includes('black'));
-    if (!blackConta) {
-      setDiagData([]);
-      setDiagLoading(false);
-      return;
-    }
-    const { data } = await supabase
-      .from('transacoes')
-      .select('*')
-      .eq('user_id', user.id)
-      .eq('conta_id', blackConta.id)
-      .gte('data', '2026-01-01')
-      .lte('data', '2026-01-31')
-      .order('data', { ascending: true });
-    setDiagData(data || []);
-    setDiagLoading(false);
+  const formatMonthLabel = (ym: string) => {
+    const [y, m] = ym.split('-');
+    return `${MONTH_LABELS[m] || m} ${y}`;
   };
+
+  const selectedContaNome = contas?.find(c => c.id === selectedConta)?.nome || '';
+
+  // Auto-run diagnostic when month/conta change
+  useEffect(() => {
+    if (!user || !selectedMonth || !selectedConta) return;
+    const runDiag = async () => {
+      setDiagLoading(true);
+      const [year, month] = selectedMonth.split('-');
+      const startDate = `${year}-${month}-01`;
+      const endDay = new Date(Number(year), Number(month), 0).getDate();
+      const endDate = `${year}-${month}-${String(endDay).padStart(2, '0')}`;
+      const { data } = await supabase
+        .from('transacoes')
+        .select('*')
+        .eq('user_id', user.id)
+        .eq('conta_id', selectedConta)
+        .gte('data', startDate)
+        .lte('data', endDate)
+        .order('data', { ascending: true });
+      setDiagData(data || []);
+      setDiagLoading(false);
+    };
+    runDiag();
+  }, [user, selectedMonth, selectedConta]);
 
   const handleSearch = async () => {
     if (!user || !searchTerm.trim()) return;
