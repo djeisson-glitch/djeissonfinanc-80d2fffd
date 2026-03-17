@@ -23,6 +23,8 @@ type PlannedTransaction = {
   user_id: string;
   conta_id: string;
   data: string;
+  data_original: string | null;
+  mes_competencia: string | null;
   descricao: string;
   valor: number;
   categoria: string;
@@ -193,10 +195,20 @@ export function CsvImportDialog({ open, onOpenChange }: Props) {
     }
   };
 
-  const applyDueDate = (transactions: ParsedTransaction[]): ParsedTransaction[] => {
-    if (!isCredito || !dueConfirmed) return transactions;
+  const applyDueDate = (transactions: ParsedTransaction[]): (ParsedTransaction & { _data_original: string; _mes_competencia: string })[] => {
+    if (!isCredito || !dueConfirmed) {
+      return transactions.map(t => ({ ...t, _data_original: t.data, _mes_competencia: '' }));
+    }
     const dueDateStr = `${dueYear}-${String(dueMonth + 1).padStart(2, '0')}-01`;
-    return transactions.map(t => ({ ...t, data: dueDateStr }));
+    // mes_competencia = month before vencimento
+    const compDate = new Date(dueYear, dueMonth - 1, 1);
+    const mesCompetencia = `${compDate.getFullYear()}-${String(compDate.getMonth() + 1).padStart(2, '0')}`;
+    return transactions.map(t => ({
+      ...t,
+      _data_original: t.data,
+      _mes_competencia: mesCompetencia,
+      data: dueDateStr,
+    }));
   };
 
   const validateBeforeImport = () => {
@@ -254,6 +266,8 @@ export function CsvImportDialog({ open, onOpenChange }: Props) {
         user_id: currentUserId,
         conta_id: contaId,
         data: t.data,
+        data_original: isCredito ? t._data_original : null,
+        mes_competencia: isCredito ? t._mes_competencia : null,
         descricao: t.descricao,
         valor: t.valor,
         categoria,
@@ -274,6 +288,8 @@ export function CsvImportDialog({ open, onOpenChange }: Props) {
             user_id: currentUserId,
             conta_id: contaId,
             data: ft.data,
+            data_original: null,
+            mes_competencia: null,
             descricao: ft.descricao,
             valor: ft.valor,
             categoria,
@@ -502,7 +518,7 @@ export function CsvImportDialog({ open, onOpenChange }: Props) {
       const batchSize = 50;
 
       for (let i = 0; i < plan.newTransactions.length; i += batchSize) {
-        const batch = plan.newTransactions.slice(i, i + batchSize).map(({ _isOriginal, ...rest }) => rest);
+        const batch = plan.newTransactions.slice(i, i + batchSize).map(({ _isOriginal, ...rest }) => rest as any);
         const { error, data } = await supabase
           .from('transacoes')
           .insert(batch)

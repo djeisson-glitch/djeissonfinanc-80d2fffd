@@ -21,6 +21,8 @@ export interface Transacao {
   user_id: string;
   conta_id: string;
   data: string;
+  data_original: string | null;
+  mes_competencia: string | null;
   descricao: string;
   valor: number;
   categoria: string;

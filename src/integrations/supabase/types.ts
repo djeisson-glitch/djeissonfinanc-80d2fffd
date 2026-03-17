@@ -179,11 +179,13 @@ export type Database = {
           conta_id: string
           created_at: string
           data: string
+          data_original: string | null
           descricao: string
           essencial: boolean
           grupo_parcela: string | null
           hash_transacao: string
           id: string
+          mes_competencia: string | null
           observacoes: string | null
           parcela_atual: number | null
           parcela_total: number | null
@@ -197,11 +199,13 @@ export type Database = {
           conta_id: string
           created_at?: string
           data: string
+          data_original?: string | null
           descricao: string
           essencial?: boolean
           grupo_parcela?: string | null
           hash_transacao: string
           id?: string
+          mes_competencia?: string | null
           observacoes?: string | null
           parcela_atual?: number | null
           parcela_total?: number | null
@@ -215,11 +219,13 @@ export type Database = {
           conta_id?: string
           created_at?: string
           data?: string
+          data_original?: string | null
           descricao?: string
           essencial?: boolean
           grupo_parcela?: string | null
           hash_transacao?: string
           id?: string
+          mes_competencia?: string | null
           observacoes?: string | null
           parcela_atual?: number | null
           parcela_total?: number | null
