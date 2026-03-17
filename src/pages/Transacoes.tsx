@@ -259,7 +259,12 @@ export default function TransacoesPage() {
             <TableBody>
               {filtered.map((t) => (
                 <TableRow key={t.id}>
-                  <TableCell className="text-sm">{formatDate(t.data)}</TableCell>
+                  <TableCell className="text-sm" title={t.data_original ? `Original: ${formatDate(t.data_original)}` : undefined}>
+                    {formatDate(t.data)}
+                    {t.data_original && t.data_original !== t.data && (
+                      <span className="block text-[10px] text-muted-foreground">orig: {formatDate(t.data_original)}</span>
+                    )}
+                  </TableCell>
                   <TableCell className="text-sm max-w-[200px] truncate">{t.descricao}</TableCell>
                   <TableCell>
                     <Badge
