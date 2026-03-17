@@ -48,6 +48,49 @@ export default function DashboardPage() {
     enabled: !!user,
   });
 
+  // Credit card invoice data
+  const { data: contas } = useQuery({
+    queryKey: ['contas', user?.id],
+    queryFn: async () => {
+      const { data } = await supabase.from('contas').select('*').eq('user_id', user!.id);
+      return data || [];
+    },
+    enabled: !!user,
+  });
+
+  const creditCards = contas?.filter(c => c.tipo === 'credito') || [];
+
+  const { data: faturaData } = useQuery({
+    queryKey: ['dashboard', 'faturas', user?.id, start, end],
+    queryFn: async () => {
+      if (creditCards.length === 0) return {};
+      const cardIds = creditCards.map(c => c.id);
+      const { data } = await supabase
+        .from('transacoes')
+        .select('conta_id, tipo, valor, descricao')
+        .eq('user_id', user!.id)
+        .in('conta_id', cardIds)
+        .gte('data', start)
+        .lte('data', end);
+
+      const faturas: Record<string, { despesas: number; pagamentos: number }> = {};
+      data?.forEach(t => {
+        if (!faturas[t.conta_id]) faturas[t.conta_id] = { despesas: 0, pagamentos: 0 };
+        if (t.tipo === 'despesa') {
+          faturas[t.conta_id].despesas += Number(t.valor);
+        }
+        const desc = t.descricao.toLowerCase();
+        if (desc.includes('pag fat') || desc.includes('pagamento fatura') || desc.includes('pag fat deb cc')) {
+          faturas[t.conta_id].pagamentos += Math.abs(Number(t.valor));
+        } else if (t.tipo === 'receita') {
+          faturas[t.conta_id].pagamentos += Number(t.valor);
+        }
+      });
+      return faturas;
+    },
+    enabled: !!user && creditCards.length > 0,
+  });
+
   const { data: parcelasFuturas } = useQuery({
     queryKey: ['dashboard', 'parcelas-futuras', user?.id],
     queryFn: async () => {
