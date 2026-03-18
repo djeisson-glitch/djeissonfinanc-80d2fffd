@@ -474,11 +474,35 @@ export function CsvImportDialog({ open, onOpenChange }: Props) {
       const plan = await buildImportPlan(context.contaId, context.currentUserId);
       setPreparedPlan(plan);
       setProgress(100);
-    } catch (err) {
-      console.error(err);
-      toast({ title: 'Erro ao analisar o CSV', variant: 'destructive' });
+    } catch (err: any) {
+      if (err?.type === 'CONFLICTS') {
+        setPendingConflicts(err.conflicts);
+        setConflictContext({ contaId: err.contaId, userId: err.userId });
+      } else {
+        console.error(err);
+        toast({ title: 'Erro ao analisar o CSV', variant: 'destructive' });
+      }
     } finally {
       setImporting(false);
+    }
+  };
+
+  const handleConflictResolved = async (resolved: ConflictMatch[]) => {
+    if (!conflictContext) return;
+    setPendingConflicts(null);
+    setImporting(true);
+    setProgress(10);
+
+    try {
+      const plan = await buildImportPlan(conflictContext.contaId, conflictContext.userId, resolved);
+      setPreparedPlan(plan);
+      setProgress(100);
+    } catch (err) {
+      console.error(err);
+      toast({ title: 'Erro ao processar conflitos', variant: 'destructive' });
+    } finally {
+      setImporting(false);
+      setConflictContext(null);
     }
   };
 
