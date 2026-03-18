@@ -677,6 +677,8 @@ export function CsvImportDialog({ open, onOpenChange }: Props) {
     setParsedLineLogs([]);
     setForceImporting(false);
     setPreparedPlan(null);
+    setPendingConflicts(null);
+    setConflictContext(null);
     setDueConfirmed(false);
     onOpenChange(false);
   };
