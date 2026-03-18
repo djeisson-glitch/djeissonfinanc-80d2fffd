@@ -840,5 +840,15 @@ export function CsvImportDialog({ open, onOpenChange }: Props) {
         )}
       </DialogContent>
     </Dialog>
+
+    {pendingConflicts && pendingConflicts.length > 0 && (
+      <ConflictModal
+        open={true}
+        conflicts={pendingConflicts}
+        onConfirm={handleConflictResolved}
+        onCancel={() => { setPendingConflicts(null); setConflictContext(null); }}
+      />
+    )}
+    </>
   );
 }
