@@ -8,11 +8,13 @@ import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { parseSicrediCSV, type SkippedLine, type ParsedTransaction, type CsvLineLogEntry } from '@/lib/csv-parser';
 import { parseOFX } from '@/lib/ofx-parser';
+import { projectFutureInstallments, detectConflicts, type ConflictMatch, type ProjectableTransaction, type ProjectedInstallment } from '@/lib/installment-projection';
 import { Progress } from '@/components/ui/progress';
 import { Upload, FileText, Check, AlertCircle, CreditCard, CalendarDays } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { ImportReport, ImportResult, DuplicateInfo, ImportedItem } from './ImportReport';
 import { CsvImportPreview, type CsvPreviewEntry } from './CsvImportPreview';
+import { ConflictModal } from './ConflictModal';
 
 interface Props {
   open: boolean;
