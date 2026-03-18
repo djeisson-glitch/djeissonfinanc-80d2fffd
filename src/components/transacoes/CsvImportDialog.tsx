@@ -8,11 +8,13 @@ import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { parseSicrediCSV, type SkippedLine, type ParsedTransaction, type CsvLineLogEntry } from '@/lib/csv-parser';
 import { parseOFX } from '@/lib/ofx-parser';
+import { projectFutureInstallments, detectConflicts, type ConflictMatch, type ProjectableTransaction, type ProjectedInstallment } from '@/lib/installment-projection';
 import { Progress } from '@/components/ui/progress';
 import { Upload, FileText, Check, AlertCircle, CreditCard, CalendarDays } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { ImportReport, ImportResult, DuplicateInfo, ImportedItem } from './ImportReport';
 import { CsvImportPreview, type CsvPreviewEntry } from './CsvImportPreview';
+import { ConflictModal } from './ConflictModal';
 
 interface Props {
   open: boolean;
@@ -93,6 +95,8 @@ export function CsvImportDialog({ open, onOpenChange }: Props) {
   const [parsedLineLogs, setParsedLineLogs] = useState<CsvLineLogEntry[]>([]);
   const [forceImporting, setForceImporting] = useState(false);
   const [preparedPlan, setPreparedPlan] = useState<PreparedImportPlan | null>(null);
+  const [pendingConflicts, setPendingConflicts] = useState<ConflictMatch[] | null>(null);
+  const [conflictContext, setConflictContext] = useState<{ contaId: string; userId: string } | null>(null);
 
   // Credit card due date
   const [dueMonth, setDueMonth] = useState<number>(0);
@@ -240,16 +244,16 @@ export function CsvImportDialog({ open, onOpenChange }: Props) {
     return { contaId: selectedConta, currentUserId: user.id };
   };
 
-  const buildImportPlan = async (contaId: string, currentUserId: string): Promise<PreparedImportPlan> => {
+  const buildImportPlan = async (contaId: string, currentUserId: string, resolvedConflicts?: ConflictMatch[]): Promise<PreparedImportPlan> => {
     const { data: rules } = await supabase
       .from('regras_categorizacao')
       .select('*')
       .eq('user_id', currentUserId);
 
-    setProgress(25);
+    setProgress(20);
 
     const finalTransactions = applyDueDate(parsedTransactions);
-    const allTransactions: PlannedTransaction[] = [];
+    const allOriginals: PlannedTransaction[] = [];
 
     for (const t of finalTransactions) {
       let categoria = 'Outros';
@@ -264,7 +268,7 @@ export function CsvImportDialog({ open, onOpenChange }: Props) {
 
       const grupo_parcela = t.parcela_atual ? crypto.randomUUID() : null;
 
-      allTransactions.push({
+      allOriginals.push({
         user_id: currentUserId,
         conta_id: contaId,
         data: t.data,
@@ -284,24 +288,111 @@ export function CsvImportDialog({ open, onOpenChange }: Props) {
       });
     }
 
+    setProgress(35);
+
+    // --- Auto-project future installments ---
+    const projectedInstallments = projectFutureInstallments(allOriginals);
+
+    setProgress(45);
+
+    // --- Fetch existing transactions from DB for conflict detection ---
+    let existingTxs: any[] = [];
+    let from = 0;
+    const batchSize = 1000;
+    while (true) {
+      const { data } = await supabase
+        .from('transacoes')
+        .select('id, descricao, valor, data, data_original, mes_competencia, parcela_atual, parcela_total, pessoa, hash_transacao')
+        .eq('user_id', currentUserId)
+        .eq('conta_id', contaId)
+        .range(from, from + batchSize - 1);
+      if (!data || data.length === 0) break;
+      existingTxs = existingTxs.concat(data);
+      if (data.length < batchSize) break;
+      from += batchSize;
+    }
+
+    setProgress(60);
+
+    // --- Detect conflicts ---
+    const allPlanned = [...allOriginals, ...projectedInstallments] as (ProjectableTransaction | ProjectedInstallment)[];
+    const { clean, exactMatches, conflicts } = detectConflicts(allPlanned, existingTxs);
+
+    // If there are unresolved conflicts and no resolved conflicts provided, pause for user
+    if (conflicts.length > 0 && !resolvedConflicts) {
+      // Store conflicts and return a dummy plan — caller will show modal
+      throw { type: 'CONFLICTS', conflicts, contaId, userId: currentUserId };
+    }
+
+    // Apply resolved conflicts
+    const idsToDelete: string[] = [];
+    const resolvedClean: (ProjectableTransaction | ProjectedInstallment)[] = [...clean];
+
+    // Auto-projected that will be replaced by CSV real data
+    for (const em of exactMatches) {
+      // If existing is auto-projected and planned is not, delete old and import new
+      const existingTx = existingTxs.find(e => e.id === em.existingId);
+      if (existingTx?.descricao?.includes('(auto-projetada)') && !('_isProjected' in em.planned)) {
+        idsToDelete.push(em.existingId);
+        resolvedClean.push(em.planned);
+      }
+      // Otherwise exact hash match → upsert will handle it
+    }
+
+    if (resolvedConflicts) {
+      for (const rc of resolvedConflicts) {
+        if (rc.choice === 'csv') {
+          idsToDelete.push(rc.existingTransaction.id);
+          resolvedClean.push(rc.csvTransaction);
+        }
+        // choice === 'existing' → skip the CSV transaction
+      }
+    }
+
     setProgress(75);
 
-    // All transactions are imported directly — no duplicate detection
-    const newTransactions = allTransactions;
-    const duplicateTransactions: PlannedTransaction[] = [];
-    const duplicateItems: DuplicateInfo[] = [];
-
-    const importedOriginals: ImportedItem[] = newTransactions.map(t => ({
-      data: t.data,
-      descricao: t.descricao,
-      valor: t.valor,
-      tipo: t.tipo,
-      parcela_atual: t.parcela_atual,
-      parcela_total: t.parcela_total,
-      pessoa: t.pessoa,
+    const newTransactions: PlannedTransaction[] = resolvedClean.map(t => ({
+      ...t,
+      _isOriginal: !('_isProjected' in t),
     }));
+    const duplicateTransactions: PlannedTransaction[] = [];
+    const duplicateItems: DuplicateInfo[] = exactMatches
+      .filter(em => {
+        const existingTx = existingTxs.find(e => e.id === em.existingId);
+        return !existingTx?.descricao?.includes('(auto-projetada)') || ('_isProjected' in em.planned);
+      })
+      .map(em => ({
+        data: em.planned.data,
+        descricao: em.planned.descricao,
+        valor: em.planned.valor,
+        pessoa: em.planned.pessoa,
+        hash_transacao: em.planned.hash_transacao,
+      }));
 
-    const importedFutures: ImportedItem[] = [];
+    const importedOriginals: ImportedItem[] = newTransactions
+      .filter(t => t._isOriginal)
+      .map(t => ({
+        data: t.data,
+        descricao: t.descricao,
+        valor: t.valor,
+        tipo: t.tipo,
+        parcela_atual: t.parcela_atual,
+        parcela_total: t.parcela_total,
+        pessoa: t.pessoa,
+      }));
+
+    const importedFutures: ImportedItem[] = newTransactions
+      .filter(t => !t._isOriginal)
+      .map(t => ({
+        data: t.data,
+        descricao: t.descricao,
+        valor: t.valor,
+        tipo: t.tipo,
+        parcela_atual: t.parcela_atual,
+        parcela_total: t.parcela_total,
+        pessoa: t.pessoa,
+        isFuture: true,
+      }));
 
     const totalDespesas = newTransactions
       .filter(t => t.tipo === 'despesa')
@@ -320,6 +411,17 @@ export function CsvImportDialog({ open, onOpenChange }: Props) {
 
     const previewEntries: CsvPreviewEntry[] = parsedLineLogs.map((entry) => {
       if (entry.status === 'importada') {
+        // Check if this was detected as duplicate
+        const isDup = duplicateItems.some(d => d.hash_transacao === entry.hash_transacao);
+        if (isDup) {
+          return {
+            lineNumber: entry.lineNumber,
+            content: entry.content,
+            status: 'duplicate' as const,
+            reason: 'Já existe no banco (hash idêntico)',
+            hash_transacao: entry.hash_transacao,
+          };
+        }
         return {
           lineNumber: entry.lineNumber,
           content: entry.content,
@@ -341,7 +443,7 @@ export function CsvImportDialog({ open, onOpenChange }: Props) {
 
     return {
       contaNome,
-      allTransactionsCount: allTransactions.length,
+      allTransactionsCount: allOriginals.length + projectedInstallments.length,
       newTransactions,
       duplicateTransactions,
       duplicateItems,
@@ -351,7 +453,7 @@ export function CsvImportDialog({ open, onOpenChange }: Props) {
       totalReceitas,
       logEntries,
       previewEntries,
-      autoProjectedIdsToDelete: [],
+      autoProjectedIdsToDelete: idsToDelete,
       replacedTransactions: [],
     };
   };
@@ -372,11 +474,35 @@ export function CsvImportDialog({ open, onOpenChange }: Props) {
       const plan = await buildImportPlan(context.contaId, context.currentUserId);
       setPreparedPlan(plan);
       setProgress(100);
-    } catch (err) {
-      console.error(err);
-      toast({ title: 'Erro ao analisar o CSV', variant: 'destructive' });
+    } catch (err: any) {
+      if (err?.type === 'CONFLICTS') {
+        setPendingConflicts(err.conflicts);
+        setConflictContext({ contaId: err.contaId, userId: err.userId });
+      } else {
+        console.error(err);
+        toast({ title: 'Erro ao analisar o CSV', variant: 'destructive' });
+      }
     } finally {
       setImporting(false);
+    }
+  };
+
+  const handleConflictResolved = async (resolved: ConflictMatch[]) => {
+    if (!conflictContext) return;
+    setPendingConflicts(null);
+    setImporting(true);
+    setProgress(10);
+
+    try {
+      const plan = await buildImportPlan(conflictContext.contaId, conflictContext.userId, resolved);
+      setPreparedPlan(plan);
+      setProgress(100);
+    } catch (err) {
+      console.error(err);
+      toast({ title: 'Erro ao processar conflitos', variant: 'destructive' });
+    } finally {
+      setImporting(false);
+      setConflictContext(null);
     }
   };
 
@@ -551,6 +677,8 @@ export function CsvImportDialog({ open, onOpenChange }: Props) {
     setParsedLineLogs([]);
     setForceImporting(false);
     setPreparedPlan(null);
+    setPendingConflicts(null);
+    setConflictContext(null);
     setDueConfirmed(false);
     onOpenChange(false);
   };
@@ -561,6 +689,7 @@ export function CsvImportDialog({ open, onOpenChange }: Props) {
   }, []);
 
   return (
+    <>
     <Dialog open={open} onOpenChange={handleClose}>
       <DialogContent className="sm:max-w-5xl">
         <DialogHeader>
@@ -712,5 +841,15 @@ export function CsvImportDialog({ open, onOpenChange }: Props) {
         )}
       </DialogContent>
     </Dialog>
+
+    {pendingConflicts && pendingConflicts.length > 0 && (
+      <ConflictModal
+        open={true}
+        conflicts={pendingConflicts}
+        onConfirm={handleConflictResolved}
+        onCancel={() => { setPendingConflicts(null); setConflictContext(null); }}
+      />
+    )}
+    </>
   );
 }
