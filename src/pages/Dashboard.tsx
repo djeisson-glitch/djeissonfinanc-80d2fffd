@@ -156,12 +156,29 @@ export default function DashboardPage() {
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <Card className="cursor-pointer hover:bg-muted/50 transition-colors" onClick={() => navigate('/transacoes?tipo=receita')}>
+        <Card>
           <CardContent className="p-4">
-            <p className="text-sm text-muted-foreground">Receita</p>
+            <p className="text-sm text-muted-foreground">Receita Base</p>
             <p className="text-2xl font-bold text-success">{formatCurrency(receita)}</p>
+            <p className="text-xs text-muted-foreground">Configurada</p>
           </CardContent>
         </Card>
+        {totalReceitas > 0 ? (
+          <Card className="cursor-pointer hover:bg-muted/50 transition-colors" onClick={() => navigate('/transacoes?tipo=receita')}>
+            <CardContent className="p-4">
+              <p className="text-sm text-muted-foreground">Receitas do Mês</p>
+              <p className="text-2xl font-bold text-success">{formatCurrency(totalReceitas)}</p>
+              <p className="text-xs text-muted-foreground">{transacoesMes?.filter(t => t.tipo === 'receita').length} transações</p>
+            </CardContent>
+          </Card>
+        ) : (
+          <Card className="cursor-pointer hover:bg-muted/50 transition-colors" onClick={() => navigate('/transacoes?tipo=despesa')}>
+            <CardContent className="p-4">
+              <p className="text-sm text-muted-foreground">Despesas</p>
+              <p className="text-2xl font-bold text-destructive">{formatCurrency(totalDespesas)}</p>
+            </CardContent>
+          </Card>
+        )}
         <Card className="cursor-pointer hover:bg-muted/50 transition-colors" onClick={() => navigate('/transacoes?tipo=despesa')}>
           <CardContent className="p-4">
             <p className="text-sm text-muted-foreground">Despesas</p>
@@ -174,12 +191,7 @@ export default function DashboardPage() {
             <p className={`text-2xl font-bold ${saldoProjetado >= reserva ? 'text-success' : 'text-destructive'}`}>
               {formatCurrency(saldoProjetado)}
             </p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
-            <p className="text-sm text-muted-foreground">% da Receita</p>
-            <p className="text-2xl font-bold">{percentGasto.toFixed(1)}%</p>
+            <p className="text-xs text-muted-foreground">{percentGasto.toFixed(1)}% da receita</p>
             <Progress value={Math.min(percentGasto, 100)} className="mt-2" />
           </CardContent>
         </Card>
