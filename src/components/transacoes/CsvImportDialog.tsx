@@ -689,6 +689,7 @@ export function CsvImportDialog({ open, onOpenChange }: Props) {
   }, []);
 
   return (
+    <>
     <Dialog open={open} onOpenChange={handleClose}>
       <DialogContent className="sm:max-w-5xl">
         <DialogHeader>
