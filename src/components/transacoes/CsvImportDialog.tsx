@@ -95,6 +95,8 @@ export function CsvImportDialog({ open, onOpenChange }: Props) {
   const [parsedLineLogs, setParsedLineLogs] = useState<CsvLineLogEntry[]>([]);
   const [forceImporting, setForceImporting] = useState(false);
   const [preparedPlan, setPreparedPlan] = useState<PreparedImportPlan | null>(null);
+  const [pendingConflicts, setPendingConflicts] = useState<ConflictMatch[] | null>(null);
+  const [conflictContext, setConflictContext] = useState<{ contaId: string; userId: string } | null>(null);
 
   // Credit card due date
   const [dueMonth, setDueMonth] = useState<number>(0);
