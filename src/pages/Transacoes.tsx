@@ -15,7 +15,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { useToast } from '@/hooks/use-toast';
-import { Pencil, Trash2, Search, Download, Copy } from 'lucide-react';
+import { Pencil, Trash2, Search, Download, Copy, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
 import { exportCSV, copyToClipboard } from '@/lib/export';
 import { MonthSelector } from '@/components/MonthSelector';
 
@@ -35,6 +35,29 @@ export default function TransacoesPage() {
   const [search, setSearch] = useState('');
   const [editingTx, setEditingTx] = useState<any>(null);
   const [learnPattern, setLearnPattern] = useState(false);
+  const [sortColumn, setSortColumn] = useState<string | null>(null);
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
+
+  const toggleSort = (column: string) => {
+    if (sortColumn === column) {
+      if (sortDirection === 'asc') {
+        setSortDirection('desc');
+      } else {
+        setSortColumn(null);
+        setSortDirection('asc');
+      }
+    } else {
+      setSortColumn(column);
+      setSortDirection('asc');
+    }
+  };
+
+  const SortIcon = ({ column }: { column: string }) => {
+    if (sortColumn !== column) return <ArrowUpDown className="h-3 w-3 ml-1 opacity-40" />;
+    return sortDirection === 'asc'
+      ? <ArrowUp className="h-3 w-3 ml-1" />
+      : <ArrowDown className="h-3 w-3 ml-1" />;
+  };
 
   // Read URL params on mount
   useEffect(() => {
@@ -117,7 +140,7 @@ export default function TransacoesPage() {
     setSearchParams(searchParams, { replace: true });
   };
 
-  const filtered = transacoes?.filter(t => {
+  const filtered = (transacoes?.filter(t => {
     if (filterCategoria !== 'all' && t.categoria !== filterCategoria) return false;
     if (filterTipo !== 'all' && t.tipo !== filterTipo) return false;
     if (filterEssencial === 'true' && !t.essencial) return false;
@@ -126,7 +149,24 @@ export default function TransacoesPage() {
     if (filterPessoa !== 'all' && t.pessoa !== filterPessoa) return false;
     if (search && !t.descricao.toLowerCase().includes(search.toLowerCase())) return false;
     return true;
-  }) || [];
+  }) || []).sort((a, b) => {
+    if (!sortColumn) return 0;
+    const dir = sortDirection === 'asc' ? 1 : -1;
+    switch (sortColumn) {
+      case 'data': return dir * a.data.localeCompare(b.data);
+      case 'descricao': return dir * a.descricao.localeCompare(b.descricao, 'pt-BR');
+      case 'categoria': return dir * a.categoria.localeCompare(b.categoria, 'pt-BR');
+      case 'valor': {
+        const va = a.tipo === 'receita' ? Number(a.valor) : -Number(a.valor);
+        const vb = b.tipo === 'receita' ? Number(b.valor) : -Number(b.valor);
+        return dir * (va - vb);
+      }
+      case 'essencial': return dir * (Number(a.essencial) - Number(b.essencial));
+      case 'parcela': return dir * ((a.parcela_atual || 0) - (b.parcela_atual || 0));
+      case 'pessoa': return dir * a.pessoa.localeCompare(b.pessoa, 'pt-BR');
+      default: return 0;
+    }
+  });
 
   const pessoas = [...new Set(transacoes?.map(t => t.pessoa) || [])];
 
@@ -246,13 +286,27 @@ export default function TransacoesPage() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Data</TableHead>
-                <TableHead>Descrição</TableHead>
-                <TableHead>Categoria</TableHead>
-                <TableHead className="text-right">Valor</TableHead>
-                <TableHead>Tipo</TableHead>
-                <TableHead>Parcela</TableHead>
-                <TableHead>Pessoa</TableHead>
+                <TableHead className="cursor-pointer select-none" onClick={() => toggleSort('data')}>
+                  <span className="flex items-center">Data<SortIcon column="data" /></span>
+                </TableHead>
+                <TableHead className="cursor-pointer select-none" onClick={() => toggleSort('descricao')}>
+                  <span className="flex items-center">Descrição<SortIcon column="descricao" /></span>
+                </TableHead>
+                <TableHead className="cursor-pointer select-none" onClick={() => toggleSort('categoria')}>
+                  <span className="flex items-center">Categoria<SortIcon column="categoria" /></span>
+                </TableHead>
+                <TableHead className="text-right cursor-pointer select-none" onClick={() => toggleSort('valor')}>
+                  <span className="flex items-center justify-end">Valor<SortIcon column="valor" /></span>
+                </TableHead>
+                <TableHead className="cursor-pointer select-none" onClick={() => toggleSort('essencial')}>
+                  <span className="flex items-center">Tipo<SortIcon column="essencial" /></span>
+                </TableHead>
+                <TableHead className="cursor-pointer select-none" onClick={() => toggleSort('parcela')}>
+                  <span className="flex items-center">Parcela<SortIcon column="parcela" /></span>
+                </TableHead>
+                <TableHead className="cursor-pointer select-none" onClick={() => toggleSort('pessoa')}>
+                  <span className="flex items-center">Pessoa<SortIcon column="pessoa" /></span>
+                </TableHead>
                 <TableHead className="w-20">Ações</TableHead>
               </TableRow>
             </TableHeader>
