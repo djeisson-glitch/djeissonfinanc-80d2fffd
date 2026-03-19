@@ -302,9 +302,11 @@ export function CsvImportDialog({ open, onOpenChange }: Props) {
     for (const proj of projections) {
       const projMonth = proj.data_original.substring(0, 7); // "2026-02"
 
-      // Se projeção é de mês FUTURO ao CSV, NÃO avaliar (deixa quieta)
-      if (projMonth > csvMonth) {
-        console.log(`⏭️ Pulando (futura): ${proj.descricao} - ${proj.data_original}`);
+      // Só avaliar projeções do MESMO mês do CSV — não toca em outros meses
+      if (projMonth !== csvMonth) {
+        console.log(
+          `⏭️ Pulando (outro mês): ${proj.descricao} - ${proj.data_original} (mês ${projMonth} ≠ ${csvMonth})`,
+        );
         continue;
       }
 
@@ -583,6 +585,10 @@ export function CsvImportDialog({ open, onOpenChange }: Props) {
 
     try {
       // ETAPA 1: Limpar órfãs
+
+      console.log("🧹 Etapa 1/2: Limpando projeções órfãs...");
+      const deleted = await cleanOrphanProjections(context.contaId, context.currentUserId, parsedTransactions);
+      console.log(`✅ Limpeza concluída: ${deleted} órfãs removidas`);
 
       setProgress(10);
 
