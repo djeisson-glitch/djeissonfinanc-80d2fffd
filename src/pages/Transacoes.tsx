@@ -21,6 +21,7 @@ import { Pencil, Trash2, Search, Download, Copy, ArrowUpDown, ArrowUp, ArrowDown
 import { Checkbox } from '@/components/ui/checkbox';
 import { exportCSV, copyToClipboard } from '@/lib/export';
 import { MonthSelector } from '@/components/MonthSelector';
+import { RecategorizarModal } from '@/components/transacoes/RecategorizarModal';
 
 export default function TransacoesPage() {
   const { user } = useAuth();
@@ -41,6 +42,9 @@ export default function TransacoesPage() {
   const [showIgnoradas, setShowIgnoradas] = useState(false);
   const [sortColumn, setSortColumn] = useState<string | null>(null);
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
+  const [recatTransactions, setRecatTransactions] = useState<any[]>([]);
+  const [recatCategoria, setRecatCategoria] = useState<{ nome: string; id: string | null; essencial: boolean }>({ nome: '', id: null, essencial: false });
+  const [recatOpen, setRecatOpen] = useState(false);
 
   const toggleSort = (column: string) => {
     if (sortColumn === column) {
@@ -107,7 +111,10 @@ export default function TransacoesPage() {
         essencial: tx.essencial,
         ignorar_dashboard: tx.ignorar_dashboard,
       }).eq('id', tx.id);
+
+      let savedPattern: string | null = null;
       if (learnPattern && editingTx) {
+        savedPattern = editingTx.descricao;
         await supabase.from('regras_categorizacao').insert({
           user_id: user!.id,
           padrao: editingTx.descricao,
@@ -117,12 +124,69 @@ export default function TransacoesPage() {
           aprendido_auto: false,
         });
       }
+      return { savedPattern, categoria: tx.categoria, categoria_id: tx.categoria_id, essencial: tx.essencial };
+    },
+    onSuccess: async (result) => {
+      queryClient.invalidateQueries({ queryKey: ['transacoes'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] });
+      const closedTxId = editingTx?.id;
+      setEditingTx(null);
+      toast({ title: 'Transação atualizada' });
+
+      // After learning a pattern, search for other "Outros" transactions matching it
+      if (result?.savedPattern && user) {
+        const pattern = result.savedPattern.toLowerCase();
+        // Find the "Outros" categoria_id for the user
+        const { data: outrosCat } = await supabase
+          .from('categorias')
+          .select('id')
+          .eq('user_id', user.id)
+          .eq('nome', 'Outros')
+          .is('parent_id', null)
+          .maybeSingle();
+
+        let query = supabase
+          .from('transacoes')
+          .select('id, data, descricao, valor, tipo, pessoa, categoria, categoria_id')
+          .eq('user_id', user.id)
+          .neq('id', closedTxId)
+          .ilike('descricao', `%${pattern}%`);
+
+        // Match transactions in "Outros" — either by categoria_id or by string
+        if (outrosCat?.id) {
+          query = query.or(`categoria.eq.Outros,categoria_id.eq.${outrosCat.id}`);
+        } else {
+          query = query.eq('categoria', 'Outros');
+        }
+
+        const { data: matching } = await query;
+        if (matching && matching.length > 0) {
+          setRecatTransactions(matching);
+          setRecatCategoria({ nome: result.categoria, id: result.categoria_id, essencial: result.essencial });
+          setRecatOpen(true);
+        }
+      }
+    },
+  });
+
+  const bulkRecategorizeMutation = useMutation({
+    mutationFn: async () => {
+      const ids = recatTransactions.map(t => t.id);
+      const updateData: any = {
+        categoria: recatCategoria.nome,
+        essencial: recatCategoria.essencial,
+      };
+      if (recatCategoria.id) {
+        updateData.categoria_id = recatCategoria.id;
+      }
+      await supabase.from('transacoes').update(updateData).in('id', ids);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['transacoes'] });
       queryClient.invalidateQueries({ queryKey: ['dashboard'] });
-      setEditingTx(null);
-      toast({ title: 'Transação atualizada' });
+      toast({ title: `${recatTransactions.length} transações recategorizadas para "${recatCategoria.nome}"` });
+      setRecatOpen(false);
+      setRecatTransactions([]);
     },
   });
 
@@ -448,6 +512,15 @@ export default function TransacoesPage() {
           )}
         </DialogContent>
       </Dialog>
+
+      <RecategorizarModal
+        open={recatOpen}
+        onOpenChange={setRecatOpen}
+        transactions={recatTransactions}
+        categoriaNome={recatCategoria.nome}
+        onConfirm={() => bulkRecategorizeMutation.mutate()}
+        loading={bulkRecategorizeMutation.isPending}
+      />
     </div>
   );
 }
