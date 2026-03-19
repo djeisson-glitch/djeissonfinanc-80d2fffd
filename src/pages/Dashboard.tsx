@@ -267,7 +267,7 @@ export default function DashboardPage() {
               <p className="text-sm text-muted-foreground">Nenhuma despesa este mês</p>
             ) : (
               <div className="space-y-3">
-                {categoryRanking.map(({ cat, total, pct }) => (
+                {categoryRanking.map(({ cat, total, pct, color }) => (
                   <button
                     key={cat}
                     className="flex items-center justify-between w-full hover:bg-muted/50 rounded-lg p-2 -m-2 transition-colors cursor-pointer text-left"
@@ -276,7 +276,7 @@ export default function DashboardPage() {
                     <div className="flex items-center gap-2">
                       <div
                         className="w-3 h-3 rounded-full shrink-0"
-                        style={{ backgroundColor: getCategoriaColor(cat) }}
+                        style={{ backgroundColor: color }}
                       />
                       <span className="text-sm font-medium">{cat}</span>
                     </div>
