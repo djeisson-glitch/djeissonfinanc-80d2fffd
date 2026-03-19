@@ -330,6 +330,7 @@ export function CsvImportDialog({ open, onOpenChange }: Props) {
 
     // Auto-replacements: CSV real data replaces auto-projected (relaxed match)
     for (const ar of autoReplacements) {
+      console.log(`[Import] Auto-replace: deletar ID ${ar.existingId} → importar "${ar.planned.descricao}"`);
       idsToDelete.push(ar.existingId);
       resolvedClean.push(ar.planned);
     }
@@ -338,6 +339,7 @@ export function CsvImportDialog({ open, onOpenChange }: Props) {
     for (const em of exactMatches) {
       const existingTx = existingTxs.find(e => e.id === em.existingId);
       if (existingTx?.descricao?.includes('(auto-projetada)') && !('_isProjected' in em.planned)) {
+        console.log(`[Import] Exact-match replace: deletar ID ${em.existingId} → importar "${em.planned.descricao}"`);
         idsToDelete.push(em.existingId);
         resolvedClean.push(em.planned);
       }
@@ -347,12 +349,17 @@ export function CsvImportDialog({ open, onOpenChange }: Props) {
     if (resolvedConflicts) {
       for (const rc of resolvedConflicts) {
         if (rc.choice === 'csv') {
+          console.log(`[Import] Conflito resolvido (CSV): deletar ID ${rc.existingTransaction.id} → importar "${rc.csvTransaction.descricao}"`);
           idsToDelete.push(rc.existingTransaction.id);
           resolvedClean.push(rc.csvTransaction);
+        } else {
+          console.log(`[Import] Conflito resolvido (manter existente): ID ${rc.existingTransaction.id}`);
         }
-        // choice === 'existing' → skip the CSV transaction
       }
     }
+
+    console.log(`[Import] Total IDs para deletar: ${idsToDelete.length}`, idsToDelete);
+    console.log(`[Import] Total transações para importar: ${resolvedClean.length}`);
 
     setProgress(75);
 
