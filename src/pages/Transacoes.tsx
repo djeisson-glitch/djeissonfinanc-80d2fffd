@@ -430,6 +430,17 @@ export default function TransacoesPage() {
                 <Label>Essencial</Label>
                 <Switch checked={editingTx.essencial} onCheckedChange={v => setEditingTx({ ...editingTx, essencial: v })} />
               </div>
+              <div className="flex items-center gap-3 rounded-lg border p-3">
+                <Checkbox
+                  id="ignorar-dashboard"
+                  checked={editingTx.ignorar_dashboard || false}
+                  onCheckedChange={(v) => setEditingTx({ ...editingTx, ignorar_dashboard: !!v })}
+                />
+                <div>
+                  <Label htmlFor="ignorar-dashboard" className="text-sm font-medium cursor-pointer">Ignorar no dashboard</Label>
+                  <p className="text-xs text-muted-foreground">Transação não será contabilizada nos totais e gráficos</p>
+                </div>
+              </div>
               <div className="flex items-center justify-between rounded-lg border p-3">
                 <div>
                   <p className="text-sm font-medium">Aprender padrão?</p>
@@ -444,6 +455,7 @@ export default function TransacoesPage() {
                   categoria: editingTx.categoria,
                   subcategoria: editingTx.subcategoria,
                   essencial: editingTx.essencial,
+                  ignorar_dashboard: editingTx.ignorar_dashboard || false,
                 })}
               >
                 Salvar
