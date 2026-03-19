@@ -530,20 +530,22 @@ export function CsvImportDialog({ open, onOpenChange }: Props) {
 
       // Step 1: Delete auto-projected duplicates from database
       let deletedCount = 0;
+      console.log(`[Import] Executando deleção de ${plan.autoProjectedIdsToDelete.length} transações:`, plan.autoProjectedIdsToDelete);
       if (plan.autoProjectedIdsToDelete.length > 0) {
         for (let i = 0; i < plan.autoProjectedIdsToDelete.length; i += 100) {
           const chunk = plan.autoProjectedIdsToDelete.slice(i, i + 100);
-          const { error } = await supabase
+          const { error, count } = await supabase
             .from('transacoes')
             .delete()
             .in('id', chunk);
           if (error) {
-            console.error('Error deleting auto-projected:', error);
+            console.error('[Import] Erro ao deletar:', error);
           } else {
             deletedCount += chunk.length;
+            console.log(`[Import] Deletado chunk de ${chunk.length} IDs com sucesso`);
           }
         }
-        console.log(`Deleted ${deletedCount} auto-projected duplicates`);
+        console.log(`[Import] Total deletado: ${deletedCount} transações auto-projetadas`);
       }
 
       // Step 2: Insert new transactions
