@@ -272,7 +272,7 @@ export function CsvImportDialog({ open, onOpenChange }: Props) {
         user_id: currentUserId,
         conta_id: contaId,
         data: t.data,
-        data_original: isCredito ? t._data_original : null,
+        data_original: t._data_original,
         mes_competencia: isCredito ? t._mes_competencia : null,
         descricao: t.descricao,
         valor: t.valor,

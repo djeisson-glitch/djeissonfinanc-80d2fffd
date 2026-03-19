@@ -5,6 +5,7 @@ const MONTH_NAMES = [
 
 interface ExportTransaction {
   data: string;
+  data_original: string | null;
   descricao: string;
   categoria: string;
   valor: number;
@@ -38,9 +39,10 @@ function getContaNome(contaId: string, contas: { id: string; nome: string }[]): 
 }
 
 function buildRows(opts: ExportOptions): string[][] {
-  const header = ['Data', 'Descrição', 'Categoria', 'Valor', 'Tipo', 'Essencial', 'Parcela', 'Pessoa', 'Conta', 'Observações'];
+  const header = ['Data', 'Data Competência', 'Descrição', 'Categoria', 'Valor', 'Tipo', 'Essencial', 'Parcela', 'Pessoa', 'Conta', 'Observações'];
   const rows = opts.transactions.map(t => [
     formatDateBR(t.data),
+    t.data_original ? formatDateBR(t.data_original) : formatDateBR(t.data),
     t.descricao,
     t.categoria,
     formatValorBR(t.valor),
