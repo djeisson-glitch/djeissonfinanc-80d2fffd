@@ -5,6 +5,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { getMonthRange, formatCurrency, getMonthName } from '@/lib/format';
 import { CATEGORIAS_CONFIG, getCategoriaColor } from '@/types/database.types';
+import { useCategorias } from '@/hooks/useCategorias';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
