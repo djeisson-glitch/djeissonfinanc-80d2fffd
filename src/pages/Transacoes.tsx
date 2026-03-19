@@ -15,7 +15,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { useToast } from '@/hooks/use-toast';
-import { Pencil, Trash2, Search, Download, Copy, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
+import { Pencil, Trash2, Search, Download, Copy, ArrowUpDown, ArrowUp, ArrowDown, EyeOff } from 'lucide-react';
+import { Checkbox } from '@/components/ui/checkbox';
 import { exportCSV, copyToClipboard } from '@/lib/export';
 import { MonthSelector } from '@/components/MonthSelector';
 
@@ -35,6 +36,7 @@ export default function TransacoesPage() {
   const [search, setSearch] = useState('');
   const [editingTx, setEditingTx] = useState<any>(null);
   const [learnPattern, setLearnPattern] = useState(false);
+  const [showIgnoradas, setShowIgnoradas] = useState(false);
   const [sortColumn, setSortColumn] = useState<string | null>(null);
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
 
@@ -96,10 +98,11 @@ export default function TransacoesPage() {
   });
 
   const updateMutation = useMutation({
-    mutationFn: async (tx: { id: string; categoria: string; subcategoria: string | null; essencial: boolean }) => {
+    mutationFn: async (tx: { id: string; categoria: string; subcategoria: string | null; essencial: boolean; ignorar_dashboard: boolean }) => {
       await supabase.from('transacoes').update({ 
         categoria: tx.categoria, 
         essencial: tx.essencial,
+        ignorar_dashboard: tx.ignorar_dashboard,
       }).eq('id', tx.id);
       if (learnPattern && editingTx) {
         await supabase.from('regras_categorizacao').insert({
@@ -141,6 +144,7 @@ export default function TransacoesPage() {
   };
 
   const filtered = (transacoes?.filter(t => {
+    if (!showIgnoradas && t.ignorar_dashboard) return false;
     if (filterCategoria !== 'all' && t.categoria !== filterCategoria) return false;
     if (filterTipo !== 'all' && t.tipo !== filterTipo) return false;
     if (filterEssencial === 'true' && !t.essencial) return false;
@@ -256,6 +260,14 @@ export default function TransacoesPage() {
                 {pessoas.map(p => <SelectItem key={p} value={p}>{p}</SelectItem>)}
               </SelectContent>
             </Select>
+            <div className="flex items-center gap-2 col-span-2 md:col-span-1">
+              <Checkbox
+                id="show-ignoradas"
+                checked={showIgnoradas}
+                onCheckedChange={(v) => setShowIgnoradas(!!v)}
+              />
+              <Label htmlFor="show-ignoradas" className="text-sm cursor-pointer whitespace-nowrap">Mostrar ignoradas</Label>
+            </div>
           </div>
         </CardContent>
       </Card>
@@ -312,14 +324,19 @@ export default function TransacoesPage() {
             </TableHeader>
             <TableBody>
               {filtered.map((t) => (
-                <TableRow key={t.id}>
+                <TableRow key={t.id} className={t.ignorar_dashboard ? 'opacity-50' : ''}>
                   <TableCell className="text-sm" title={t.data_original ? `Original: ${formatDate(t.data_original)}` : undefined}>
                     {formatDate(t.data)}
                     {t.data_original && t.data_original !== t.data && (
                       <span className="block text-[10px] text-muted-foreground">orig: {formatDate(t.data_original)}</span>
                     )}
                   </TableCell>
-                  <TableCell className="text-sm max-w-[200px] truncate">{t.descricao}</TableCell>
+                  <TableCell className="text-sm max-w-[200px] truncate">
+                    <span className="flex items-center gap-1">
+                      {t.ignorar_dashboard && <EyeOff className="h-3 w-3 text-muted-foreground shrink-0" />}
+                      {t.descricao}
+                    </span>
+                  </TableCell>
                   <TableCell>
                     <Badge
                       variant="secondary"
@@ -421,6 +438,17 @@ export default function TransacoesPage() {
                 <Label>Essencial</Label>
                 <Switch checked={editingTx.essencial} onCheckedChange={v => setEditingTx({ ...editingTx, essencial: v })} />
               </div>
+              <div className="flex items-center gap-3 rounded-lg border p-3">
+                <Checkbox
+                  id="ignorar-dashboard"
+                  checked={editingTx.ignorar_dashboard || false}
+                  onCheckedChange={(v) => setEditingTx({ ...editingTx, ignorar_dashboard: !!v })}
+                />
+                <div>
+                  <Label htmlFor="ignorar-dashboard" className="text-sm font-medium cursor-pointer">Ignorar no dashboard</Label>
+                  <p className="text-xs text-muted-foreground">Transação não será contabilizada nos totais e gráficos</p>
+                </div>
+              </div>
               <div className="flex items-center justify-between rounded-lg border p-3">
                 <div>
                   <p className="text-sm font-medium">Aprender padrão?</p>
@@ -435,6 +463,7 @@ export default function TransacoesPage() {
                   categoria: editingTx.categoria,
                   subcategoria: editingTx.subcategoria,
                   essencial: editingTx.essencial,
+                  ignorar_dashboard: editingTx.ignorar_dashboard || false,
                 })}
               >
                 Salvar

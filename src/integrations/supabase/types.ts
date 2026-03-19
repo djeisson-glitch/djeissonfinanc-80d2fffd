@@ -14,6 +14,44 @@ export type Database = {
   }
   public: {
     Tables: {
+      categorias: {
+        Row: {
+          cor: string | null
+          created_at: string
+          icone: string | null
+          id: string
+          nome: string
+          parent_id: string | null
+          user_id: string
+        }
+        Insert: {
+          cor?: string | null
+          created_at?: string
+          icone?: string | null
+          id?: string
+          nome: string
+          parent_id?: string | null
+          user_id: string
+        }
+        Update: {
+          cor?: string | null
+          created_at?: string
+          icone?: string | null
+          id?: string
+          nome?: string
+          parent_id?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "categorias_parent_id_fkey"
+            columns: ["parent_id"]
+            isOneToOne: false
+            referencedRelation: "categorias"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       configuracoes: {
         Row: {
           created_at: string
@@ -147,6 +185,7 @@ export type Database = {
         Row: {
           aprendido_auto: boolean
           categoria: string
+          categoria_id: string | null
           created_at: string
           essencial: boolean
           id: string
@@ -156,6 +195,7 @@ export type Database = {
         Insert: {
           aprendido_auto?: boolean
           categoria: string
+          categoria_id?: string | null
           created_at?: string
           essencial?: boolean
           id?: string
@@ -165,17 +205,27 @@ export type Database = {
         Update: {
           aprendido_auto?: boolean
           categoria?: string
+          categoria_id?: string | null
           created_at?: string
           essencial?: boolean
           id?: string
           padrao?: string
           user_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "regras_categorizacao_categoria_id_fkey"
+            columns: ["categoria_id"]
+            isOneToOne: false
+            referencedRelation: "categorias"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       transacoes: {
         Row: {
           categoria: string
+          categoria_id: string | null
           conta_id: string
           created_at: string
           data: string
@@ -185,6 +235,7 @@ export type Database = {
           grupo_parcela: string | null
           hash_transacao: string
           id: string
+          ignorar_dashboard: boolean
           mes_competencia: string | null
           observacoes: string | null
           parcela_atual: number | null
@@ -196,6 +247,7 @@ export type Database = {
         }
         Insert: {
           categoria?: string
+          categoria_id?: string | null
           conta_id: string
           created_at?: string
           data: string
@@ -205,6 +257,7 @@ export type Database = {
           grupo_parcela?: string | null
           hash_transacao: string
           id?: string
+          ignorar_dashboard?: boolean
           mes_competencia?: string | null
           observacoes?: string | null
           parcela_atual?: number | null
@@ -216,6 +269,7 @@ export type Database = {
         }
         Update: {
           categoria?: string
+          categoria_id?: string | null
           conta_id?: string
           created_at?: string
           data?: string
@@ -225,6 +279,7 @@ export type Database = {
           grupo_parcela?: string | null
           hash_transacao?: string
           id?: string
+          ignorar_dashboard?: boolean
           mes_competencia?: string | null
           observacoes?: string | null
           parcela_atual?: number | null
@@ -235,6 +290,13 @@ export type Database = {
           valor?: number
         }
         Relationships: [
+          {
+            foreignKeyName: "transacoes_categoria_id_fkey"
+            columns: ["categoria_id"]
+            isOneToOne: false
+            referencedRelation: "categorias"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "transacoes_conta_id_fkey"
             columns: ["conta_id"]

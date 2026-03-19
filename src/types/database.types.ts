@@ -35,6 +35,8 @@ export interface Transacao {
   hash_transacao: string;
   pessoa: string;
   observacoes: string | null;
+  ignorar_dashboard: boolean;
+  categoria_id: string | null;
   created_at: string;
 }
 
