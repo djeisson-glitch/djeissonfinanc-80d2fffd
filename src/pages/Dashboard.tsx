@@ -41,6 +41,7 @@ export default function DashboardPage() {
         .from('transacoes')
         .select('*')
         .eq('user_id', user!.id)
+        .eq('ignorar_dashboard', false)
         .gte('data', start < '2026-01-01' ? '2026-01-01' : start)
         .lte('data', end);
       return data || [];
