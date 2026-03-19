@@ -3,6 +3,7 @@ import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { AlertTriangle, CheckCircle2, XCircle } from 'lucide-react';
+import { useEnterSubmit } from '@/hooks/useEnterSubmit';
 
 export type CsvPreviewEntry = {
   lineNumber: number;
