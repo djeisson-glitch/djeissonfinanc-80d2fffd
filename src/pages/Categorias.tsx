@@ -183,7 +183,7 @@ export default function CategoriasPage() {
           <DialogHeader>
             <DialogTitle>{editingCat ? 'Editar Categoria' : parentId ? 'Nova Subcategoria' : 'Nova Categoria'}</DialogTitle>
           </DialogHeader>
-          <div className="space-y-4">
+          <form onSubmit={(e) => { e.preventDefault(); if (nome.trim()) saveMutation.mutate(); }} className="space-y-4">
             <div className="space-y-2">
               <Label>Nome</Label>
               <Input value={nome} onChange={e => setNome(e.target.value)} placeholder="Nome da categoria" />
@@ -197,10 +197,10 @@ export default function CategoriasPage() {
                 </div>
               </div>
             )}
-            <Button className="w-full" onClick={() => saveMutation.mutate()} disabled={!nome.trim() || saveMutation.isPending}>
+            <Button className="w-full" type="submit" disabled={!nome.trim() || saveMutation.isPending}>
               {saveMutation.isPending ? 'Salvando...' : 'Salvar'}
             </Button>
-          </div>
+          </form>
         </DialogContent>
       </Dialog>
     </div>

@@ -224,7 +224,7 @@ export default function ContasPage() {
           <DialogHeader>
             <DialogTitle>{editConta ? 'Editar Conta' : 'Nova Conta'}</DialogTitle>
           </DialogHeader>
-          <div className="space-y-4">
+          <form onSubmit={(e) => { e.preventDefault(); if (nome) saveMutation.mutate(); }} className="space-y-4">
             <div className="space-y-2">
               <Label>Nome</Label>
               <Input value={nome} onChange={e => setNome(e.target.value)} placeholder="Ex: Cartão Sicredi" />
@@ -243,10 +243,10 @@ export default function ContasPage() {
               <Label>Saldo Inicial (R$)</Label>
               <Input type="number" value={saldoInicial} onChange={e => setSaldoInicial(Number(e.target.value))} />
             </div>
-            <Button className="w-full" onClick={() => saveMutation.mutate()} disabled={!nome}>
+            <Button className="w-full" type="submit" disabled={!nome}>
               {editConta ? 'Salvar' : 'Criar'}
             </Button>
-          </div>
+          </form>
         </DialogContent>
       </Dialog>
 
