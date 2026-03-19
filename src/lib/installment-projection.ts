@@ -125,10 +125,12 @@ export function detectConflicts(
 ): {
   clean: (ProjectableTransaction | ProjectedInstallment)[];
   exactMatches: { planned: ProjectableTransaction | ProjectedInstallment; existingId: string }[];
+  autoReplacements: { planned: ProjectableTransaction | ProjectedInstallment; existingId: string }[];
   conflicts: ConflictMatch[];
 } {
   const clean: (ProjectableTransaction | ProjectedInstallment)[] = [];
   const exactMatches: { planned: ProjectableTransaction | ProjectedInstallment; existingId: string }[] = [];
+  const autoReplacements: { planned: ProjectableTransaction | ProjectedInstallment; existingId: string }[] = [];
   const conflicts: ConflictMatch[] = [];
 
   const normalize = (s: string) => s.replace(/\s*\(auto-projetada\)/, '').trim().substring(0, 15).toLowerCase();
