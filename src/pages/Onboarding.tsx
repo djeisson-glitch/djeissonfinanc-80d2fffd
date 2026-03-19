@@ -58,6 +58,9 @@ export default function OnboardingPage() {
         await supabase.from('contas').insert(contasToInsert);
       }
 
+      // Seed default categories
+      await seedCategorias.mutateAsync();
+
       toast({ title: 'Configuração concluída!' });
       navigate('/');
     } catch (err) {
