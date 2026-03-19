@@ -465,7 +465,7 @@ export default function TransacoesPage() {
                 onClick={() => updateMutation.mutate({
                   id: editingTx.id,
                   categoria: editingTx.categoria,
-                  subcategoria: editingTx.subcategoria,
+                  categoria_id: editingTx.categoria_id || null,
                   essencial: editingTx.essencial,
                   ignorar_dashboard: editingTx.ignorar_dashboard || false,
                 })}
