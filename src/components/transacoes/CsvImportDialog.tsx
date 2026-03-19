@@ -330,6 +330,7 @@ export function CsvImportDialog({ open, onOpenChange }: Props) {
 
     // Auto-replacements: CSV real data replaces auto-projected (relaxed match)
     for (const ar of autoReplacements) {
+      console.log(`[Import] Auto-replace: deletar ID ${ar.existingId} → importar "${ar.planned.descricao}"`);
       idsToDelete.push(ar.existingId);
       resolvedClean.push(ar.planned);
     }
@@ -338,6 +339,7 @@ export function CsvImportDialog({ open, onOpenChange }: Props) {
     for (const em of exactMatches) {
       const existingTx = existingTxs.find(e => e.id === em.existingId);
       if (existingTx?.descricao?.includes('(auto-projetada)') && !('_isProjected' in em.planned)) {
+        console.log(`[Import] Exact-match replace: deletar ID ${em.existingId} → importar "${em.planned.descricao}"`);
         idsToDelete.push(em.existingId);
         resolvedClean.push(em.planned);
       }
@@ -347,12 +349,17 @@ export function CsvImportDialog({ open, onOpenChange }: Props) {
     if (resolvedConflicts) {
       for (const rc of resolvedConflicts) {
         if (rc.choice === 'csv') {
+          console.log(`[Import] Conflito resolvido (CSV): deletar ID ${rc.existingTransaction.id} → importar "${rc.csvTransaction.descricao}"`);
           idsToDelete.push(rc.existingTransaction.id);
           resolvedClean.push(rc.csvTransaction);
+        } else {
+          console.log(`[Import] Conflito resolvido (manter existente): ID ${rc.existingTransaction.id}`);
         }
-        // choice === 'existing' → skip the CSV transaction
       }
     }
+
+    console.log(`[Import] Total IDs para deletar: ${idsToDelete.length}`, idsToDelete);
+    console.log(`[Import] Total transações para importar: ${resolvedClean.length}`);
 
     setProgress(75);
 
@@ -523,20 +530,22 @@ export function CsvImportDialog({ open, onOpenChange }: Props) {
 
       // Step 1: Delete auto-projected duplicates from database
       let deletedCount = 0;
+      console.log(`[Import] Executando deleção de ${plan.autoProjectedIdsToDelete.length} transações:`, plan.autoProjectedIdsToDelete);
       if (plan.autoProjectedIdsToDelete.length > 0) {
         for (let i = 0; i < plan.autoProjectedIdsToDelete.length; i += 100) {
           const chunk = plan.autoProjectedIdsToDelete.slice(i, i + 100);
-          const { error } = await supabase
+          const { error, count } = await supabase
             .from('transacoes')
             .delete()
             .in('id', chunk);
           if (error) {
-            console.error('Error deleting auto-projected:', error);
+            console.error('[Import] Erro ao deletar:', error);
           } else {
             deletedCount += chunk.length;
+            console.log(`[Import] Deletado chunk de ${chunk.length} IDs com sucesso`);
           }
         }
-        console.log(`Deleted ${deletedCount} auto-projected duplicates`);
+        console.log(`[Import] Total deletado: ${deletedCount} transações auto-projetadas`);
       }
 
       // Step 2: Insert new transactions
