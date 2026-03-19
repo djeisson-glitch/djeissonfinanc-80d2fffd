@@ -7,6 +7,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
 import { formatCurrency, formatDate } from '@/lib/format';
 import { AlertTriangle } from 'lucide-react';
+import { useEnterSubmit } from '@/hooks/useEnterSubmit';
 import type { ConflictMatch } from '@/lib/installment-projection';
 
 interface Props {
@@ -34,9 +35,11 @@ export function ConflictModal({ open, conflicts, onConfirm, onCancel }: Props) {
   const csvCount = Object.values(choices).filter(v => v === 'csv').length;
   const existingCount = Object.values(choices).filter(v => v === 'existing').length;
 
+  const handleKeyDown = useEnterSubmit(handleConfirm);
+
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!v) onCancel(); }}>
-      <DialogContent className="sm:max-w-2xl">
+      <DialogContent className="sm:max-w-2xl" onKeyDown={handleKeyDown}>
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <AlertTriangle className="h-5 w-5 text-amber-500" />

@@ -3,6 +3,7 @@ import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { formatCurrency, formatDate } from '@/lib/format';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { useEnterSubmit } from '@/hooks/useEnterSubmit';
 
 interface MatchingTransaction {
   id: string;
@@ -30,9 +31,10 @@ export function RecategorizarModal({
   onConfirm,
   loading,
 }: RecategorizarModalProps) {
+  const handleKeyDown = useEnterSubmit(onConfirm, loading);
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg">
+      <DialogContent className="max-w-lg" onKeyDown={handleKeyDown}>
         <DialogHeader>
           <DialogTitle>
             Encontramos {transactions.length} transaç{transactions.length === 1 ? 'ão' : 'ões'} com o mesmo padrão

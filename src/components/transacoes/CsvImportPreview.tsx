@@ -47,9 +47,10 @@ export function CsvImportPreview({ fileName, totalLines, entries, onBack, onConf
   const willImportCount = entries.filter((entry) => entry.status === 'will_import').length;
   const duplicateCount = entries.filter((entry) => entry.status === 'duplicate').length;
   const rejectedCount = entries.filter((entry) => entry.status === 'rejected').length;
+  const handleKeyDown = useEnterSubmit(onConfirm, confirming);
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4" onKeyDown={handleKeyDown} tabIndex={-1}>
       <div className="space-y-1">
         <p className="text-lg font-semibold">Prévia completa do CSV</p>
         <p className="text-sm text-muted-foreground">Nada será salvo no banco até você confirmar a importação.</p>
