@@ -93,6 +93,7 @@ export interface ConflictMatch {
     descricao: string;
     valor: number;
     data: string;
+    data_original: string | null;
     parcela_atual: number | null;
     parcela_total: number | null;
     pessoa: string;

@@ -77,7 +77,7 @@ export function ConflictModal({ open, conflicts, onConfirm, onCancel }: Props) {
                       <Label htmlFor={`csv-${i}`} className="flex-1 cursor-pointer text-xs">
                         <span className="font-medium">Importar do CSV</span>
                         <span className="block text-muted-foreground">
-                          {formatDate(csv.data)} · {formatCurrency(csv.valor)} · {csv.pessoa}
+                          {formatDate((csv as any).data_original || csv.data)} · {formatCurrency(csv.valor)} · {csv.pessoa}
                         </span>
                       </Label>
                     </div>
@@ -86,7 +86,7 @@ export function ConflictModal({ open, conflicts, onConfirm, onCancel }: Props) {
                       <Label htmlFor={`existing-${i}`} className="flex-1 cursor-pointer text-xs">
                         <span className="font-medium">Manter existente</span>
                         <span className="block text-muted-foreground">
-                          {formatDate(existing.data)} · {formatCurrency(existing.valor)} · {existing.pessoa}
+                          {formatDate(existing.data_original || existing.data)} · {formatCurrency(existing.valor)} · {existing.pessoa}
                           {existing.descricao.includes('(auto-projetada)') && (
                             <Badge variant="outline" className="ml-1 text-[9px]">auto-projetada</Badge>
                           )}
