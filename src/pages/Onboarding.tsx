@@ -9,6 +9,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { useToast } from '@/hooks/use-toast';
 import { CONTAS_PADRAO } from '@/types/database.types';
 import { formatCurrency } from '@/lib/format';
+import { useCategorias } from '@/hooks/useCategorias';
 import { DollarSign, ArrowRight, Check } from 'lucide-react';
 
 export default function OnboardingPage() {
