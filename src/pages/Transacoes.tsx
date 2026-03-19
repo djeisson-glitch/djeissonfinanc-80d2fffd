@@ -98,10 +98,11 @@ export default function TransacoesPage() {
   });
 
   const updateMutation = useMutation({
-    mutationFn: async (tx: { id: string; categoria: string; subcategoria: string | null; essencial: boolean }) => {
+    mutationFn: async (tx: { id: string; categoria: string; subcategoria: string | null; essencial: boolean; ignorar_dashboard: boolean }) => {
       await supabase.from('transacoes').update({ 
         categoria: tx.categoria, 
         essencial: tx.essencial,
+        ignorar_dashboard: tx.ignorar_dashboard,
       }).eq('id', tx.id);
       if (learnPattern && editingTx) {
         await supabase.from('regras_categorizacao').insert({
