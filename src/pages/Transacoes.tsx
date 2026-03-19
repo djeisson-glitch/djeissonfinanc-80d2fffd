@@ -260,6 +260,14 @@ export default function TransacoesPage() {
                 {pessoas.map(p => <SelectItem key={p} value={p}>{p}</SelectItem>)}
               </SelectContent>
             </Select>
+            <div className="flex items-center gap-2 col-span-2 md:col-span-1">
+              <Checkbox
+                id="show-ignoradas"
+                checked={showIgnoradas}
+                onCheckedChange={(v) => setShowIgnoradas(!!v)}
+              />
+              <Label htmlFor="show-ignoradas" className="text-sm cursor-pointer whitespace-nowrap">Mostrar ignoradas</Label>
+            </div>
           </div>
         </CardContent>
       </Card>
