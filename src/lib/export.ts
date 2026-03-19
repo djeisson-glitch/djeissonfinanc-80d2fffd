@@ -5,6 +5,7 @@ const MONTH_NAMES = [
 
 interface ExportTransaction {
   data: string;
+  data_original: string | null;
   descricao: string;
   categoria: string;
   valor: number;
