@@ -159,7 +159,7 @@ export function detectConflicts(
         if (!e.descricao.includes('(auto-projetada)')) return false;
         const ePrefix = normalize(e.descricao);
         if (ePrefix !== prefix) return false;
-        if (Math.abs(Number(e.valor) - tx.valor) > 5.00) return false;
+        if (Math.abs(Number(e.valor) - tx.valor) > 0.30) return false;
         if (e.parcela_atual !== tx.parcela_atual) return false;
         if (e.parcela_total !== tx.parcela_total) return false;
         if (e.pessoa.toLowerCase() !== tx.pessoa.toLowerCase()) return false;
