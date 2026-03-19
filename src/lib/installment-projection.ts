@@ -210,5 +210,5 @@ export function detectConflicts(
     }
   }
 
-  return { clean, exactMatches, conflicts };
+  return { clean, exactMatches, autoReplacements, conflicts };
 }
