@@ -100,9 +100,10 @@ export default function TransacoesPage() {
   });
 
   const updateMutation = useMutation({
-    mutationFn: async (tx: { id: string; categoria: string; subcategoria: string | null; essencial: boolean; ignorar_dashboard: boolean }) => {
+    mutationFn: async (tx: { id: string; categoria: string; categoria_id: string | null; essencial: boolean; ignorar_dashboard: boolean }) => {
       await supabase.from('transacoes').update({ 
         categoria: tx.categoria, 
+        categoria_id: tx.categoria_id,
         essencial: tx.essencial,
         ignorar_dashboard: tx.ignorar_dashboard,
       }).eq('id', tx.id);
@@ -111,6 +112,7 @@ export default function TransacoesPage() {
           user_id: user!.id,
           padrao: editingTx.descricao,
           categoria: tx.categoria,
+          categoria_id: tx.categoria_id,
           essencial: tx.essencial,
           aprendido_auto: false,
         });
