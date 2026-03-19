@@ -510,10 +510,6 @@ export function CsvImportDialog({ open, onOpenChange }: Props) {
     setProgress(5);
 
     try {
-      // 🆕 ETAPA 1: Limpar projeções órfãs ANTES de construir o plano
-      console.log("🧹 Etapa 1/2: Limpando projeções órfãs...");
-      await cleanOrphanProjections(context.contaId, context.currentUserId, parsedTransactions);
-
       setProgress(10);
 
       // 🆕 ETAPA 2: Construir plano de importação
