@@ -21,6 +21,7 @@ import { Pencil, Trash2, Search, Download, Copy, ArrowUpDown, ArrowUp, ArrowDown
 import { Checkbox } from '@/components/ui/checkbox';
 import { exportCSV, copyToClipboard } from '@/lib/export';
 import { MonthSelector } from '@/components/MonthSelector';
+import { RecategorizarModal } from '@/components/transacoes/RecategorizarModal';
 
 export default function TransacoesPage() {
   const { user } = useAuth();
