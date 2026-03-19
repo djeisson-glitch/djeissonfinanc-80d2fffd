@@ -286,13 +286,27 @@ export default function TransacoesPage() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Data</TableHead>
-                <TableHead>Descrição</TableHead>
-                <TableHead>Categoria</TableHead>
-                <TableHead className="text-right">Valor</TableHead>
-                <TableHead>Tipo</TableHead>
-                <TableHead>Parcela</TableHead>
-                <TableHead>Pessoa</TableHead>
+                <TableHead className="cursor-pointer select-none" onClick={() => toggleSort('data')}>
+                  <span className="flex items-center">Data<SortIcon column="data" /></span>
+                </TableHead>
+                <TableHead className="cursor-pointer select-none" onClick={() => toggleSort('descricao')}>
+                  <span className="flex items-center">Descrição<SortIcon column="descricao" /></span>
+                </TableHead>
+                <TableHead className="cursor-pointer select-none" onClick={() => toggleSort('categoria')}>
+                  <span className="flex items-center">Categoria<SortIcon column="categoria" /></span>
+                </TableHead>
+                <TableHead className="text-right cursor-pointer select-none" onClick={() => toggleSort('valor')}>
+                  <span className="flex items-center justify-end">Valor<SortIcon column="valor" /></span>
+                </TableHead>
+                <TableHead className="cursor-pointer select-none" onClick={() => toggleSort('essencial')}>
+                  <span className="flex items-center">Tipo<SortIcon column="essencial" /></span>
+                </TableHead>
+                <TableHead className="cursor-pointer select-none" onClick={() => toggleSort('parcela')}>
+                  <span className="flex items-center">Parcela<SortIcon column="parcela" /></span>
+                </TableHead>
+                <TableHead className="cursor-pointer select-none" onClick={() => toggleSort('pessoa')}>
+                  <span className="flex items-center">Pessoa<SortIcon column="pessoa" /></span>
+                </TableHead>
                 <TableHead className="w-20">Ações</TableHead>
               </TableRow>
             </TableHeader>
