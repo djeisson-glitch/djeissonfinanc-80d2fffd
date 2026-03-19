@@ -144,6 +144,7 @@ export default function TransacoesPage() {
   };
 
   const filtered = (transacoes?.filter(t => {
+    if (!showIgnoradas && t.ignorar_dashboard) return false;
     if (filterCategoria !== 'all' && t.categoria !== filterCategoria) return false;
     if (filterTipo !== 'all' && t.tipo !== filterTipo) return false;
     if (filterEssencial === 'true' && !t.essencial) return false;
