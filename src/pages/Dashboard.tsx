@@ -17,6 +17,7 @@ import { ParcelasTimeline } from '@/components/dashboard/ParcelasTimeline';
 export default function DashboardPage() {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const { getParentForCategoria, getCategoriaById, getColor: getCatColor } = useCategorias();
   const now = new Date();
   const [month, setMonth] = useState(now.getMonth());
   const [year, setYear] = useState(now.getFullYear());
