@@ -396,48 +396,20 @@ export default function TransacoesPage() {
               <p className="text-sm text-muted-foreground">{editingTx.descricao}</p>
               <div className="space-y-2">
                 <Label>Categoria</Label>
-                <Select
-                  value={editingTx.categoria}
-                  onValueChange={v => {
-                    const config = CATEGORIAS_CONFIG[v];
+                <CategoriaSelector
+                  value={editingTx.categoria_id}
+                  tipoFilter={editingTx.tipo}
+                  onValueChange={(catId) => {
+                    const cat = getCategoriaById(catId);
                     setEditingTx({
                       ...editingTx,
-                      categoria: v,
-                      essencial: config?.essencial ?? false,
-                      subcategoria: null,
+                      categoria_id: catId,
+                      categoria: cat?.nome || editingTx.categoria,
+                      essencial: CATEGORIAS_CONFIG[cat?.nome || '']?.essencial ?? editingTx.essencial,
                     });
                   }}
-                >
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {(editingTx.tipo === 'receita' ? CATEGORIAS_RECEITA : CATEGORIAS_DESPESA).map(c => (
-                      <SelectItem key={c} value={c}>
-                        <div className="flex items-center gap-2">
-                          <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: getCategoriaColor(c) }} />
-                          {c}
-                        </div>
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                />
               </div>
-              {editSubcategorias.length > 0 && (
-                <div className="space-y-2">
-                  <Label>Subcategoria (opcional)</Label>
-                  <Select
-                    value={editingTx.subcategoria || '_none'}
-                    onValueChange={v => setEditingTx({ ...editingTx, subcategoria: v === '_none' ? null : v })}
-                  >
-                    <SelectTrigger><SelectValue placeholder="Nenhuma" /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="_none">Nenhuma</SelectItem>
-                      {editSubcategorias.map(s => (
-                        <SelectItem key={s} value={s}>{s}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              )}
               <div className="flex items-center justify-between">
                 <Label>Essencial</Label>
                 <Switch checked={editingTx.essencial} onCheckedChange={v => setEditingTx({ ...editingTx, essencial: v })} />
