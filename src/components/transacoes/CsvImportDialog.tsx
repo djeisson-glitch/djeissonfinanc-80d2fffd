@@ -268,6 +268,69 @@ export function CsvImportDialog({ open, onOpenChange }: Props) {
     return { contaId: selectedConta, currentUserId: user.id };
   };
 
+  const cleanOrphanProjections = async (
+    contaId: string,
+    userId: string,
+    csvTransactions: ParsedTransaction[],
+  ): Promise<number> => {
+    console.log("🧹 Iniciando limpeza de projeções órfãs...");
+
+    // Detectar mês de vencimento do CSV
+    const invoiceMonth = csvTransactions.reduce(
+      (latest, t) => {
+        const d = new Date(t.data + "T00:00:00");
+        return d > latest ? d : latest;
+      },
+      new Date(csvTransactions[0].data + "T00:00:00"),
+    );
+
+    const invoiceMonthStr = `${invoiceMonth.getFullYear()}-${String(invoiceMonth.getMonth() + 1).padStart(2, "0")}`;
+    console.log("📅 Mês de vencimento detectado:", invoiceMonthStr);
+
+    // Buscar auto-projetadas deste mês
+    const { data: projections } = await supabase
+      .from("transacoes")
+      .select("*")
+      .eq("user_id", userId)
+      .eq("conta_id", contaId)
+      .ilike("descricao", "%(auto-projetada)%")
+      .like("mes_competencia", `${invoiceMonthStr}%`);
+
+    if (!projections || projections.length === 0) {
+      console.log("✅ Nenhuma projeção órfã encontrada");
+      return 0;
+    }
+
+    console.log(`🔍 Encontradas ${projections.length} projeções auto-criadas no mês ${invoiceMonthStr}`);
+
+    const orphanIds: string[] = [];
+
+    for (const proj of projections) {
+      const matched = csvTransactions.some((csv) => {
+        const desc1 = proj.descricao.substring(0, 15).trim().toLowerCase();
+        const desc2 = csv.descricao.substring(0, 15).trim().toLowerCase();
+        const dataMatch = proj.data_original === csv.data;
+        const parcelaMatch = proj.parcela_atual === csv.parcela_atual && proj.parcela_total === csv.parcela_total;
+        const valorMatch = Math.abs(proj.valor - csv.valor) <= 0.1;
+        const pessoaMatch = proj.pessoa === csv.pessoa;
+
+        return desc1 === desc2 && dataMatch && parcelaMatch && valorMatch && pessoaMatch;
+      });
+
+      if (!matched) {
+        console.log(`🗑️ Órfã: ${proj.descricao} (${proj.valor})`);
+        orphanIds.push(proj.id);
+      }
+    }
+
+    if (orphanIds.length > 0) {
+      await supabase.from("transacoes").delete().in("id", orphanIds);
+      console.log(`✅ Deletadas ${orphanIds.length} projeções órfãs`);
+    }
+
+    return orphanIds.length;
+  };
+
   const buildImportPlan = async (
     contaId: string,
     currentUserId: string,
@@ -510,9 +573,14 @@ export function CsvImportDialog({ open, onOpenChange }: Props) {
     setProgress(5);
 
     try {
+      // ETAPA 1: Limpar órfãs
+      console.log("🧹 Etapa 1/2: Limpando projeções órfãs...");
+      const deleted = await cleanOrphanProjections(context.contaId, context.currentUserId, parsedTransactions);
+      console.log(`✅ Limpeza concluída: ${deleted} órfãs removidas`);
+
       setProgress(10);
 
-      // 🆕 ETAPA 2: Construir plano de importação
+      // ETAPA 2: Construir plano
       console.log("📋 Etapa 2/2: Construindo plano de importação...");
       const plan = await buildImportPlan(context.contaId, context.currentUserId);
       setPreparedPlan(plan);
