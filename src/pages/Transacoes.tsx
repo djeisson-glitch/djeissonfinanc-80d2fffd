@@ -42,6 +42,9 @@ export default function TransacoesPage() {
   const [showIgnoradas, setShowIgnoradas] = useState(false);
   const [sortColumn, setSortColumn] = useState<string | null>(null);
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
+  const [recatTransactions, setRecatTransactions] = useState<any[]>([]);
+  const [recatCategoria, setRecatCategoria] = useState<{ nome: string; id: string | null; essencial: boolean }>({ nome: '', id: null, essencial: false });
+  const [recatOpen, setRecatOpen] = useState(false);
 
   const toggleSort = (column: string) => {
     if (sortColumn === column) {
