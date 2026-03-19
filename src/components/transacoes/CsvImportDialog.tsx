@@ -293,15 +293,17 @@ export function CsvImportDialog({ open, onOpenChange }: Props) {
 
     // Pegar o mês mais recente do CSV sendo importado
 
+    console.log(`📅 Mês alvo: ${targetMonth}`);
+
     const orphanIds: string[] = [];
 
     for (const proj of projections) {
       const projMonth = proj.data_original.substring(0, 7); // "2026-02"
 
       // Só avaliar projeções do MESMO mês do CSV — não toca em outros meses
-      if (projMonth !== csvMonth) {
+      if (projMonth !== targetMonth) {
         console.log(
-          `⏭️ Pulando (outro mês): ${proj.descricao} - ${proj.data_original} (mês ${projMonth} ≠ ${csvMonth})`,
+          `⏭️ Pulando (outro mês): ${proj.descricao} - ${proj.data_original} (mês ${projMonth} ≠ ${targetMonth})`,
         );
         continue;
       }
