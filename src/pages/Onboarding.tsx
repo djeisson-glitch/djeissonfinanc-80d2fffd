@@ -9,6 +9,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { useToast } from '@/hooks/use-toast';
 import { CONTAS_PADRAO } from '@/types/database.types';
 import { formatCurrency } from '@/lib/format';
+import { useCategorias } from '@/hooks/useCategorias';
 import { DollarSign, ArrowRight, Check } from 'lucide-react';
 
 export default function OnboardingPage() {
@@ -20,6 +21,7 @@ export default function OnboardingPage() {
   const [reservaMinima, setReservaMinima] = useState(2000);
   const [contas, setContas] = useState(CONTAS_PADRAO.map(c => ({ ...c })));
   const [loading, setLoading] = useState(false);
+  const { seedCategorias } = useCategorias();
 
   const updateContaSaldo = (index: number, saldo: number) => {
     setContas(prev => prev.map((c, i) => i === index ? { ...c, saldo_inicial: saldo } : c));
@@ -55,6 +57,9 @@ export default function OnboardingPage() {
       if (contasToInsert.length > 0) {
         await supabase.from('contas').insert(contasToInsert);
       }
+
+      // Seed default categories
+      await seedCategorias.mutateAsync();
 
       toast({ title: 'Configuração concluída!' });
       navigate('/');

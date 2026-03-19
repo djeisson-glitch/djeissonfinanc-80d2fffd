@@ -5,6 +5,8 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { formatCurrency, formatDate, getMonthRange } from '@/lib/format';
 import { CATEGORIAS, CATEGORIAS_DESPESA, CATEGORIAS_RECEITA, CATEGORIAS_CONFIG, getCategoriaColor, getSubcategorias } from '@/types/database.types';
+import { useCategorias } from '@/hooks/useCategorias';
+import { CategoriaSelector } from '@/components/CategoriaSelector';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -98,9 +100,10 @@ export default function TransacoesPage() {
   });
 
   const updateMutation = useMutation({
-    mutationFn: async (tx: { id: string; categoria: string; subcategoria: string | null; essencial: boolean; ignorar_dashboard: boolean }) => {
+    mutationFn: async (tx: { id: string; categoria: string; categoria_id: string | null; essencial: boolean; ignorar_dashboard: boolean }) => {
       await supabase.from('transacoes').update({ 
         categoria: tx.categoria, 
+        categoria_id: tx.categoria_id,
         essencial: tx.essencial,
         ignorar_dashboard: tx.ignorar_dashboard,
       }).eq('id', tx.id);
@@ -109,6 +112,7 @@ export default function TransacoesPage() {
           user_id: user!.id,
           padrao: editingTx.descricao,
           categoria: tx.categoria,
+          categoria_id: tx.categoria_id,
           essencial: tx.essencial,
           aprendido_auto: false,
         });
@@ -173,8 +177,8 @@ export default function TransacoesPage() {
   });
 
   const pessoas = [...new Set(transacoes?.map(t => t.pessoa) || [])];
-
-  const editSubcategorias = editingTx ? getSubcategorias(editingTx.categoria) : [];
+  const { getCategoriaById, getDisplayName, getColor } = useCategorias();
+  
 
   return (
     <div className="space-y-4 animate-fade-in">
@@ -341,9 +345,9 @@ export default function TransacoesPage() {
                     <Badge
                       variant="secondary"
                       className="text-xs"
-                      style={{ borderLeft: `3px solid ${getCategoriaColor(t.categoria)}` }}
+                      style={{ borderLeft: `3px solid ${t.categoria_id ? getColor(t.categoria_id) : getCategoriaColor(t.categoria)}` }}
                     >
-                      {t.categoria}
+                      {t.categoria_id ? getDisplayName(t.categoria_id) : t.categoria}
                     </Badge>
                   </TableCell>
                   <TableCell className={`text-right text-sm font-medium ${t.tipo === 'receita' ? 'text-success' : 'text-destructive'}`}>
@@ -392,48 +396,20 @@ export default function TransacoesPage() {
               <p className="text-sm text-muted-foreground">{editingTx.descricao}</p>
               <div className="space-y-2">
                 <Label>Categoria</Label>
-                <Select
-                  value={editingTx.categoria}
-                  onValueChange={v => {
-                    const config = CATEGORIAS_CONFIG[v];
+                <CategoriaSelector
+                  value={editingTx.categoria_id}
+                  tipoFilter={editingTx.tipo}
+                  onValueChange={(catId) => {
+                    const cat = getCategoriaById(catId);
                     setEditingTx({
                       ...editingTx,
-                      categoria: v,
-                      essencial: config?.essencial ?? false,
-                      subcategoria: null,
+                      categoria_id: catId,
+                      categoria: cat?.nome || editingTx.categoria,
+                      essencial: CATEGORIAS_CONFIG[cat?.nome || '']?.essencial ?? editingTx.essencial,
                     });
                   }}
-                >
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {(editingTx.tipo === 'receita' ? CATEGORIAS_RECEITA : CATEGORIAS_DESPESA).map(c => (
-                      <SelectItem key={c} value={c}>
-                        <div className="flex items-center gap-2">
-                          <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: getCategoriaColor(c) }} />
-                          {c}
-                        </div>
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                />
               </div>
-              {editSubcategorias.length > 0 && (
-                <div className="space-y-2">
-                  <Label>Subcategoria (opcional)</Label>
-                  <Select
-                    value={editingTx.subcategoria || '_none'}
-                    onValueChange={v => setEditingTx({ ...editingTx, subcategoria: v === '_none' ? null : v })}
-                  >
-                    <SelectTrigger><SelectValue placeholder="Nenhuma" /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="_none">Nenhuma</SelectItem>
-                      {editSubcategorias.map(s => (
-                        <SelectItem key={s} value={s}>{s}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              )}
               <div className="flex items-center justify-between">
                 <Label>Essencial</Label>
                 <Switch checked={editingTx.essencial} onCheckedChange={v => setEditingTx({ ...editingTx, essencial: v })} />
@@ -461,7 +437,7 @@ export default function TransacoesPage() {
                 onClick={() => updateMutation.mutate({
                   id: editingTx.id,
                   categoria: editingTx.categoria,
-                  subcategoria: editingTx.subcategoria,
+                  categoria_id: editingTx.categoria_id || null,
                   essencial: editingTx.essencial,
                   ignorar_dashboard: editingTx.ignorar_dashboard || false,
                 })}

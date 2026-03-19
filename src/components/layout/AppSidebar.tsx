@@ -5,6 +5,7 @@ import {
   Wallet,
   Settings,
   DollarSign,
+  FolderOpen,
 } from 'lucide-react';
 import { NavLink } from '@/components/NavLink';
 import { useLocation } from 'react-router-dom';
@@ -26,6 +27,7 @@ const items = [
   { title: 'Transações', url: '/transacoes', icon: ArrowLeftRight },
   { title: 'Calculadora', url: '/calculadora', icon: Calculator },
   { title: 'Contas', url: '/contas', icon: Wallet },
+  { title: 'Categorias', url: '/categorias', icon: FolderOpen },
   { title: 'Configurações', url: '/configuracoes', icon: Settings },
 ];
 

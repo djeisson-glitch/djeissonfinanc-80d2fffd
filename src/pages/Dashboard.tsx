@@ -5,6 +5,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { getMonthRange, formatCurrency, getMonthName } from '@/lib/format';
 import { CATEGORIAS_CONFIG, getCategoriaColor } from '@/types/database.types';
+import { useCategorias } from '@/hooks/useCategorias';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
@@ -16,6 +17,7 @@ import { ParcelasTimeline } from '@/components/dashboard/ParcelasTimeline';
 export default function DashboardPage() {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const { getParentForCategoria, getCategoriaById, getColor: getCatColor } = useCategorias();
   const now = new Date();
   const [month, setMonth] = useState(now.getMonth());
   const [year, setYear] = useState(now.getFullYear());
@@ -126,14 +128,23 @@ export default function DashboardPage() {
   const categorias = transacoesMes
     ?.filter(t => t.tipo === 'despesa')
     .reduce((acc, t) => {
-      const cat = t.categoria;
-      if (!acc[cat]) acc[cat] = { total: 0, essencial: t.essencial };
-      acc[cat].total += Number(t.valor);
+      // Group by parent category when categoria_id is available
+      let catName = t.categoria;
+      let catColor = getCategoriaColor(catName);
+      if (t.categoria_id) {
+        const parent = getParentForCategoria(t.categoria_id);
+        if (parent) {
+          catName = parent.nome;
+          catColor = parent.cor || getCategoriaColor(catName);
+        }
+      }
+      if (!acc[catName]) acc[catName] = { total: 0, essencial: t.essencial, color: catColor };
+      acc[catName].total += Number(t.valor);
       return acc;
-    }, {} as Record<string, { total: number; essencial: boolean }>) || {};
+    }, {} as Record<string, { total: number; essencial: boolean; color: string }>) || {};
 
   const categoryRanking = Object.entries(categorias)
-    .map(([cat, { total, essencial }]) => ({ cat, total, essencial, pct: totalDespesas > 0 ? (total / totalDespesas) * 100 : 0 }))
+    .map(([cat, { total, essencial, color }]) => ({ cat, total, essencial, color, pct: totalDespesas > 0 ? (total / totalDespesas) * 100 : 0 }))
     .sort((a, b) => b.total - a.total);
 
   const totalEssencial = transacoesMes?.filter(t => t.tipo === 'despesa' && t.essencial).reduce((s, t) => s + Number(t.valor), 0) || 0;
@@ -256,7 +267,7 @@ export default function DashboardPage() {
               <p className="text-sm text-muted-foreground">Nenhuma despesa este mês</p>
             ) : (
               <div className="space-y-3">
-                {categoryRanking.map(({ cat, total, pct }) => (
+                {categoryRanking.map(({ cat, total, pct, color }) => (
                   <button
                     key={cat}
                     className="flex items-center justify-between w-full hover:bg-muted/50 rounded-lg p-2 -m-2 transition-colors cursor-pointer text-left"
@@ -265,7 +276,7 @@ export default function DashboardPage() {
                     <div className="flex items-center gap-2">
                       <div
                         className="w-3 h-3 rounded-full shrink-0"
-                        style={{ backgroundColor: getCategoriaColor(cat) }}
+                        style={{ backgroundColor: color }}
                       />
                       <span className="text-sm font-medium">{cat}</span>
                     </div>
