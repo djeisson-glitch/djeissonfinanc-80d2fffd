@@ -21,6 +21,7 @@ export default function OnboardingPage() {
   const [reservaMinima, setReservaMinima] = useState(2000);
   const [contas, setContas] = useState(CONTAS_PADRAO.map(c => ({ ...c })));
   const [loading, setLoading] = useState(false);
+  const { seedCategorias } = useCategorias();
 
   const updateContaSaldo = (index: number, saldo: number) => {
     setContas(prev => prev.map((c, i) => i === index ? { ...c, saldo_inicial: saldo } : c));
