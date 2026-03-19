@@ -178,7 +178,7 @@ export default function TransacoesPage() {
 
   const pessoas = [...new Set(transacoes?.map(t => t.pessoa) || [])];
   const { getCategoriaById, getDisplayName, getColor } = useCategorias();
-  const editSubcategorias = editingTx ? getSubcategorias(editingTx.categoria) : [];
+  
 
   return (
     <div className="space-y-4 animate-fade-in">
