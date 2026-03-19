@@ -275,33 +275,20 @@ export function CsvImportDialog({ open, onOpenChange }: Props) {
   ): Promise<number> => {
     console.log("🧹 Iniciando limpeza de projeções órfãs...");
 
-    // Detectar mês de vencimento do CSV
-    const invoiceMonth = csvTransactions.reduce(
-      (latest, t) => {
-        const d = new Date(t.data + "T00:00:00");
-        return d > latest ? d : latest;
-      },
-      new Date(csvTransactions[0].data + "T00:00:00"),
-    );
-
-    const invoiceMonthStr = `${invoiceMonth.getFullYear()}-${String(invoiceMonth.getMonth() + 1).padStart(2, "0")}`;
-    console.log("📅 Mês de vencimento detectado:", invoiceMonthStr);
-
-    // Buscar auto-projetadas deste mês
+    // Buscar TODAS auto-projetadas desta conta
     const { data: projections } = await supabase
       .from("transacoes")
       .select("*")
       .eq("user_id", userId)
       .eq("conta_id", contaId)
-      .ilike("descricao", "%(auto-projetada)%")
-      .like("mes_competencia", `${invoiceMonthStr}%`);
+      .ilike("descricao", "%(auto-projetada)%");
 
     if (!projections || projections.length === 0) {
-      console.log("✅ Nenhuma projeção órfã encontrada");
+      console.log("✅ Nenhuma projeção encontrada");
       return 0;
     }
 
-    console.log(`🔍 Encontradas ${projections.length} projeções auto-criadas no mês ${invoiceMonthStr}`);
+    console.log(`🔍 Encontradas ${projections.length} projeções auto-criadas`);
 
     const orphanIds: string[] = [];
 
@@ -318,8 +305,10 @@ export function CsvImportDialog({ open, onOpenChange }: Props) {
       });
 
       if (!matched) {
-        console.log(`🗑️ Órfã: ${proj.descricao} (${proj.valor})`);
+        console.log(`🗑️ Órfã: ${proj.descricao} - ${proj.data_original} - ${proj.parcela_atual}/${proj.parcela_total}`);
         orphanIds.push(proj.id);
+      } else {
+        console.log(`✅ Match: ${proj.descricao} - ${proj.parcela_atual}/${proj.parcela_total}`);
       }
     }
 
