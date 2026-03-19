@@ -77,7 +77,7 @@ export function ConflictModal({ open, conflicts, onConfirm, onCancel }: Props) {
                       <Label htmlFor={`csv-${i}`} className="flex-1 cursor-pointer text-xs">
                         <span className="font-medium">Importar do CSV</span>
                         <span className="block text-muted-foreground">
-                          {formatDate(csv.data)} · {formatCurrency(csv.valor)} · {csv.pessoa}
+                          {formatDate((csv as any).data_original || csv.data)} · {formatCurrency(csv.valor)} · {csv.pessoa}
                         </span>
                       </Label>
                     </div>
