@@ -49,13 +49,8 @@ export function projectFutureInstallments(
       // Only project dates >= 2026-01-01
       if (isoDate < '2026-01-01') continue;
 
-      // Project data_original forward
-      let projectedOriginal: string | null = null;
-      if (t.data_original) {
-        const origDate = new Date(t.data_original + 'T00:00:00');
-        origDate.setMonth(origDate.getMonth() + offset);
-        projectedOriginal = origDate.toISOString().split('T')[0];
-      }
+      // Keep data_original (competência) identical to the original installment
+      const projectedOriginal: string | null = t.data_original;
 
       // Project mes_competencia forward
       let projectedCompetencia: string | null = null;
