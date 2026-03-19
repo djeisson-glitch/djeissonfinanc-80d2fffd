@@ -273,9 +273,9 @@ export function CsvImportDialog({ open, onOpenChange }: Props) {
     userId: string,
     csvTransactions: ParsedTransaction[],
   ): Promise<number> => {
-    console.log("🧹 Iniciando limpeza de projeções órfãs...");
+    console.log("🧹 Limpando projeções órfãs...");
 
-    // Buscar TODAS auto-projetadas desta conta
+    // Buscar todas auto-projetadas desta conta
     const { data: projections } = await supabase
       .from("transacoes")
       .select("*")
@@ -290,15 +290,31 @@ export function CsvImportDialog({ open, onOpenChange }: Props) {
 
     console.log(`🔍 Encontradas ${projections.length} projeções auto-criadas`);
 
+    // Pegar o mês mais recente do CSV sendo importado
+    const csvDates = csvTransactions.map((t) => new Date(t.data).getTime());
+    const csvNewestDate = new Date(Math.max(...csvDates));
+    const csvMonth = `${csvNewestDate.getFullYear()}-${String(csvNewestDate.getMonth() + 1).padStart(2, "0")}`;
+
+    console.log(`📅 Mês do CSV importado: ${csvMonth}`);
+
     const orphanIds: string[] = [];
 
     for (const proj of projections) {
+      const projMonth = proj.data_original.substring(0, 7); // "2026-02"
+
+      // Se projeção é de mês FUTURO ao CSV, NÃO avaliar (deixa quieta)
+      if (projMonth > csvMonth) {
+        console.log(`⏭️ Pulando (futura): ${proj.descricao} - ${proj.data_original}`);
+        continue;
+      }
+
+      // Avaliar se bate com alguma transação do CSV
       const matched = csvTransactions.some((csv) => {
-        const desc1 = proj.descricao.substring(0, 15).trim().toLowerCase();
-        const desc2 = csv.descricao.substring(0, 15).trim().toLowerCase();
+        const desc1 = proj.descricao.substring(0, 7).trim().toLowerCase();
+        const desc2 = csv.descricao.substring(0, 7).trim().toLowerCase();
         const dataMatch = proj.data_original === csv.data;
         const parcelaMatch = proj.parcela_atual === csv.parcela_atual && proj.parcela_total === csv.parcela_total;
-        const valorMatch = Math.abs(proj.valor - csv.valor) <= 0.1;
+        const valorMatch = Math.abs(proj.valor - csv.valor) <= 0.15;
         const pessoaMatch = proj.pessoa === csv.pessoa;
 
         return desc1 === desc2 && dataMatch && parcelaMatch && valorMatch && pessoaMatch;
@@ -313,7 +329,11 @@ export function CsvImportDialog({ open, onOpenChange }: Props) {
     }
 
     if (orphanIds.length > 0) {
-      await supabase.from("transacoes").delete().in("id", orphanIds);
+      const { error } = await supabase.from("transacoes").delete().in("id", orphanIds);
+      if (error) {
+        console.error("❌ Erro ao deletar órfãs:", error);
+        return 0;
+      }
       console.log(`✅ Deletadas ${orphanIds.length} projeções órfãs`);
     }
 
