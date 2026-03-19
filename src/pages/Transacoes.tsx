@@ -36,6 +36,7 @@ export default function TransacoesPage() {
   const [search, setSearch] = useState('');
   const [editingTx, setEditingTx] = useState<any>(null);
   const [learnPattern, setLearnPattern] = useState(false);
+  const [showIgnoradas, setShowIgnoradas] = useState(false);
   const [sortColumn, setSortColumn] = useState<string | null>(null);
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
 
