@@ -125,22 +125,56 @@ export function detectConflicts(
 ): {
   clean: (ProjectableTransaction | ProjectedInstallment)[];
   exactMatches: { planned: ProjectableTransaction | ProjectedInstallment; existingId: string }[];
+  autoReplacements: { planned: ProjectableTransaction | ProjectedInstallment; existingId: string }[];
   conflicts: ConflictMatch[];
 } {
   const clean: (ProjectableTransaction | ProjectedInstallment)[] = [];
   const exactMatches: { planned: ProjectableTransaction | ProjectedInstallment; existingId: string }[] = [];
+  const autoReplacements: { planned: ProjectableTransaction | ProjectedInstallment; existingId: string }[] = [];
   const conflicts: ConflictMatch[] = [];
 
   const normalize = (s: string) => s.replace(/\s*\(auto-projetada\)/, '').trim().substring(0, 15).toLowerCase();
 
+  const daysDiff = (a: string, b: string): number => {
+    const da = new Date(a + 'T00:00:00');
+    const db = new Date(b + 'T00:00:00');
+    return Math.abs(da.getTime() - db.getTime()) / (1000 * 60 * 60 * 24);
+  };
+
   for (const tx of planned) {
     const prefix = normalize(tx.descricao);
+    const isFromCsv = !('_isProjected' in tx);
 
     // Find exact hash match first
     const hashMatch = existing.find(e => e.hash_transacao === tx.hash_transacao);
     if (hashMatch) {
       exactMatches.push({ planned: tx, existingId: hashMatch.id });
       continue;
+    }
+
+    // For CSV (real) installment transactions, try relaxed match against auto-projected
+    // Tolerance: value ±R$5.00, data_original ±30 days
+    if (isFromCsv && tx.parcela_atual && tx.parcela_total) {
+      const autoProjectedMatch = existing.find(e => {
+        if (!e.descricao.includes('(auto-projetada)')) return false;
+        const ePrefix = normalize(e.descricao);
+        if (ePrefix !== prefix) return false;
+        if (Math.abs(Number(e.valor) - tx.valor) > 5.00) return false;
+        if (e.parcela_atual !== tx.parcela_atual) return false;
+        if (e.parcela_total !== tx.parcela_total) return false;
+        if (e.pessoa.toLowerCase() !== tx.pessoa.toLowerCase()) return false;
+        // Flexible data_original comparison: ±30 days
+        const txOriginal = (tx as any).data_original || tx.data;
+        const eOriginal = e.data_original || e.data;
+        if (daysDiff(txOriginal, eOriginal) > 30) return false;
+        return true;
+      });
+
+      if (autoProjectedMatch) {
+        // Auto-replace: delete projected, import real
+        autoReplacements.push({ planned: tx, existingId: autoProjectedMatch.id });
+        continue;
+      }
     }
 
     // Find partial match: same description prefix + value ± 0.10 + same parcela + same pessoa + same data_original (competência)
@@ -151,7 +185,6 @@ export function detectConflicts(
       if (e.parcela_atual !== tx.parcela_atual) return false;
       if (e.parcela_total !== tx.parcela_total) return false;
       if (e.pessoa.toLowerCase() !== tx.pessoa.toLowerCase()) return false;
-      // Compare data_original (competência date) — different months = NOT duplicates
       const txOriginal = (tx as any).data_original || tx.data;
       const eOriginal = e.data_original || e.data;
       if (txOriginal !== eOriginal) return false;
@@ -160,10 +193,8 @@ export function detectConflicts(
 
     if (partialMatch) {
       // Check if the existing one is auto-projected — auto-replace those
-      if (partialMatch.descricao.includes('(auto-projetada)') && !('_isProjected' in tx)) {
-        // CSV real data replaces auto-projected — treat as clean (will upsert)
-        // But we need to delete the old auto-projected one since hash differs
-        exactMatches.push({ planned: tx, existingId: partialMatch.id });
+      if (partialMatch.descricao.includes('(auto-projetada)') && isFromCsv) {
+        autoReplacements.push({ planned: tx, existingId: partialMatch.id });
         continue;
       }
 
@@ -172,12 +203,12 @@ export function detectConflicts(
         existingTransaction: partialMatch,
         matchType: 'partial',
         matchReason: `Mesma descrição, valor, parcela e pessoa. Datas podem diferir.`,
-        choice: 'csv', // default: import CSV
+        choice: 'csv',
       });
     } else {
       clean.push(tx);
     }
   }
 
-  return { clean, exactMatches, conflicts };
+  return { clean, exactMatches, autoReplacements, conflicts };
 }

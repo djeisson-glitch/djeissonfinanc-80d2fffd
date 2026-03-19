@@ -316,7 +316,7 @@ export function CsvImportDialog({ open, onOpenChange }: Props) {
 
     // --- Detect conflicts ---
     const allPlanned = [...allOriginals, ...projectedInstallments] as (ProjectableTransaction | ProjectedInstallment)[];
-    const { clean, exactMatches, conflicts } = detectConflicts(allPlanned, existingTxs);
+    const { clean, exactMatches, autoReplacements, conflicts } = detectConflicts(allPlanned, existingTxs);
 
     // If there are unresolved conflicts and no resolved conflicts provided, pause for user
     if (conflicts.length > 0 && !resolvedConflicts) {
@@ -328,9 +328,14 @@ export function CsvImportDialog({ open, onOpenChange }: Props) {
     const idsToDelete: string[] = [];
     const resolvedClean: (ProjectableTransaction | ProjectedInstallment)[] = [...clean];
 
-    // Auto-projected that will be replaced by CSV real data
+    // Auto-replacements: CSV real data replaces auto-projected (relaxed match)
+    for (const ar of autoReplacements) {
+      idsToDelete.push(ar.existingId);
+      resolvedClean.push(ar.planned);
+    }
+
+    // Auto-projected that will be replaced by CSV real data (exact hash matches)
     for (const em of exactMatches) {
-      // If existing is auto-projected and planned is not, delete old and import new
       const existingTx = existingTxs.find(e => e.id === em.existingId);
       if (existingTx?.descricao?.includes('(auto-projetada)') && !('_isProjected' in em.planned)) {
         idsToDelete.push(em.existingId);
