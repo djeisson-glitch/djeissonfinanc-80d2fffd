@@ -70,6 +70,7 @@ export default function DashboardPage() {
         .from('transacoes')
         .select('conta_id, tipo, valor, descricao')
         .eq('user_id', user!.id)
+        .eq('ignorar_dashboard', false)
         .in('conta_id', cardIds)
         .gte('data', start)
         .lte('data', end);
