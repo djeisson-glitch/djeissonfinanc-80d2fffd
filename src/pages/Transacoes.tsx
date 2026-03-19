@@ -345,9 +345,9 @@ export default function TransacoesPage() {
                     <Badge
                       variant="secondary"
                       className="text-xs"
-                      style={{ borderLeft: `3px solid ${getCategoriaColor(t.categoria)}` }}
+                      style={{ borderLeft: `3px solid ${t.categoria_id ? getColor(t.categoria_id) : getCategoriaColor(t.categoria)}` }}
                     >
-                      {t.categoria}
+                      {t.categoria_id ? getDisplayName(t.categoria_id) : t.categoria}
                     </Badge>
                   </TableCell>
                   <TableCell className={`text-right text-sm font-medium ${t.tipo === 'receita' ? 'text-success' : 'text-destructive'}`}>
