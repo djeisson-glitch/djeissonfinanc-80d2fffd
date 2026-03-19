@@ -298,7 +298,7 @@ export function CsvImportDialog({ open, onOpenChange }: Props) {
     const orphanIds: string[] = [];
 
     for (const proj of projections) {
-      const projMonth = proj.data_original.substring(0, 7); // "2026-02"
+      const projMonth = proj.data.substring(0, 7); // "2026-02"
 
       // Só avaliar projeções do MESMO mês do CSV — não toca em outros meses
       if (projMonth !== targetMonth) {
