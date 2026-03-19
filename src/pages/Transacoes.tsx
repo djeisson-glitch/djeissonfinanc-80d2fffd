@@ -512,6 +512,15 @@ export default function TransacoesPage() {
           )}
         </DialogContent>
       </Dialog>
+
+      <RecategorizarModal
+        open={recatOpen}
+        onOpenChange={setRecatOpen}
+        transactions={recatTransactions}
+        categoriaNome={recatCategoria.nome}
+        onConfirm={() => bulkRecategorizeMutation.mutate()}
+        loading={bulkRecategorizeMutation.isPending}
+      />
     </div>
   );
 }
