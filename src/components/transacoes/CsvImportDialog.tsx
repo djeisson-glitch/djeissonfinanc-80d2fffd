@@ -272,6 +272,7 @@ export function CsvImportDialog({ open, onOpenChange }: Props) {
     contaId: string,
     userId: string,
     csvTransactions: ParsedTransaction[],
+    targetMonth: string,
   ): Promise<number> => {
     console.log("🧹 Limpando projeções órfãs...");
 
@@ -291,11 +292,6 @@ export function CsvImportDialog({ open, onOpenChange }: Props) {
     console.log(`🔍 Encontradas ${projections.length} projeções auto-criadas`);
 
     // Pegar o mês mais recente do CSV sendo importado
-    const csvDates = csvTransactions.map((t) => new Date(t.data).getTime());
-    const csvNewestDate = new Date(Math.max(...csvDates));
-    const csvMonth = `${csvNewestDate.getFullYear()}-${String(csvNewestDate.getMonth() + 1).padStart(2, "0")}`;
-
-    console.log(`📅 Mês do CSV importado: ${csvMonth}`);
 
     const orphanIds: string[] = [];
 
@@ -584,10 +580,20 @@ export function CsvImportDialog({ open, onOpenChange }: Props) {
     setProgress(5);
 
     try {
-      // ETAPA 1: Limpar órfãs
-
-      console.log("🧹 Etapa 1/2: Limpando projeções órfãs...");
-      const deleted = await cleanOrphanProjections(context.contaId, context.currentUserId, parsedTransactions);
+      // ETAPA 1: Limpar órfãs do mês importado
+      const csvDates = parsedTransactions.map((t) => new Date(t.data + "T00:00:00").getTime());
+      const newestDate = new Date(Math.max(...csvDates));
+      const targetMonth =
+        isCredito && dueConfirmed
+          ? `${dueYear}-${String(dueMonth + 1).padStart(2, "0")}`
+          : `${newestDate.getFullYear()}-${String(newestDate.getMonth() + 1).padStart(2, "0")}`;
+      console.log("🧹 Etapa 1/2: Limpando projeções órfãs do mês", targetMonth);
+      const deleted = await cleanOrphanProjections(
+        context.contaId,
+        context.currentUserId,
+        parsedTransactions,
+        targetMonth,
+      );
       console.log(`✅ Limpeza concluída: ${deleted} órfãs removidas`);
 
       setProgress(10);
