@@ -584,7 +584,6 @@ export function CsvImportDialog({ open, onOpenChange }: Props) {
     try {
       // ETAPA 1: Limpar órfãs
       console.log("🧹 Etapa 1/2: Limpando projeções órfãs...");
-      const deleted = await cleanOrphanProjections(context.contaId, context.currentUserId, parsedTransactions);
       console.log(`✅ Limpeza concluída: ${deleted} órfãs removidas`);
 
       setProgress(10);
