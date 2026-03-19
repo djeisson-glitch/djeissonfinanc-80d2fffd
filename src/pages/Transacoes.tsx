@@ -325,7 +325,7 @@ export default function TransacoesPage() {
                   </TableCell>
                   <TableCell className="text-sm max-w-[200px] truncate">
                     <span className="flex items-center gap-1">
-                      {t.ignorar_dashboard && <EyeOff className="h-3 w-3 text-muted-foreground shrink-0" title="Ignorada no dashboard" />}
+                      {t.ignorar_dashboard && <EyeOff className="h-3 w-3 text-muted-foreground shrink-0" />}
                       {t.descricao}
                     </span>
                   </TableCell>
