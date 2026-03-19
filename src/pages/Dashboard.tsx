@@ -106,6 +106,7 @@ export default function DashboardPage() {
         .from('transacoes')
         .select('*')
         .eq('user_id', user!.id)
+        .eq('ignorar_dashboard', false)
         .not('parcela_total', 'is', null)
         .gte('data', today.toISOString().split('T')[0])
         .lte('data', sixMonthsLater.toISOString().split('T')[0]);
