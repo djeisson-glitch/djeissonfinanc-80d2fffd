@@ -456,7 +456,13 @@ export default function TransacoesPage() {
             <DialogTitle>Editar Transação</DialogTitle>
           </DialogHeader>
           {editingTx && (
-            <div className="space-y-4">
+            <form onSubmit={(e) => { e.preventDefault(); updateMutation.mutate({
+              id: editingTx.id,
+              categoria: editingTx.categoria,
+              categoria_id: editingTx.categoria_id || null,
+              essencial: editingTx.essencial,
+              ignorar_dashboard: editingTx.ignorar_dashboard || false,
+            }); }} className="space-y-4">
               <p className="text-sm text-muted-foreground">{editingTx.descricao}</p>
               <div className="space-y-2">
                 <Label>Categoria</Label>
@@ -496,19 +502,10 @@ export default function TransacoesPage() {
                 </div>
                 <Switch checked={learnPattern} onCheckedChange={setLearnPattern} />
               </div>
-              <Button
-                className="w-full"
-                onClick={() => updateMutation.mutate({
-                  id: editingTx.id,
-                  categoria: editingTx.categoria,
-                  categoria_id: editingTx.categoria_id || null,
-                  essencial: editingTx.essencial,
-                  ignorar_dashboard: editingTx.ignorar_dashboard || false,
-                })}
-              >
+              <Button className="w-full" type="submit">
                 Salvar
               </Button>
-            </div>
+            </form>
           )}
         </DialogContent>
       </Dialog>
