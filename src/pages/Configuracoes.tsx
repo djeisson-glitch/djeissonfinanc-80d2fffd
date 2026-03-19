@@ -13,6 +13,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Save, Trash2, Settings, AlertTriangle } from 'lucide-react';
+import { useEnterSubmit } from '@/hooks/useEnterSubmit';
 import { ImportHistory } from '@/components/configuracoes/ImportHistory';
 import { DebugPanel } from '@/components/configuracoes/DebugPanel';
 
@@ -45,6 +46,7 @@ export default function ConfiguracoesPage() {
   const [resetDialogOpen, setResetDialogOpen] = useState(false);
   const [resetConfirm, setResetConfirm] = useState('');
   const [resetting, setResetting] = useState(false);
+  const resetKeyDown = useEnterSubmit(() => { if (resetConfirm === 'RESETAR') handleReset(); }, resetting || resetConfirm !== 'RESETAR');
 
   const displayReceita = receita ?? config?.receita_mensal_fixa ?? 13000;
   const displayReserva = reserva ?? config?.reserva_minima ?? 2000;
@@ -214,7 +216,7 @@ export default function ConfiguracoesPage() {
       </Tabs>
 
       <Dialog open={resetDialogOpen} onOpenChange={setResetDialogOpen}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="sm:max-w-md" onKeyDown={resetKeyDown}>
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-destructive">
               <AlertTriangle className="h-5 w-5" />
