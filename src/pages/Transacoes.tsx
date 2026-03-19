@@ -316,14 +316,19 @@ export default function TransacoesPage() {
             </TableHeader>
             <TableBody>
               {filtered.map((t) => (
-                <TableRow key={t.id}>
+                <TableRow key={t.id} className={t.ignorar_dashboard ? 'opacity-50' : ''}>
                   <TableCell className="text-sm" title={t.data_original ? `Original: ${formatDate(t.data_original)}` : undefined}>
                     {formatDate(t.data)}
                     {t.data_original && t.data_original !== t.data && (
                       <span className="block text-[10px] text-muted-foreground">orig: {formatDate(t.data_original)}</span>
                     )}
                   </TableCell>
-                  <TableCell className="text-sm max-w-[200px] truncate">{t.descricao}</TableCell>
+                  <TableCell className="text-sm max-w-[200px] truncate">
+                    <span className="flex items-center gap-1">
+                      {t.ignorar_dashboard && <EyeOff className="h-3 w-3 text-muted-foreground shrink-0" title="Ignorada no dashboard" />}
+                      {t.descricao}
+                    </span>
+                  </TableCell>
                   <TableCell>
                     <Badge
                       variant="secondary"
