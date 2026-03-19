@@ -13,6 +13,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Save, Trash2, Settings, AlertTriangle } from 'lucide-react';
+import { useEnterSubmit } from '@/hooks/useEnterSubmit';
 import { ImportHistory } from '@/components/configuracoes/ImportHistory';
 import { DebugPanel } from '@/components/configuracoes/DebugPanel';
 
