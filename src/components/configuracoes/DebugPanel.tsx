@@ -895,6 +895,64 @@ export function DebugPanel() {
           )}
         </CardContent>
       </Card>
+
+      {/* Migrate Categories */}
+      <MigrateCategoriesSection userId={user?.id} />
     </div>
+  );
+}
+
+function MigrateCategoriesSection({ userId }: { userId?: string }) {
+  const [loading, setLoading] = useState(false);
+  const [result, setResult] = useState<string | null>(null);
+
+  const handleMigrate = async () => {
+    if (!userId) return;
+    setLoading(true);
+    setResult(null);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error('Not authenticated');
+
+      const res = await supabase.functions.invoke('migrate-categorias', {
+        headers: { Authorization: `Bearer ${session.access_token}` },
+      });
+
+      if (res.error) throw res.error;
+      const d = res.data;
+      setResult(`Migradas: ${d.migratedTransactions}/${d.totalTransactions} transações, ${d.migratedRules}/${d.totalRules} regras`);
+      toast.success('Migração concluída');
+    } catch (err: any) {
+      setResult(`Erro: ${err.message}`);
+      toast.error('Erro na migração');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <CardTitle className="text-base flex items-center gap-2">
+          <BarChart3 className="h-4 w-4" />
+          Migrar Categorias (string → ID)
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <p className="text-xs text-muted-foreground">
+          Migra transações e regras que usam categoria string para usar categoria_id. 
+          Certifique-se de que as categorias padrão já foram criadas na página Categorias.
+        </p>
+        <Button onClick={handleMigrate} disabled={loading} size="sm">
+          {loading ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Check className="h-4 w-4 mr-1" />}
+          Executar Migração
+        </Button>
+        {result && (
+          <div className="p-3 rounded-md bg-muted border text-xs">
+            <p className="font-medium text-foreground">{result}</p>
+          </div>
+        )}
+      </CardContent>
+    </Card>
   );
 }
