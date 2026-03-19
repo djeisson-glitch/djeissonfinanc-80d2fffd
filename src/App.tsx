@@ -12,6 +12,7 @@ import TransacoesPage from "@/pages/Transacoes";
 import CalculadoraPage from "@/pages/Calculadora";
 import ContasPage from "@/pages/Contas";
 import ConfiguracoesPage from "@/pages/Configuracoes";
+import CategoriasPage from "@/pages/Categorias";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
