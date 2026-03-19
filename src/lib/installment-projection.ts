@@ -148,7 +148,7 @@ export function detectConflicts(
       continue;
     }
 
-    // Find partial match: same description prefix + value ± 0.10 + same parcela + same pessoa
+    // Find partial match: same description prefix + value ± 0.10 + same parcela + same pessoa + same data_original (competência)
     const partialMatch = existing.find(e => {
       const ePrefix = normalize(e.descricao);
       if (ePrefix !== prefix) return false;
@@ -156,6 +156,10 @@ export function detectConflicts(
       if (e.parcela_atual !== tx.parcela_atual) return false;
       if (e.parcela_total !== tx.parcela_total) return false;
       if (e.pessoa.toLowerCase() !== tx.pessoa.toLowerCase()) return false;
+      // Compare data_original (competência date) — different months = NOT duplicates
+      const txOriginal = (tx as any).data_original || tx.data;
+      const eOriginal = e.data_original || e.data;
+      if (txOriginal !== eOriginal) return false;
       return true;
     });
 
