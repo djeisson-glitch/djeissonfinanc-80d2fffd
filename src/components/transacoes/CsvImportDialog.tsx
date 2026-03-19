@@ -347,18 +347,20 @@ export function CsvImportDialog({ open, onOpenChange }: Props) {
     }
 
     if (resolvedConflicts) {
+      console.log("🔍 Processando conflitos resolvidos:", resolvedConflicts.length);
       for (const rc of resolvedConflicts) {
+        console.log("Conflito:", rc.choice, rc.existingTransaction.id);
         if (rc.choice === 'csv') {
-          console.log(`[Import] Conflito resolvido (CSV): deletar ID ${rc.existingTransaction.id} → importar "${rc.csvTransaction.descricao}"`);
           idsToDelete.push(rc.existingTransaction.id);
           resolvedClean.push(rc.csvTransaction);
+          console.log("✅ Adicionado ID para deleção:", rc.existingTransaction.id);
         } else {
           console.log(`[Import] Conflito resolvido (manter existente): ID ${rc.existingTransaction.id}`);
         }
       }
     }
 
-    console.log(`[Import] Total IDs para deletar: ${idsToDelete.length}`, idsToDelete);
+    console.log("📦 IDs para deletar (total):", idsToDelete.length, idsToDelete);
     console.log(`[Import] Total transações para importar: ${resolvedClean.length}`);
 
     setProgress(75);
@@ -530,7 +532,7 @@ export function CsvImportDialog({ open, onOpenChange }: Props) {
 
       // Step 1: Delete auto-projected duplicates from database
       let deletedCount = 0;
-      console.log(`[Import] Executando deleção de ${plan.autoProjectedIdsToDelete.length} transações:`, plan.autoProjectedIdsToDelete);
+      console.log("🗑️ Plan.autoProjectedIdsToDelete:", plan.autoProjectedIdsToDelete.length, plan.autoProjectedIdsToDelete);
       if (plan.autoProjectedIdsToDelete.length > 0) {
         for (let i = 0; i < plan.autoProjectedIdsToDelete.length; i += 100) {
           const chunk = plan.autoProjectedIdsToDelete.slice(i, i + 100);
