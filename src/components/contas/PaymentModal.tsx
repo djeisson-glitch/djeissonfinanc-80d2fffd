@@ -103,7 +103,7 @@ export function PaymentModal({ open, onOpenChange, contaId, contaNome, faturaTot
         <DialogHeader>
           <DialogTitle>Registrar Pagamento — {contaNome}</DialogTitle>
         </DialogHeader>
-        <div className="space-y-4">
+        <form onSubmit={(e) => { e.preventDefault(); handleConfirm(); }} className="space-y-4">
           <div className="p-3 rounded-lg bg-muted text-center">
             <p className="text-sm text-muted-foreground">Fatura atual</p>
             <p className="text-xl font-bold text-destructive">{formatCurrency(faturaTotal)}</p>
@@ -160,12 +160,12 @@ export function PaymentModal({ open, onOpenChange, contaId, contaNome, faturaTot
 
           <Button
             className="w-full"
-            onClick={handleConfirm}
+            type="submit"
             disabled={submitting || (mode === 'parcial' && (valorPago <= 0 || valorPago >= faturaTotal))}
           >
             {submitting ? 'Registrando...' : 'Confirmar Pagamento'}
           </Button>
-        </div>
+        </form>
       </DialogContent>
     </Dialog>
   );
