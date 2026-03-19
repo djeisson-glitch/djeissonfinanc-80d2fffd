@@ -140,7 +140,7 @@ export default function TransacoesPage() {
     setSearchParams(searchParams, { replace: true });
   };
 
-  const filtered = transacoes?.filter(t => {
+  const filtered = (transacoes?.filter(t => {
     if (filterCategoria !== 'all' && t.categoria !== filterCategoria) return false;
     if (filterTipo !== 'all' && t.tipo !== filterTipo) return false;
     if (filterEssencial === 'true' && !t.essencial) return false;
@@ -149,7 +149,24 @@ export default function TransacoesPage() {
     if (filterPessoa !== 'all' && t.pessoa !== filterPessoa) return false;
     if (search && !t.descricao.toLowerCase().includes(search.toLowerCase())) return false;
     return true;
-  }) || [];
+  }) || []).sort((a, b) => {
+    if (!sortColumn) return 0;
+    const dir = sortDirection === 'asc' ? 1 : -1;
+    switch (sortColumn) {
+      case 'data': return dir * a.data.localeCompare(b.data);
+      case 'descricao': return dir * a.descricao.localeCompare(b.descricao, 'pt-BR');
+      case 'categoria': return dir * a.categoria.localeCompare(b.categoria, 'pt-BR');
+      case 'valor': {
+        const va = a.tipo === 'receita' ? Number(a.valor) : -Number(a.valor);
+        const vb = b.tipo === 'receita' ? Number(b.valor) : -Number(b.valor);
+        return dir * (va - vb);
+      }
+      case 'essencial': return dir * (Number(a.essencial) - Number(b.essencial));
+      case 'parcela': return dir * ((a.parcela_atual || 0) - (b.parcela_atual || 0));
+      case 'pessoa': return dir * a.pessoa.localeCompare(b.pessoa, 'pt-BR');
+      default: return 0;
+    }
+  });
 
   const pessoas = [...new Set(transacoes?.map(t => t.pessoa) || [])];
 
