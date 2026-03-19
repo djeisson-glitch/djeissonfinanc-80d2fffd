@@ -532,7 +532,7 @@ export function CsvImportDialog({ open, onOpenChange }: Props) {
 
       // Step 1: Delete auto-projected duplicates from database
       let deletedCount = 0;
-      console.log(`[Import] Executando deleção de ${plan.autoProjectedIdsToDelete.length} transações:`, plan.autoProjectedIdsToDelete);
+      console.log("🗑️ Plan.autoProjectedIdsToDelete:", plan.autoProjectedIdsToDelete.length, plan.autoProjectedIdsToDelete);
       if (plan.autoProjectedIdsToDelete.length > 0) {
         for (let i = 0; i < plan.autoProjectedIdsToDelete.length; i += 100) {
           const chunk = plan.autoProjectedIdsToDelete.slice(i, i + 100);
