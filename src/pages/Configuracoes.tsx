@@ -215,7 +215,7 @@ export default function ConfiguracoesPage() {
       </Tabs>
 
       <Dialog open={resetDialogOpen} onOpenChange={setResetDialogOpen}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="sm:max-w-md" onKeyDown={useEnterSubmit(() => { if (resetConfirm === 'RESETAR') handleReset(); }, resetting || resetConfirm !== 'RESETAR')}>
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-destructive">
               <AlertTriangle className="h-5 w-5" />
