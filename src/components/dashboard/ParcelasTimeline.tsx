@@ -63,23 +63,7 @@ export function ParcelasTimeline({ parcelas }: ParcelasTimelineProps) {
 
   const endingMonths = monthGroups.filter(m => m.terminam.length > 0);
 
-  if (monthGroups.length === 0) {
-    return (
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-lg flex items-center gap-2">
-            <TrendingDown className="h-5 w-5" />
-            Parcelas por Mês
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <p className="text-sm text-muted-foreground">Nenhuma parcela futura</p>
-        </CardContent>
-      </Card>
-    );
-  }
-
-  const chartData = monthGroups.map(m => ({ mes: m.mes, total: m.total, mesKey: m.mesKey }));
+  const chartData = monthGroups.map(m => ({ mes: m.mes, total: m.total, mesKey: m.mesKey, isCurrent: m.isCurrent, isPast: m.isPast }));
 
   const ChartTooltip = ({ active, payload, label }: any) => {
     if (!active || !payload?.length) return null;
