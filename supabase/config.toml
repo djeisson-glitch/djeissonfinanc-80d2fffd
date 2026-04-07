@@ -2,3 +2,6 @@ project_id = "sciotyrsanhmuiqwqypu"
 
 [functions.categorize]
 verify_jwt = false
+
+[functions.ai-financial-advisor]
+verify_jwt = false
