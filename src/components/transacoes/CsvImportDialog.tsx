@@ -624,7 +624,7 @@ export function CsvImportDialog({ open, onOpenChange }: Props) {
     const context = validateBeforeImport();
     if (!context) return;
 
-    if (fileType !== "csv") {
+    if (fileType === "ofx") {
       await handleImport();
       return;
     }
