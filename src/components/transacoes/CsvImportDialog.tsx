@@ -143,7 +143,7 @@ export function CsvImportDialog({ open, onOpenChange }: Props) {
 
   const loadContas = useCallback(async () => {
     if (!user) return;
-    const { data } = await supabase.from("contas").select("id, nome, tipo").eq("user_id", user.id);
+    const { data } = await supabase.from("contas").select("id, nome, tipo, numero_conta").eq("user_id", user.id);
     setContas(data || []);
     return data || [];
   }, [user]);
