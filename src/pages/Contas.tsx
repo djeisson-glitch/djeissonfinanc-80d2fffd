@@ -115,9 +115,9 @@ export default function ContasPage() {
       const finalSaldo = tipo === 'credito' ? 0 : saldoInicial;
 
       if (editConta) {
-        await supabase.from('contas').update({ nome, tipo, saldo_inicial: finalSaldo, data_abertura: dataAberturaStr }).eq('id', editConta.id);
+        await supabase.from('contas').update({ nome, tipo, saldo_inicial: finalSaldo, data_abertura: dataAberturaStr, banco: banco || null, codigo_banco: codigoBanco || null, agencia: agencia || null, numero_conta: numeroConta || null }).eq('id', editConta.id);
       } else {
-        const { data: newConta, error } = await supabase.from('contas').insert({ user_id: user!.id, nome, tipo, saldo_inicial: finalSaldo, data_abertura: dataAberturaStr }).select('id').single();
+        const { data: newConta, error } = await supabase.from('contas').insert({ user_id: user!.id, nome, tipo, saldo_inicial: finalSaldo, data_abertura: dataAberturaStr, banco: banco || null, codigo_banco: codigoBanco || null, agencia: agencia || null, numero_conta: numeroConta || null }).select('id').single();
         if (error) throw error;
 
         // Create opening balance transaction for debit accounts
@@ -156,6 +156,10 @@ export default function ContasPage() {
     setTipo('debito');
     setSaldoInicial(0);
     setDataAbertura(new Date(2026, 0, 1));
+    setBanco('');
+    setCodigoBanco('');
+    setAgencia('');
+    setNumeroConta('');
   };
 
   const openEdit = (conta: any) => {
@@ -164,6 +168,10 @@ export default function ContasPage() {
     setTipo(conta.tipo);
     setSaldoInicial(conta.saldo_inicial);
     setDataAbertura(conta.data_abertura ? new Date(conta.data_abertura + 'T00:00:00') : new Date(2026, 0, 1));
+    setBanco(conta.banco || '');
+    setCodigoBanco(conta.codigo_banco || '');
+    setAgencia(conta.agencia || '');
+    setNumeroConta(conta.numero_conta || '');
     setDialogOpen(true);
   };
 
