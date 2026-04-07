@@ -437,10 +437,18 @@ export function CsvImportDialog({ open, onOpenChange }: Props) {
     for (const t of importableTransactions) {
       let categoria = "Outros";
       let essencial = false;
+      
+      // 1. Check user-defined rules first
       const matchedRule = rules?.find((r) => t.descricao.toLowerCase().includes(r.padrao.toLowerCase()));
       if (matchedRule) {
         categoria = matchedRule.categoria;
         essencial = matchedRule.essencial;
+      } else {
+        // 2. Fall back to dictionary-based auto-categorization
+        const autoCategoria = autoCategorizarTransacao(t.descricao);
+        if (autoCategoria) {
+          categoria = autoCategoria;
+        }
       }
 
       const grupo_parcela = t.parcela_atual ? crypto.randomUUID() : null;
