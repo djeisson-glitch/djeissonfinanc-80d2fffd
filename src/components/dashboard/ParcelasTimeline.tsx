@@ -31,10 +31,12 @@ export function ParcelasTimeline({ parcelas }: ParcelasTimelineProps) {
   const [selectedEnding, setSelectedEnding] = useState<MonthGroup | null>(null);
 
   const monthGroups = useMemo(() => {
-    if (!parcelas || parcelas.length === 0) return [];
+    const year = new Date().getFullYear();
+    const currentMonth = new Date().getMonth(); // 0-based
 
+    // Build map from parcelas data
     const porMes: Record<string, { total: number; items: Parcela[] }> = {};
-    parcelas.forEach(p => {
+    (parcelas || []).forEach(p => {
       const d = new Date(p.data + 'T00:00:00');
       const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
       if (!porMes[key]) porMes[key] = { total: 0, items: [] };
@@ -42,17 +44,18 @@ export function ParcelasTimeline({ parcelas }: ParcelasTimelineProps) {
       porMes[key].items.push(p);
     });
 
-    return Object.keys(porMes).sort().map(key => {
-      const d = new Date(key + '-01T00:00:00');
-      const label = `${getMonthName(d.getMonth())}/${d.getFullYear().toString().slice(2)}`;
-      const { total, items } = porMes[key];
-      const ending = items.filter(p => p.parcela_atual != null && p.parcela_total != null && p.parcela_atual === p.parcela_total);
+    // Generate all 12 months of the current year
+    return Array.from({ length: 12 }, (_, i) => {
+      const key = `${year}-${String(i + 1).padStart(2, '0')}`;
+      const label = `${getMonthName(i)}/${year.toString().slice(2)}`;
+      const data = porMes[key] || { total: 0, items: [] };
+      const ending = data.items.filter(p => p.parcela_atual != null && p.parcela_total != null && p.parcela_atual === p.parcela_total);
       const terminam = ending.map(p => ({
         descricao: p.descricao,
         valor: Number(p.valor),
         parcelaInfo: `${p.parcela_atual}/${p.parcela_total}`,
       }));
-      return { mes: label, mesKey: key, total, items, terminam } as MonthGroup;
+      return { mes: label, mesKey: key, total: data.total, items: data.items, terminam, isCurrent: i === currentMonth, isPast: i < currentMonth } as MonthGroup & { isCurrent: boolean; isPast: boolean };
     });
   }, [parcelas]);
 
