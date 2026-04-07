@@ -106,6 +106,57 @@ export type Database = {
         }
         Relationships: []
       }
+      grupos_parcela: {
+        Row: {
+          categoria_id: string | null
+          conta_id: string
+          created_at: string
+          data_inicio: string
+          descricao: string
+          id: string
+          total_parcelas: number
+          user_id: string
+          valor_parcela: number
+        }
+        Insert: {
+          categoria_id?: string | null
+          conta_id: string
+          created_at?: string
+          data_inicio: string
+          descricao: string
+          id?: string
+          total_parcelas: number
+          user_id: string
+          valor_parcela: number
+        }
+        Update: {
+          categoria_id?: string | null
+          conta_id?: string
+          created_at?: string
+          data_inicio?: string
+          descricao?: string
+          id?: string
+          total_parcelas?: number
+          user_id?: string
+          valor_parcela?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "grupos_parcela_categoria_id_fkey"
+            columns: ["categoria_id"]
+            isOneToOne: false
+            referencedRelation: "categorias"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "grupos_parcela_conta_id_fkey"
+            columns: ["conta_id"]
+            isOneToOne: false
+            referencedRelation: "contas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       historico_importacoes: {
         Row: {
           conta_id: string
@@ -226,11 +277,13 @@ export type Database = {
         Row: {
           categoria: string
           categoria_id: string | null
+          codigo_cartao: string | null
           conta_id: string
           created_at: string
           data: string
           data_original: string | null
           descricao: string
+          descricao_normalizada: string | null
           essencial: boolean
           grupo_parcela: string | null
           hash_transacao: string
@@ -244,15 +297,18 @@ export type Database = {
           tipo: string
           user_id: string
           valor: number
+          valor_dolar: number | null
         }
         Insert: {
           categoria?: string
           categoria_id?: string | null
+          codigo_cartao?: string | null
           conta_id: string
           created_at?: string
           data: string
           data_original?: string | null
           descricao: string
+          descricao_normalizada?: string | null
           essencial?: boolean
           grupo_parcela?: string | null
           hash_transacao: string
@@ -266,15 +322,18 @@ export type Database = {
           tipo: string
           user_id: string
           valor: number
+          valor_dolar?: number | null
         }
         Update: {
           categoria?: string
           categoria_id?: string | null
+          codigo_cartao?: string | null
           conta_id?: string
           created_at?: string
           data?: string
           data_original?: string | null
           descricao?: string
+          descricao_normalizada?: string | null
           essencial?: boolean
           grupo_parcela?: string | null
           hash_transacao?: string
@@ -288,6 +347,7 @@ export type Database = {
           tipo?: string
           user_id?: string
           valor?: number
+          valor_dolar?: number | null
         }
         Relationships: [
           {
