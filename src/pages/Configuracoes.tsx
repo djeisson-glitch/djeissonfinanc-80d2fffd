@@ -187,6 +187,87 @@ export default function ConfiguracoesPage() {
         </CardContent>
       </Card>
 
+      {/* Re-categorização */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-lg flex items-center gap-2">
+            <RefreshCw className="h-5 w-5" />
+            Re-categorização Automática
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <p className="text-sm text-muted-foreground">
+            Aplica o dicionário de categorias automáticas em todas as transações que ainda estão como "Outros". 
+            Transações categorizadas manualmente não serão alteradas.
+          </p>
+          <Button
+            disabled={recategorizing}
+            onClick={async () => {
+              if (!user) return;
+              setRecategorizing(true);
+              try {
+                // 1. Ensure required categories exist
+                const existingNames = new Set(categorias.map(c => c.nome));
+                const missing = REQUIRED_CATEGORIES.filter(name => !existingNames.has(name));
+                if (missing.length > 0) {
+                  const inserts = missing.map(nome => ({
+                    user_id: user.id,
+                    nome,
+                    cor: CATEGORY_COLORS[nome] || '#9ca3af',
+                    parent_id: null,
+                  }));
+                  await supabase.from('categorias').insert(inserts);
+                  queryClient.invalidateQueries({ queryKey: ['categorias'] });
+                }
+
+                // 2. Fetch all transactions with categoria = 'Outros'
+                let allTx: any[] = [];
+                let from = 0;
+                const batchSize = 1000;
+                while (true) {
+                  const { data } = await supabase
+                    .from('transacoes')
+                    .select('id, descricao, categoria')
+                    .eq('user_id', user.id)
+                    .eq('categoria', 'Outros')
+                    .range(from, from + batchSize - 1);
+                  if (!data || data.length === 0) break;
+                  allTx = allTx.concat(data);
+                  if (data.length < batchSize) break;
+                  from += batchSize;
+                }
+
+                // 3. Run auto-categorization
+                let updated = 0;
+                for (const tx of allTx) {
+                  const newCat = autoCategorizarTransacao(tx.descricao);
+                  if (newCat && newCat !== 'Outros') {
+                    await supabase
+                      .from('transacoes')
+                      .update({ categoria: newCat })
+                      .eq('id', tx.id);
+                    updated++;
+                  }
+                }
+
+                queryClient.invalidateQueries({ queryKey: ['transacoes'] });
+                toast({ 
+                  title: `${updated} transações recategorizadas`,
+                  description: `${allTx.length} transações analisadas, ${updated} atualizadas.`
+                });
+              } catch (err) {
+                console.error(err);
+                toast({ title: 'Erro ao recategorizar', variant: 'destructive' });
+              }
+              setRecategorizing(false);
+            }}
+          >
+            <RefreshCw className={`mr-2 h-4 w-4 ${recategorizing ? 'animate-spin' : ''}`} />
+            {recategorizing ? 'Re-categorizando...' : 'Re-categorizar transações'}
+          </Button>
+        </CardContent>
+      </Card>
+
       {/* Danger Zone */}
       <Card className="border-destructive/50">
         <CardHeader>
