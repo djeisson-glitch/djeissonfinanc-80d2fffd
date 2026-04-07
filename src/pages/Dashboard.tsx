@@ -304,7 +304,7 @@ export default function DashboardPage() {
           totalNaoEssencial,
           pctEssencial,
           topCategorias: categoryRanking.slice(0, 5),
-          parcelasAtivas: parcelasFuturas?.length,
+          parcelasAtivas: parcelasAno?.length,
           faturasPendentes: creditCards.filter(c => {
             const f = faturaData?.[c.id];
             return f && f.despesas > 0 && f.pagamentos < f.despesas;
