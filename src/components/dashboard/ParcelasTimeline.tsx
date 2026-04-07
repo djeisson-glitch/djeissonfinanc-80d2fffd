@@ -24,6 +24,8 @@ interface MonthGroup {
   total: number;
   items: Parcela[];
   terminam: { descricao: string; valor: number; parcelaInfo: string }[];
+  isCurrent: boolean;
+  isPast: boolean;
 }
 
 export function ParcelasTimeline({ parcelas }: ParcelasTimelineProps) {
@@ -31,10 +33,12 @@ export function ParcelasTimeline({ parcelas }: ParcelasTimelineProps) {
   const [selectedEnding, setSelectedEnding] = useState<MonthGroup | null>(null);
 
   const monthGroups = useMemo(() => {
-    if (!parcelas || parcelas.length === 0) return [];
+    const year = new Date().getFullYear();
+    const currentMonth = new Date().getMonth(); // 0-based
 
+    // Build map from parcelas data
     const porMes: Record<string, { total: number; items: Parcela[] }> = {};
-    parcelas.forEach(p => {
+    (parcelas || []).forEach(p => {
       const d = new Date(p.data + 'T00:00:00');
       const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
       if (!porMes[key]) porMes[key] = { total: 0, items: [] };
@@ -42,39 +46,24 @@ export function ParcelasTimeline({ parcelas }: ParcelasTimelineProps) {
       porMes[key].items.push(p);
     });
 
-    return Object.keys(porMes).sort().map(key => {
-      const d = new Date(key + '-01T00:00:00');
-      const label = `${getMonthName(d.getMonth())}/${d.getFullYear().toString().slice(2)}`;
-      const { total, items } = porMes[key];
-      const ending = items.filter(p => p.parcela_atual != null && p.parcela_total != null && p.parcela_atual === p.parcela_total);
+    // Generate all 12 months of the current year
+    return Array.from({ length: 12 }, (_, i) => {
+      const key = `${year}-${String(i + 1).padStart(2, '0')}`;
+      const label = `${getMonthName(i)}/${year.toString().slice(2)}`;
+      const data = porMes[key] || { total: 0, items: [] };
+      const ending = data.items.filter(p => p.parcela_atual != null && p.parcela_total != null && p.parcela_atual === p.parcela_total);
       const terminam = ending.map(p => ({
         descricao: p.descricao,
         valor: Number(p.valor),
         parcelaInfo: `${p.parcela_atual}/${p.parcela_total}`,
       }));
-      return { mes: label, mesKey: key, total, items, terminam } as MonthGroup;
+      return { mes: label, mesKey: key, total: data.total, items: data.items, terminam, isCurrent: i === currentMonth, isPast: i < currentMonth } as MonthGroup & { isCurrent: boolean; isPast: boolean };
     });
   }, [parcelas]);
 
   const endingMonths = monthGroups.filter(m => m.terminam.length > 0);
 
-  if (monthGroups.length === 0) {
-    return (
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-lg flex items-center gap-2">
-            <TrendingDown className="h-5 w-5" />
-            Parcelas por Mês
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <p className="text-sm text-muted-foreground">Nenhuma parcela futura</p>
-        </CardContent>
-      </Card>
-    );
-  }
-
-  const chartData = monthGroups.map(m => ({ mes: m.mes, total: m.total, mesKey: m.mesKey }));
+  const chartData = monthGroups.map(m => ({ mes: m.mes, total: m.total, mesKey: m.mesKey, isCurrent: m.isCurrent, isPast: m.isPast }));
 
   const ChartTooltip = ({ active, payload, label }: any) => {
     if (!active || !payload?.length) return null;
@@ -111,41 +100,53 @@ export function ParcelasTimeline({ parcelas }: ParcelasTimelineProps) {
               <Bar
                 dataKey="total"
                 radius={[4, 4, 0, 0]}
-                fill="hsl(var(--foreground) / 0.3)"
                 cursor="pointer"
                 onClick={(_: any, index: number) => setSelectedMonth(monthGroups[index])}
-              />
+              >
+                {chartData.map((entry, index) => (
+                  <Cell
+                    key={index}
+                    fill={entry.isCurrent ? 'hsl(var(--primary))' : entry.isPast ? 'hsl(var(--muted-foreground) / 0.3)' : 'hsl(var(--foreground) / 0.3)'}
+                  />
+                ))}
+              </Bar>
             </BarChart>
           </ResponsiveContainer>
         </CardContent>
       </Card>
 
-      {endingMonths.length > 0 && (
-        <Card className="md:col-span-2">
-          <CardHeader>
-            <CardTitle className="text-lg">Parcelas que Terminam</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
-              {endingMonths.map(m => {
-                const economia = m.terminam.reduce((s, t) => s + t.valor, 0);
-                const count = m.terminam.length;
-                return (
-                  <button
-                    key={m.mesKey}
-                    onClick={() => setSelectedEnding(m)}
-                    className={`rounded-lg px-3 py-4 text-center transition-transform hover:scale-105 cursor-pointer ${getIntensityClasses(economia)}`}
-                  >
-                    <p className="text-[11px] font-medium opacity-70">{m.mes}</p>
-                    <p className="text-lg font-bold mt-1">{formatCurrency(economia)}</p>
-                    <p className="text-[11px] opacity-60">{count} parcela{count > 1 ? 's' : ''}</p>
-                  </button>
-                );
-              })}
-            </div>
-          </CardContent>
-        </Card>
-      )}
+      <Card className="md:col-span-2">
+        <CardHeader>
+          <CardTitle className="text-lg">Parcelas que Terminam</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-6 gap-3">
+            {monthGroups.map(m => {
+              const economia = m.terminam.reduce((s, t) => s + t.valor, 0);
+              const count = m.terminam.length;
+              const hasEnding = count > 0;
+              return (
+                <button
+                  key={m.mesKey}
+                  onClick={() => hasEnding && setSelectedEnding(m)}
+                  disabled={!hasEnding}
+                  className={`rounded-lg px-3 py-4 text-center transition-transform ${
+                    hasEnding
+                      ? `cursor-pointer hover:scale-105 ${m.isCurrent ? 'ring-2 ring-primary ' : ''}${getIntensityClasses(economia)}`
+                      : `cursor-default ${m.isPast ? 'bg-muted/30 text-muted-foreground/50' : 'bg-muted/50 text-muted-foreground'}`
+                  }`}
+                >
+                  <p className="text-[11px] font-medium opacity-70">{m.mes}</p>
+                  <p className={`text-lg font-bold mt-1 ${!hasEnding ? 'opacity-40' : ''}`}>
+                    {hasEnding ? formatCurrency(economia) : '—'}
+                  </p>
+                  {hasEnding && <p className="text-[11px] opacity-60">{count} parcela{count > 1 ? 's' : ''}</p>}
+                </button>
+              );
+            })}
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Modal: parcelas do mês */}
       <Dialog open={!!selectedMonth} onOpenChange={() => setSelectedMonth(null)}>

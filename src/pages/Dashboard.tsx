@@ -99,20 +99,18 @@ export default function DashboardPage() {
     enabled: !!user && creditCards.length > 0,
   });
 
-  const { data: parcelasFuturas } = useQuery({
-    queryKey: ['dashboard', 'parcelas-futuras', user?.id],
+  const { data: parcelasAno } = useQuery({
+    queryKey: ['dashboard', 'parcelas-ano', user?.id],
     queryFn: async () => {
-      const today = new Date();
-      const sixMonthsLater = new Date(today);
-      sixMonthsLater.setMonth(sixMonthsLater.getMonth() + 6);
+      const year = new Date().getFullYear();
       const { data } = await supabase
         .from('transacoes')
         .select('*')
         .eq('user_id', user!.id)
         .eq('ignorar_dashboard', false)
         .not('parcela_total', 'is', null)
-        .gte('data', today.toISOString().split('T')[0])
-        .lte('data', sixMonthsLater.toISOString().split('T')[0]);
+        .gte('data', `${year}-01-01`)
+        .lte('data', `${year}-12-31`);
       return data || [];
     },
     enabled: !!user,
@@ -292,7 +290,7 @@ export default function DashboardPage() {
           </CardContent>
         </Card>
 
-        <ParcelasTimeline parcelas={parcelasFuturas || []} />
+        <ParcelasTimeline parcelas={parcelasAno || []} />
 
 
         <AiInsightsCard context={{
@@ -306,7 +304,7 @@ export default function DashboardPage() {
           totalNaoEssencial,
           pctEssencial,
           topCategorias: categoryRanking.slice(0, 5),
-          parcelasAtivas: parcelasFuturas?.length,
+          parcelasAtivas: parcelasAno?.length,
           faturasPendentes: creditCards.filter(c => {
             const f = faturaData?.[c.id];
             return f && f.despesas > 0 && f.pagamentos < f.despesas;
