@@ -169,7 +169,6 @@ export function CsvImportDialog({ open, onOpenChange }: Props) {
     setDueConfirmed(false);
     const contasList = await loadContas();
 
-    const text = await f.text();
     let contaDetectada: string | null = null;
     let transactions: ClassifiedTransaction[] = [];
     let accountType: "corrente" | "credito" | null = null;
@@ -177,11 +176,44 @@ export function CsvImportDialog({ open, onOpenChange }: Props) {
     let totalLines = 0;
     let lineLogs: CsvLineLogEntry[] = [];
 
-    if (ext === "ofx") {
+    if (ext === "pdf") {
+      try {
+        const pages = await extractPdfText(f);
+        if (pages.every((p) => p.trim().length < 10)) {
+          toast({
+            title: "PDF sem texto extraível",
+            description: "Este PDF pode ser uma imagem escaneada. Tente exportar diretamente do app/banco.",
+            variant: "destructive",
+          });
+          setFile(null);
+          setFileType(null);
+          return;
+        }
+        const parsed = parsePdfText(pages);
+        transactions = parsed.transactions;
+        skippedLines = parsed.skippedLines;
+        totalLines = parsed.totalLines;
+        lineLogs = parsed.lineLogs;
+        contaDetectada = parsed.institution;
+      } catch (err: any) {
+        if (err?.message === "PDF_PASSWORD") {
+          toast({
+            title: "PDF protegido por senha",
+            description: "Este PDF está protegido. Remova a senha ou exporte novamente sem proteção.",
+            variant: "destructive",
+          });
+        } else {
+          toast({ title: "Erro ao ler PDF", description: String(err?.message || err), variant: "destructive" });
+        }
+        setFile(null);
+        setFileType(null);
+        return;
+      }
+    } else if (ext === "ofx") {
+      const text = await f.text();
       const parsed = parseOFX(text);
       contaDetectada = parsed.contaDetectada;
       accountType = parsed.accountType;
-      // Convert OFX transactions to ClassifiedTransaction
       transactions = parsed.transactions.map((t) => ({
         ...t,
         descricao_normalizada: normalizeDescription(t.descricao),
@@ -190,6 +222,7 @@ export function CsvImportDialog({ open, onOpenChange }: Props) {
         classification: t.tipo === 'receita' ? 'payment' as const : 'simple' as const,
       }));
     } else {
+      const text = await f.text();
       const parsed = parseSicrediCSV(text);
       contaDetectada = parsed.contaDetectada;
       transactions = parsed.transactions;
