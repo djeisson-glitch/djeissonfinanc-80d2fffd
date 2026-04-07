@@ -100,10 +100,16 @@ export function ParcelasTimeline({ parcelas }: ParcelasTimelineProps) {
               <Bar
                 dataKey="total"
                 radius={[4, 4, 0, 0]}
-                fill="hsl(var(--foreground) / 0.3)"
                 cursor="pointer"
                 onClick={(_: any, index: number) => setSelectedMonth(monthGroups[index])}
-              />
+              >
+                {chartData.map((entry, index) => (
+                  <Cell
+                    key={index}
+                    fill={entry.isCurrent ? 'hsl(var(--primary))' : entry.isPast ? 'hsl(var(--muted-foreground) / 0.3)' : 'hsl(var(--foreground) / 0.3)'}
+                  />
+                ))}
+              </Bar>
             </BarChart>
           </ResponsiveContainer>
         </CardContent>
