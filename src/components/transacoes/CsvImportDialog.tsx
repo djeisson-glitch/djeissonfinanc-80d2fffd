@@ -13,6 +13,7 @@ import {
   type ClassifiedTransaction,
   type CsvLineLogEntry,
 } from "@/lib/csv-parser";
+import { extractPdfText, parsePdfText } from "@/lib/pdf-parser";
 import { parseOFX } from "@/lib/ofx-parser";
 import {
   projectFutureInstallments,
@@ -96,7 +97,7 @@ export function CsvImportDialog({ open, onOpenChange }: Props) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [file, setFile] = useState<File | null>(null);
-  const [fileType, setFileType] = useState<"csv" | "ofx" | null>(null);
+  const [fileType, setFileType] = useState<"csv" | "ofx" | "pdf" | null>(null);
   const [contas, setContas] = useState<{ id: string; nome: string; tipo: string }[]>([]);
   const [selectedConta, setSelectedConta] = useState<string>("");
   const [detectedConta, setDetectedConta] = useState<string | null>(null);
@@ -152,17 +153,17 @@ export function CsvImportDialog({ open, onOpenChange }: Props) {
     if (!f) return;
 
     const ext = f.name.split(".").pop()?.toLowerCase();
-    if (ext !== "csv" && ext !== "ofx") {
-      toast({ title: "Apenas arquivos .csv ou .ofx", variant: "destructive" });
+    if (ext !== "csv" && ext !== "ofx" && ext !== "pdf") {
+      toast({ title: "Apenas arquivos .csv, .ofx ou .pdf", variant: "destructive" });
       return;
     }
-    if (f.size > 5 * 1024 * 1024) {
-      toast({ title: "Arquivo muito grande (máx 5MB)", variant: "destructive" });
+    if (f.size > 10 * 1024 * 1024) {
+      toast({ title: "Arquivo muito grande (máx 10MB)", variant: "destructive" });
       return;
     }
 
     setFile(f);
-    setFileType(ext as "csv" | "ofx");
+    setFileType(ext as "csv" | "ofx" | "pdf");
     setResult(null);
     setPreparedPlan(null);
     setDueConfirmed(false);
