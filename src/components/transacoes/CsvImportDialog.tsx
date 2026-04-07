@@ -704,9 +704,28 @@ export function CsvImportDialog({ open, onOpenChange }: Props) {
     if (!context) return;
 
     setImporting(true);
-    setProgress(10);
+    setProgress(5);
 
     try {
+      // Step 0: Ensure required categories exist
+      const { data: existingCats } = await supabase
+        .from('categorias')
+        .select('nome')
+        .eq('user_id', context.currentUserId);
+      const existingNames = new Set((existingCats || []).map((c: any) => c.nome));
+      const { REQUIRED_CATEGORIES: reqCats, CATEGORY_COLORS: catColors } = await import('@/lib/auto-categorize');
+      const missingCats = reqCats.filter((name: string) => !existingNames.has(name));
+      if (missingCats.length > 0) {
+        await supabase.from('categorias').insert(
+          missingCats.map((nome: string) => ({
+            user_id: context.currentUserId,
+            nome,
+            cor: catColors[nome] || '#9ca3af',
+            parent_id: null,
+          }))
+        );
+      }
+      setProgress(10);
       const plan = preparedPlan ?? (await buildImportPlan(context.contaId, context.currentUserId));
 
       // Step 1: Delete auto-projected duplicates
