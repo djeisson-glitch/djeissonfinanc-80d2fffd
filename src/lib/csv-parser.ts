@@ -1,12 +1,15 @@
 export interface ParsedTransaction {
   data: string;
   descricao: string;
+  descricao_normalizada: string;
   valor: number;
   tipo: 'receita' | 'despesa';
   parcela_atual: number | null;
   parcela_total: number | null;
   pessoa: string;
   hash_transacao: string;
+  codigo_cartao: string | null;
+  valor_dolar: number | null;
   source_line_number?: number;
   source_line_content?: string;
 }
@@ -25,12 +28,51 @@ export interface CsvLineLogEntry {
   hash_transacao?: string;
 }
 
+export type TransactionClassification =
+  | 'simple'           // Tipo 3: sem parcela
+  | 'new_installment'  // Tipo 1: parcela 01/X
+  | 'ongoing_installment' // Tipo 2: parcela N/X (N>1)
+  | 'payment';         // Tipo 4: valor negativo
+
+export interface ClassifiedTransaction extends ParsedTransaction {
+  classification: TransactionClassification;
+}
+
 interface ParseResult {
   contaDetectada: string | null;
-  transactions: ParsedTransaction[];
+  transactions: ClassifiedTransaction[];
   skippedLines: SkippedLine[];
   totalLines: number;
   lineLogs: CsvLineLogEntry[];
+}
+
+/**
+ * Normalizes a description for deduplication:
+ * - Remove multiple spaces
+ * - Uppercase
+ * - Remove city/state suffixes (e.g. "PASSO FUNDO   BRA")
+ * - Remove special characters except letters and numbers
+ * - Truncate at 40 characters
+ */
+export function normalizeDescription(desc: string): string {
+  let normalized = desc
+    .toUpperCase()
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+
+  // Remove trailing city/state patterns like "PASSO FUNDO BR", "SAO PAULO BRA"
+  normalized = normalized.replace(/\s+[A-Z]{2,3}\s*$/, '');
+  // Remove trailing location patterns like "PASSO FUNDO" after main description
+  normalized = normalized.replace(/\s{2,}[A-Z\s]+$/, '');
+
+  // Keep only letters, numbers, spaces
+  normalized = normalized.replace(/[^A-Z0-9 ]/g, '');
+
+  // Collapse spaces again after removal
+  normalized = normalized.replace(/\s{2,}/g, ' ').trim();
+
+  // Truncate at 40 chars
+  return normalized.substring(0, 40);
 }
 
 export function generateHash(data: string, descricao: string, valor: number, pessoa: string): string {
@@ -50,6 +92,40 @@ function parseDate(dateStr: string): string {
     return `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
   }
   return dateStr;
+}
+
+function parseValue(valorStr: string): number | null {
+  // Handle quoted values like "R$ 22,90" or "R$ -7.038,96"
+  let clean = valorStr
+    .replace(/"/g, '')
+    .replace('R$', '')
+    .replace(/\s/g, '')
+    .trim();
+
+  // Brazilian number format: 7.038,96 → 7038.96
+  // If has both . and , → dots are thousands, comma is decimal
+  if (clean.includes('.') && clean.includes(',')) {
+    clean = clean.replace(/\./g, '').replace(',', '.');
+  } else if (clean.includes(',')) {
+    clean = clean.replace(',', '.');
+  }
+
+  const val = parseFloat(clean);
+  return isNaN(val) ? null : val;
+}
+
+function classifyTransaction(parcela_atual: number | null, parcela_total: number | null, valor: number): TransactionClassification {
+  // Tipo 4: Payment/Refund (negative value)
+  if (valor < 0) return 'payment';
+
+  // Tipo 1: New installment (01/X where X > 1)
+  if (parcela_atual === 1 && parcela_total !== null && parcela_total > 1) return 'new_installment';
+
+  // Tipo 2: Ongoing installment (N/X where N > 1)
+  if (parcela_atual !== null && parcela_atual > 1 && parcela_total !== null) return 'ongoing_installment';
+
+  // Tipo 3: Simple transaction
+  return 'simple';
 }
 
 export function parseSicrediCSV(csvText: string): ParseResult {
@@ -72,7 +148,7 @@ export function parseSicrediCSV(csvText: string): ParseResult {
   );
 
   const skippedLines: SkippedLine[] = [];
-  const transactions: ParsedTransaction[] = [];
+  const transactions: ClassifiedTransaction[] = [];
   const lineLogs: CsvLineLogEntry[] = [];
   const hashCounts = new Map<string, number>();
 
@@ -111,6 +187,7 @@ export function parseSicrediCSV(csvText: string): ParseResult {
       return;
     }
 
+    // CSV columns: Data ; Descrição ; Parcela ; Valor ; Valor em Dólar ; Adicional ; Nome
     const parts = trimmed.split(';').map((p) => p.trim());
     if (parts.length < 3) {
       const reason = `Poucos campos (${parts.length} encontrados, mínimo 3)`;
@@ -130,6 +207,9 @@ export function parseSicrediCSV(csvText: string): ParseResult {
       valorStr = parts[2];
     }
 
+    // Extract additional fields
+    const valorDolarStr = parts.length >= 5 ? parts[4] : '';
+    const codigoCartao = parts.length >= 6 ? (parts[5] || null) : null;
     const pessoa = parts.length >= 7 ? (parts[6] || 'Djeisson Mauss') : 'Djeisson Mauss';
 
     if (!data || !descricao) {
@@ -139,50 +219,63 @@ export function parseSicrediCSV(csvText: string): ParseResult {
       return;
     }
 
-    // No date filter — credit card CSVs may have 2025 dates for installments due in 2026
-
-    let cleanVal = valorStr.replace('R$', '').replace(/\s/g, '').replace(/\./g, '').replace(',', '.').trim();
-    let valor = parseFloat(cleanVal);
-
-    if (isNaN(valor) || !valorStr) {
+    // Parse value
+    let valor = parseValue(valorStr);
+    if (valor === null) {
+      // Try other columns
       for (let pi = 2; pi < parts.length; pi++) {
-        const candidate = parts[pi].replace('R$', '').replace(/\s/g, '').replace(/\./g, '').replace(',', '.').trim();
-        const parsed = parseFloat(candidate);
-        if (!isNaN(parsed) && parsed !== 0) {
+        const parsed = parseValue(parts[pi]);
+        if (parsed !== null && parsed !== 0) {
           valor = parsed;
           break;
         }
       }
     }
 
-    if (isNaN(valor)) {
+    if (valor === null) {
       const reason = 'Valor não encontrado ou inválido';
       skippedLines.push({ lineNumber, content: trimmed, reason });
       lineLogs.push({ lineNumber, content, status: 'rejeitada', reason });
       return;
     }
 
+    // Parse parcela field: (01/12), (02/03), etc
     const parcelaMatch = parcela?.match(/\((\d+)\/(\d+)\)/);
     const parcela_atual = parcelaMatch ? parseInt(parcelaMatch[1]) : null;
     const parcela_total = parcelaMatch ? parseInt(parcelaMatch[2]) : null;
+
+    const rawValor = valor;
     const tipo = valor < 0 ? 'receita' as const : 'despesa' as const;
+    const absValor = Math.abs(valor);
     const isoDate = parseDate(data);
     const finalPessoa = pessoa || 'Djeisson Mauss';
 
-    const baseHash = generateHash(isoDate, descricao, Math.abs(valor), finalPessoa);
+    // Parse valor em dólar
+    let valorDolar: number | null = null;
+    if (valorDolarStr) {
+      valorDolar = parseValue(valorDolarStr);
+    }
+
+    const baseHash = generateHash(isoDate, descricao, absValor, finalPessoa);
     const count = hashCounts.get(baseHash) || 0;
     hashCounts.set(baseHash, count + 1);
     const hash_transacao = count > 0 ? `${baseHash}_seq${count}` : baseHash;
 
+    const classification = classifyTransaction(parcela_atual, parcela_total, rawValor);
+
     transactions.push({
       data: isoDate,
       descricao,
-      valor: Math.abs(valor),
+      descricao_normalizada: normalizeDescription(descricao),
+      valor: absValor,
       tipo,
       parcela_atual,
       parcela_total,
       pessoa: finalPessoa,
       hash_transacao,
+      codigo_cartao: codigoCartao || null,
+      valor_dolar: valorDolar,
+      classification,
       source_line_number: lineNumber,
       source_line_content: content,
     });
@@ -204,4 +297,3 @@ export function parseSicrediCSV(csvText: string): ParseResult {
     lineLogs,
   };
 }
-
