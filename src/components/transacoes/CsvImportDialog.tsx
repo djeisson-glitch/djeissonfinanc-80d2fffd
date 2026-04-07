@@ -258,7 +258,10 @@ export function CsvImportDialog({ open, onOpenChange }: Props) {
     setDueYear(defaultDue.year);
 
     if (contaDetectada && contasList) {
-      const match = contasList.find((c) => c.nome.toLowerCase().includes(contaDetectada!.toLowerCase()));
+      const match = contasList.find((c: any) =>
+        c.nome.toLowerCase().includes(contaDetectada!.toLowerCase()) ||
+        (c.numero_conta && contaDetectada === c.numero_conta)
+      );
       if (match) {
         setSelectedConta(match.id);
         setNeedsManualSelect(false);
