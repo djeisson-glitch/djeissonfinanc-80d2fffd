@@ -48,6 +48,8 @@ export default function ConfiguracoesPage() {
   const [resetDialogOpen, setResetDialogOpen] = useState(false);
   const [resetConfirm, setResetConfirm] = useState('');
   const [resetting, setResetting] = useState(false);
+  const [recategorizing, setRecategorizing] = useState(false);
+  const { categorias } = useCategorias();
   const resetKeyDown = useEnterSubmit(() => { if (resetConfirm === 'RESETAR') handleReset(); }, resetting || resetConfirm !== 'RESETAR');
 
   const displayReceita = receita ?? config?.receita_mensal_fixa ?? 13000;
