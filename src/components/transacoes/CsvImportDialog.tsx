@@ -13,6 +13,7 @@ import {
   type ClassifiedTransaction,
   type CsvLineLogEntry,
 } from "@/lib/csv-parser";
+import { autoCategorizarTransacao } from "@/lib/auto-categorize";
 import { extractPdfText, parsePdfText } from "@/lib/pdf-parser";
 import { parseOFX } from "@/lib/ofx-parser";
 import {
@@ -436,10 +437,18 @@ export function CsvImportDialog({ open, onOpenChange }: Props) {
     for (const t of importableTransactions) {
       let categoria = "Outros";
       let essencial = false;
+      
+      // 1. Check user-defined rules first
       const matchedRule = rules?.find((r) => t.descricao.toLowerCase().includes(r.padrao.toLowerCase()));
       if (matchedRule) {
         categoria = matchedRule.categoria;
         essencial = matchedRule.essencial;
+      } else {
+        // 2. Fall back to dictionary-based auto-categorization
+        const autoCategoria = autoCategorizarTransacao(t.descricao);
+        if (autoCategoria) {
+          categoria = autoCategoria;
+        }
       }
 
       const grupo_parcela = t.parcela_atual ? crypto.randomUUID() : null;
@@ -695,9 +704,28 @@ export function CsvImportDialog({ open, onOpenChange }: Props) {
     if (!context) return;
 
     setImporting(true);
-    setProgress(10);
+    setProgress(5);
 
     try {
+      // Step 0: Ensure required categories exist
+      const { data: existingCats } = await supabase
+        .from('categorias')
+        .select('nome')
+        .eq('user_id', context.currentUserId);
+      const existingNames = new Set((existingCats || []).map((c: any) => c.nome));
+      const { REQUIRED_CATEGORIES: reqCats, CATEGORY_COLORS: catColors } = await import('@/lib/auto-categorize');
+      const missingCats = reqCats.filter((name: string) => !existingNames.has(name));
+      if (missingCats.length > 0) {
+        await supabase.from('categorias').insert(
+          missingCats.map((nome: string) => ({
+            user_id: context.currentUserId,
+            nome,
+            cor: catColors[nome] || '#9ca3af',
+            parent_id: null,
+          }))
+        );
+      }
+      setProgress(10);
       const plan = preparedPlan ?? (await buildImportPlan(context.contaId, context.currentUserId));
 
       // Step 1: Delete auto-projected duplicates

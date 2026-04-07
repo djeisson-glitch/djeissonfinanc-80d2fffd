@@ -3,10 +3,11 @@ import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { CheckCircle2, XCircle, AlertTriangle, RefreshCw, ChevronDown, ChevronRight } from 'lucide-react';
+import { CheckCircle2, XCircle, AlertTriangle, RefreshCw, ChevronDown, ChevronRight, Sparkles } from 'lucide-react';
 import { useEnterSubmit } from '@/hooks/useEnterSubmit';
 import { useState } from 'react';
 import type { ClassifiedTransaction } from '@/lib/csv-parser';
+import { autoCategorizarTransacao } from '@/lib/auto-categorize';
 
 export interface InstallmentGroup {
   descricao: string;
@@ -170,21 +171,35 @@ export function CsvImportPreviewV2({ data, onBack, onConfirm, confirming }: Prop
                       <TableRow>
                         <TableHead className="w-24">Data</TableHead>
                         <TableHead>Descrição</TableHead>
+                        <TableHead className="w-36">Categoria</TableHead>
                         <TableHead className="w-28 text-right">Valor</TableHead>
                         <TableHead className="w-32">Pessoa</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {data.simpleTransactions.map((t, i) => (
-                        <TableRow key={i}>
-                          <TableCell className="text-xs">{formatDate(t.data)}</TableCell>
-                          <TableCell className="text-xs">{t.descricao}</TableCell>
-                          <TableCell className="text-xs text-right font-mono">
-                            {formatCurrency(t.valor)}
-                          </TableCell>
-                          <TableCell className="text-xs">{t.pessoa}</TableCell>
-                        </TableRow>
-                      ))}
+                      {data.simpleTransactions.map((t, i) => {
+                        const autoCat = autoCategorizarTransacao(t.descricao);
+                        return (
+                          <TableRow key={i}>
+                            <TableCell className="text-xs">{formatDate(t.data)}</TableCell>
+                            <TableCell className="text-xs">{t.descricao}</TableCell>
+                            <TableCell className="text-xs">
+                              {autoCat ? (
+                                <span className="flex items-center gap-1">
+                                  <Badge variant="outline" className="text-xs">{autoCat}</Badge>
+                                  <Sparkles className="h-3 w-3 text-amber-500" />
+                                </span>
+                              ) : (
+                                <span className="text-muted-foreground">Outros</span>
+                              )}
+                            </TableCell>
+                            <TableCell className="text-xs text-right font-mono">
+                              {formatCurrency(t.valor)}
+                            </TableCell>
+                            <TableCell className="text-xs">{t.pessoa}</TableCell>
+                          </TableRow>
+                        );
+                      })}
                     </TableBody>
                   </Table>
                 </CollapsibleContent>
@@ -256,24 +271,38 @@ export function CsvImportPreviewV2({ data, onBack, onConfirm, confirming }: Prop
                         <TableHead className="w-24">Data</TableHead>
                         <TableHead>Descrição</TableHead>
                         <TableHead className="w-20">Parcela</TableHead>
+                        <TableHead className="w-36">Categoria</TableHead>
                         <TableHead className="w-28 text-right">Valor</TableHead>
                         <TableHead className="w-32">Pessoa</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {data.ongoingInstallments.map((t, i) => (
-                        <TableRow key={i}>
-                          <TableCell className="text-xs">{formatDate(t.data)}</TableCell>
-                          <TableCell className="text-xs">{t.descricao}</TableCell>
-                          <TableCell className="text-xs">
-                            {t.parcela_atual}/{t.parcela_total}
-                          </TableCell>
-                          <TableCell className="text-xs text-right font-mono">
-                            {formatCurrency(t.valor)}
-                          </TableCell>
-                          <TableCell className="text-xs">{t.pessoa}</TableCell>
-                        </TableRow>
-                      ))}
+                      {data.ongoingInstallments.map((t, i) => {
+                        const autoCat = autoCategorizarTransacao(t.descricao);
+                        return (
+                          <TableRow key={i}>
+                            <TableCell className="text-xs">{formatDate(t.data)}</TableCell>
+                            <TableCell className="text-xs">{t.descricao}</TableCell>
+                            <TableCell className="text-xs">
+                              {t.parcela_atual}/{t.parcela_total}
+                            </TableCell>
+                            <TableCell className="text-xs">
+                              {autoCat ? (
+                                <span className="flex items-center gap-1">
+                                  <Badge variant="outline" className="text-xs">{autoCat}</Badge>
+                                  <Sparkles className="h-3 w-3 text-amber-500" />
+                                </span>
+                              ) : (
+                                <span className="text-muted-foreground">Outros</span>
+                              )}
+                            </TableCell>
+                            <TableCell className="text-xs text-right font-mono">
+                              {formatCurrency(t.valor)}
+                            </TableCell>
+                            <TableCell className="text-xs">{t.pessoa}</TableCell>
+                          </TableRow>
+                        );
+                      })}
                     </TableBody>
                   </Table>
                 </CollapsibleContent>
