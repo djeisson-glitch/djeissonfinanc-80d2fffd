@@ -115,32 +115,38 @@ export function ParcelasTimeline({ parcelas }: ParcelasTimelineProps) {
         </CardContent>
       </Card>
 
-      {endingMonths.length > 0 && (
-        <Card className="md:col-span-2">
-          <CardHeader>
-            <CardTitle className="text-lg">Parcelas que Terminam</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
-              {endingMonths.map(m => {
-                const economia = m.terminam.reduce((s, t) => s + t.valor, 0);
-                const count = m.terminam.length;
-                return (
-                  <button
-                    key={m.mesKey}
-                    onClick={() => setSelectedEnding(m)}
-                    className={`rounded-lg px-3 py-4 text-center transition-transform hover:scale-105 cursor-pointer ${getIntensityClasses(economia)}`}
-                  >
-                    <p className="text-[11px] font-medium opacity-70">{m.mes}</p>
-                    <p className="text-lg font-bold mt-1">{formatCurrency(economia)}</p>
-                    <p className="text-[11px] opacity-60">{count} parcela{count > 1 ? 's' : ''}</p>
-                  </button>
-                );
-              })}
-            </div>
-          </CardContent>
-        </Card>
-      )}
+      <Card className="md:col-span-2">
+        <CardHeader>
+          <CardTitle className="text-lg">Parcelas que Terminam</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-6 gap-3">
+            {monthGroups.map(m => {
+              const economia = m.terminam.reduce((s, t) => s + t.valor, 0);
+              const count = m.terminam.length;
+              const hasEnding = count > 0;
+              return (
+                <button
+                  key={m.mesKey}
+                  onClick={() => hasEnding && setSelectedEnding(m)}
+                  disabled={!hasEnding}
+                  className={`rounded-lg px-3 py-4 text-center transition-transform ${
+                    hasEnding
+                      ? `cursor-pointer hover:scale-105 ${m.isCurrent ? 'ring-2 ring-primary ' : ''}${getIntensityClasses(economia)}`
+                      : `cursor-default ${m.isPast ? 'bg-muted/30 text-muted-foreground/50' : 'bg-muted/50 text-muted-foreground'}`
+                  }`}
+                >
+                  <p className="text-[11px] font-medium opacity-70">{m.mes}</p>
+                  <p className={`text-lg font-bold mt-1 ${!hasEnding ? 'opacity-40' : ''}`}>
+                    {hasEnding ? formatCurrency(economia) : '—'}
+                  </p>
+                  {hasEnding && <p className="text-[11px] opacity-60">{count} parcela{count > 1 ? 's' : ''}</p>}
+                </button>
+              );
+            })}
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Modal: parcelas do mês */}
       <Dialog open={!!selectedMonth} onOpenChange={() => setSelectedMonth(null)}>
