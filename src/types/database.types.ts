@@ -13,6 +13,11 @@ export interface Conta {
   nome: string;
   tipo: 'credito' | 'debito';
   saldo_inicial: number;
+  data_abertura: string;
+  banco: string;
+  codigo_banco: string;
+  agencia: string;
+  numero_conta: string;
   created_at: string;
 }
 
