@@ -547,7 +547,7 @@ export function CsvImportDialog({ open, onOpenChange }: Props) {
       valorParcela: t.valor,
       totalParcelas: t.parcela_total!,
       valorTotal: t.valor * t.parcela_total!,
-      dataInicio: t._data_original,
+      dataInicio: (t as any)._data_original || t.data,
       pessoa: t.pessoa,
       transactions: [t],
     }));
