@@ -636,10 +636,7 @@ export function CsvImportDialog({ open, onOpenChange }: Props) {
     const context = validateBeforeImport();
     if (!context) return;
 
-    if (fileType === "ofx") {
-      await handleImport();
-      return;
-    }
+    // All file types now use preview
 
     setImporting(true);
     setProgress(5);
