@@ -247,6 +247,53 @@ export type Database = {
         }
         Relationships: []
       }
+      projecoes_manuais: {
+        Row: {
+          categoria_id: string | null
+          categoria_nome: string
+          created_at: string
+          descricao: string | null
+          id: string
+          mes: string
+          tipo: string
+          updated_at: string
+          user_id: string
+          valor: number
+        }
+        Insert: {
+          categoria_id?: string | null
+          categoria_nome?: string
+          created_at?: string
+          descricao?: string | null
+          id?: string
+          mes: string
+          tipo?: string
+          updated_at?: string
+          user_id: string
+          valor: number
+        }
+        Update: {
+          categoria_id?: string | null
+          categoria_nome?: string
+          created_at?: string
+          descricao?: string | null
+          id?: string
+          mes?: string
+          tipo?: string
+          updated_at?: string
+          user_id?: string
+          valor?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "projecoes_manuais_categoria_id_fkey"
+            columns: ["categoria_id"]
+            isOneToOne: false
+            referencedRelation: "categorias"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       regras_categorizacao: {
         Row: {
           aprendido_auto: boolean
