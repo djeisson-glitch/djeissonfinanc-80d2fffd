@@ -652,7 +652,7 @@ export function CsvImportDialog({ open, onOpenChange }: Props) {
         setConflictContext({ contaId: err.contaId, userId: err.userId });
       } else {
         console.error(err);
-        toast({ title: "Erro ao analisar o CSV", variant: "destructive" });
+        toast({ title: "Erro ao analisar o arquivo", variant: "destructive" });
       }
     } finally {
       setImporting(false);
