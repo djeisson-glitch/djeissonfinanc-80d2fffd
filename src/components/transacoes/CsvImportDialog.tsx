@@ -861,7 +861,7 @@ export function CsvImportDialog({ open, onOpenChange }: Props) {
         <DialogContent className="sm:max-w-5xl">
           <DialogHeader>
             <DialogTitle>Importar Extrato</DialogTitle>
-            <DialogDescription>Faça upload do arquivo CSV ou OFX do seu banco</DialogDescription>
+            <DialogDescription>Faça upload do arquivo CSV, OFX ou PDF do seu banco</DialogDescription>
           </DialogHeader>
 
           {!result ? (
@@ -878,8 +878,8 @@ export function CsvImportDialog({ open, onOpenChange }: Props) {
                   <label className="flex flex-col items-center justify-center border-2 border-dashed rounded-lg p-8 cursor-pointer hover:border-foreground/30 transition-colors">
                     <Upload className="h-8 w-8 text-muted-foreground mb-2" />
                     <span className="text-sm text-muted-foreground">Clique para selecionar um arquivo</span>
-                    <span className="text-xs text-muted-foreground mt-1">.csv ou .ofx — Máximo 5MB</span>
-                    <input type="file" accept=".csv,.ofx" className="hidden" onChange={handleFileSelect} />
+                    <span className="text-xs text-muted-foreground mt-1">.csv, .ofx ou .pdf — Máximo 10MB</span>
+                    <input type="file" accept=".csv,.ofx,.pdf" className="hidden" onChange={handleFileSelect} />
                   </label>
                 ) : (
                   <>
@@ -888,8 +888,8 @@ export function CsvImportDialog({ open, onOpenChange }: Props) {
                       <div className="flex-1 min-w-0">
                         <span className="text-sm font-medium truncate block">{file.name}</span>
                         <span className="text-xs text-muted-foreground">
-                          {fileType === "ofx" ? "OFX" : "CSV"} —{" "}
-                          {fileType === "csv"
+                          {fileType === "ofx" ? "OFX" : fileType === "pdf" ? "PDF" : "CSV"} —{" "}
+                          {fileType === "csv" || fileType === "pdf"
                             ? `${parsedTotalLines} linhas lidas / ${parsedTransactions.length} transações válidas`
                             : `${parsedTransactions.length} transações encontradas`}
                         </span>
