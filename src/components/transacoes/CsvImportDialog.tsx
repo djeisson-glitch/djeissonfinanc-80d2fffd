@@ -13,6 +13,7 @@ import {
   type ClassifiedTransaction,
   type CsvLineLogEntry,
 } from "@/lib/csv-parser";
+import { autoCategorizarTransacao } from "@/lib/auto-categorize";
 import { extractPdfText, parsePdfText } from "@/lib/pdf-parser";
 import { parseOFX } from "@/lib/ofx-parser";
 import {
