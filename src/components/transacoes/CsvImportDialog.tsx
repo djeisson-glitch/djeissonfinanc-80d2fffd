@@ -13,6 +13,7 @@ import {
   type ClassifiedTransaction,
   type CsvLineLogEntry,
 } from "@/lib/csv-parser";
+import { extractPdfText, parsePdfText } from "@/lib/pdf-parser";
 import { parseOFX } from "@/lib/ofx-parser";
 import {
   projectFutureInstallments,
@@ -96,7 +97,7 @@ export function CsvImportDialog({ open, onOpenChange }: Props) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [file, setFile] = useState<File | null>(null);
-  const [fileType, setFileType] = useState<"csv" | "ofx" | null>(null);
+  const [fileType, setFileType] = useState<"csv" | "ofx" | "pdf" | null>(null);
   const [contas, setContas] = useState<{ id: string; nome: string; tipo: string }[]>([]);
   const [selectedConta, setSelectedConta] = useState<string>("");
   const [detectedConta, setDetectedConta] = useState<string | null>(null);
@@ -152,23 +153,22 @@ export function CsvImportDialog({ open, onOpenChange }: Props) {
     if (!f) return;
 
     const ext = f.name.split(".").pop()?.toLowerCase();
-    if (ext !== "csv" && ext !== "ofx") {
-      toast({ title: "Apenas arquivos .csv ou .ofx", variant: "destructive" });
+    if (ext !== "csv" && ext !== "ofx" && ext !== "pdf") {
+      toast({ title: "Apenas arquivos .csv, .ofx ou .pdf", variant: "destructive" });
       return;
     }
-    if (f.size > 5 * 1024 * 1024) {
-      toast({ title: "Arquivo muito grande (máx 5MB)", variant: "destructive" });
+    if (f.size > 10 * 1024 * 1024) {
+      toast({ title: "Arquivo muito grande (máx 10MB)", variant: "destructive" });
       return;
     }
 
     setFile(f);
-    setFileType(ext as "csv" | "ofx");
+    setFileType(ext as "csv" | "ofx" | "pdf");
     setResult(null);
     setPreparedPlan(null);
     setDueConfirmed(false);
     const contasList = await loadContas();
 
-    const text = await f.text();
     let contaDetectada: string | null = null;
     let transactions: ClassifiedTransaction[] = [];
     let accountType: "corrente" | "credito" | null = null;
@@ -176,11 +176,44 @@ export function CsvImportDialog({ open, onOpenChange }: Props) {
     let totalLines = 0;
     let lineLogs: CsvLineLogEntry[] = [];
 
-    if (ext === "ofx") {
+    if (ext === "pdf") {
+      try {
+        const pages = await extractPdfText(f);
+        if (pages.every((p) => p.trim().length < 10)) {
+          toast({
+            title: "PDF sem texto extraível",
+            description: "Este PDF pode ser uma imagem escaneada. Tente exportar diretamente do app/banco.",
+            variant: "destructive",
+          });
+          setFile(null);
+          setFileType(null);
+          return;
+        }
+        const parsed = parsePdfText(pages);
+        transactions = parsed.transactions;
+        skippedLines = parsed.skippedLines;
+        totalLines = parsed.totalLines;
+        lineLogs = parsed.lineLogs;
+        contaDetectada = parsed.institution;
+      } catch (err: any) {
+        if (err?.message === "PDF_PASSWORD") {
+          toast({
+            title: "PDF protegido por senha",
+            description: "Este PDF está protegido. Remova a senha ou exporte novamente sem proteção.",
+            variant: "destructive",
+          });
+        } else {
+          toast({ title: "Erro ao ler PDF", description: String(err?.message || err), variant: "destructive" });
+        }
+        setFile(null);
+        setFileType(null);
+        return;
+      }
+    } else if (ext === "ofx") {
+      const text = await f.text();
       const parsed = parseOFX(text);
       contaDetectada = parsed.contaDetectada;
       accountType = parsed.accountType;
-      // Convert OFX transactions to ClassifiedTransaction
       transactions = parsed.transactions.map((t) => ({
         ...t,
         descricao_normalizada: normalizeDescription(t.descricao),
@@ -189,6 +222,7 @@ export function CsvImportDialog({ open, onOpenChange }: Props) {
         classification: t.tipo === 'receita' ? 'payment' as const : 'simple' as const,
       }));
     } else {
+      const text = await f.text();
       const parsed = parseSicrediCSV(text);
       contaDetectada = parsed.contaDetectada;
       transactions = parsed.transactions;
@@ -590,7 +624,7 @@ export function CsvImportDialog({ open, onOpenChange }: Props) {
     const context = validateBeforeImport();
     if (!context) return;
 
-    if (fileType !== "csv") {
+    if (fileType === "ofx") {
       await handleImport();
       return;
     }
@@ -618,7 +652,7 @@ export function CsvImportDialog({ open, onOpenChange }: Props) {
         setConflictContext({ contaId: err.contaId, userId: err.userId });
       } else {
         console.error(err);
-        toast({ title: "Erro ao analisar o CSV", variant: "destructive" });
+        toast({ title: "Erro ao analisar o arquivo", variant: "destructive" });
       }
     } finally {
       setImporting(false);
@@ -827,7 +861,7 @@ export function CsvImportDialog({ open, onOpenChange }: Props) {
         <DialogContent className="sm:max-w-5xl">
           <DialogHeader>
             <DialogTitle>Importar Extrato</DialogTitle>
-            <DialogDescription>Faça upload do arquivo CSV ou OFX do seu banco</DialogDescription>
+            <DialogDescription>Faça upload do arquivo CSV, OFX ou PDF do seu banco</DialogDescription>
           </DialogHeader>
 
           {!result ? (
@@ -844,8 +878,8 @@ export function CsvImportDialog({ open, onOpenChange }: Props) {
                   <label className="flex flex-col items-center justify-center border-2 border-dashed rounded-lg p-8 cursor-pointer hover:border-foreground/30 transition-colors">
                     <Upload className="h-8 w-8 text-muted-foreground mb-2" />
                     <span className="text-sm text-muted-foreground">Clique para selecionar um arquivo</span>
-                    <span className="text-xs text-muted-foreground mt-1">.csv ou .ofx — Máximo 5MB</span>
-                    <input type="file" accept=".csv,.ofx" className="hidden" onChange={handleFileSelect} />
+                    <span className="text-xs text-muted-foreground mt-1">.csv, .ofx ou .pdf — Máximo 10MB</span>
+                    <input type="file" accept=".csv,.ofx,.pdf" className="hidden" onChange={handleFileSelect} />
                   </label>
                 ) : (
                   <>
@@ -854,8 +888,8 @@ export function CsvImportDialog({ open, onOpenChange }: Props) {
                       <div className="flex-1 min-w-0">
                         <span className="text-sm font-medium truncate block">{file.name}</span>
                         <span className="text-xs text-muted-foreground">
-                          {fileType === "ofx" ? "OFX" : "CSV"} —{" "}
-                          {fileType === "csv"
+                          {fileType === "ofx" ? "OFX" : fileType === "pdf" ? "PDF" : "CSV"} —{" "}
+                          {fileType === "csv" || fileType === "pdf"
                             ? `${parsedTotalLines} linhas lidas / ${parsedTransactions.length} transações válidas`
                             : `${parsedTransactions.length} transações encontradas`}
                         </span>
@@ -973,15 +1007,15 @@ export function CsvImportDialog({ open, onOpenChange }: Props) {
                     {importing && <Progress value={progress} />}
 
                     <Button
-                      onClick={fileType === "csv" ? handleOpenPreview : handleImport}
+                      onClick={fileType === "csv" || fileType === "pdf" ? handleOpenPreview : handleImport}
                       disabled={importing || (isCredito && !dueConfirmed)}
                       className="w-full"
                     >
                       {importing
-                        ? fileType === "csv"
-                          ? "Analisando linhas do CSV..."
+                        ? fileType === "csv" || fileType === "pdf"
+                          ? "Analisando transações..."
                           : "Importando..."
-                        : fileType === "csv"
+                        : fileType === "csv" || fileType === "pdf"
                           ? `Revisar ${parsedTransactions.length} transações antes de importar`
                           : `Importar ${parsedTransactions.length} Transações`}
                     </Button>

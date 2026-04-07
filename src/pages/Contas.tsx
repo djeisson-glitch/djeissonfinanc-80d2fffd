@@ -11,9 +11,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import { useState } from 'react';
-import { Plus, CreditCard, Banknote, DollarSign } from 'lucide-react';
+import { Plus, CreditCard, Banknote, DollarSign, CalendarDays } from 'lucide-react';
 import { PaymentModal } from '@/components/contas/PaymentModal';
 import { MonthSelector } from '@/components/MonthSelector';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Calendar } from '@/components/ui/calendar';
+import { cn } from '@/lib/utils';
+import { format, parse } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
 
 function getInvoiceStatus(fatura: number, pagamento: number): { label: string; color: string; variant: 'default' | 'destructive' | 'outline' | 'secondary' } {
   if (fatura <= 0) return { label: 'Sem fatura', color: '#9ca3af', variant: 'secondary' };
@@ -31,6 +36,7 @@ export default function ContasPage() {
   const [nome, setNome] = useState('');
   const [tipo, setTipo] = useState<'credito' | 'debito'>('debito');
   const [saldoInicial, setSaldoInicial] = useState(0);
+  const [dataAbertura, setDataAbertura] = useState<Date>(new Date(2026, 0, 1));
   const [paymentConta, setPaymentConta] = useState<{ id: string; nome: string; fatura: number } | null>(null);
 
   const now = new Date();
@@ -101,14 +107,39 @@ export default function ContasPage() {
 
   const saveMutation = useMutation({
     mutationFn: async () => {
+      const dataAberturaStr = format(dataAbertura, 'yyyy-MM-dd');
+      const finalSaldo = tipo === 'credito' ? 0 : saldoInicial;
+
       if (editConta) {
-        await supabase.from('contas').update({ nome, tipo, saldo_inicial: saldoInicial }).eq('id', editConta.id);
+        await supabase.from('contas').update({ nome, tipo, saldo_inicial: finalSaldo, data_abertura: dataAberturaStr }).eq('id', editConta.id);
       } else {
-        await supabase.from('contas').insert({ user_id: user!.id, nome, tipo, saldo_inicial: saldoInicial });
+        const { data: newConta, error } = await supabase.from('contas').insert({ user_id: user!.id, nome, tipo, saldo_inicial: finalSaldo, data_abertura: dataAberturaStr }).select('id').single();
+        if (error) throw error;
+
+        // Create opening balance transaction for debit accounts
+        if (tipo !== 'credito' && finalSaldo !== 0) {
+          const txTipo = finalSaldo > 0 ? 'receita' : 'despesa';
+          const hash = `saldo_abertura_${newConta.id}_${Date.now()}`;
+          await supabase.from('transacoes').insert({
+            user_id: user!.id,
+            conta_id: newConta.id,
+            data: dataAberturaStr,
+            descricao: 'Saldo de Abertura',
+            descricao_normalizada: 'SALDO DE ABERTURA',
+            valor: Math.abs(finalSaldo),
+            categoria: 'Saldo Inicial',
+            tipo: txTipo,
+            essencial: false,
+            hash_transacao: hash,
+            pessoa: 'Sistema',
+            ignorar_dashboard: true,
+          });
+        }
       }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['contas'] });
+      queryClient.invalidateQueries({ queryKey: ['saldos'] });
       setDialogOpen(false);
       resetForm();
       toast({ title: editConta ? 'Conta atualizada' : 'Conta criada' });
@@ -120,6 +151,7 @@ export default function ContasPage() {
     setNome('');
     setTipo('debito');
     setSaldoInicial(0);
+    setDataAbertura(new Date(2026, 0, 1));
   };
 
   const openEdit = (conta: any) => {
@@ -127,6 +159,7 @@ export default function ContasPage() {
     setNome(conta.nome);
     setTipo(conta.tipo);
     setSaldoInicial(conta.saldo_inicial);
+    setDataAbertura(conta.data_abertura ? new Date(conta.data_abertura + 'T00:00:00') : new Date(2026, 0, 1));
     setDialogOpen(true);
   };
 
@@ -240,9 +273,29 @@ export default function ContasPage() {
               </Select>
             </div>
             <div className="space-y-2">
-              <Label>Saldo Inicial (R$)</Label>
-              <Input type="number" value={saldoInicial} onChange={e => setSaldoInicial(Number(e.target.value))} />
+              <Label>Data de Abertura</Label>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button variant="outline" className={cn("w-full justify-start text-left font-normal", !dataAbertura && "text-muted-foreground")}>
+                    <CalendarDays className="mr-2 h-4 w-4" />
+                    {format(dataAbertura, "dd/MM/yyyy")}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="start">
+                  <Calendar mode="single" selected={dataAbertura} onSelect={(d) => d && setDataAbertura(d)} initialFocus className={cn("p-3 pointer-events-auto")} />
+                </PopoverContent>
+              </Popover>
             </div>
+            {tipo !== 'credito' && (
+              <div className="space-y-2">
+                <Label>Saldo Inicial (R$)</Label>
+                <Input type="number" value={saldoInicial} onChange={e => setSaldoInicial(Number(e.target.value))} />
+                <p className="text-xs text-muted-foreground">Saldo na data de abertura. Para cartões de crédito, sempre R$ 0,00.</p>
+              </div>
+            )}
+            {tipo === 'credito' && (
+              <p className="text-xs text-muted-foreground">Cartões de crédito não possuem saldo próprio.</p>
+            )}
             <Button className="w-full" type="submit" disabled={!nome}>
               {editConta ? 'Salvar' : 'Criar'}
             </Button>
