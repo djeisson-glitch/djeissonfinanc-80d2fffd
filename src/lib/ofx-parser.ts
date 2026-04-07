@@ -57,18 +57,17 @@ function extractAllBlocks(text: string, tag: string): string[] {
 function autoCategorizeMemo(memo: string): { categoria: string; essencial: boolean; classification: TransactionClassification } | null {
   const upper = memo.toUpperCase();
 
+  // Payment detection (affects classification)
   if (upper.includes('PAGTO FATURA') || upper.includes('PAGAMENTO FATURA') || upper.includes('PAG FAT')) {
     return { categoria: 'Pagamento de Fatura', essencial: false, classification: 'payment' };
   }
-  if (upper.includes('LIQUIDACAO DE PARCELA') || upper.includes('LIQUID PARCELA')) {
-    return { categoria: 'Empréstimos', essencial: false, classification: 'simple' };
+
+  // Use the centralized dictionary for categorization
+  const autoCat = autoCategorizarTransacao(memo);
+  if (autoCat) {
+    return { categoria: autoCat, essencial: false, classification: 'simple' };
   }
-  if (upper.includes('IOF')) {
-    return { categoria: 'Operação bancária', essencial: false, classification: 'simple' };
-  }
-  if (upper.includes('CESTA DE RELACIONAMENTO') || upper.includes('TARIFA')) {
-    return { categoria: 'Operação bancária', essencial: false, classification: 'simple' };
-  }
+
   return null;
 }
 
