@@ -37,6 +37,10 @@ export default function ContasPage() {
   const [tipo, setTipo] = useState<'credito' | 'debito'>('debito');
   const [saldoInicial, setSaldoInicial] = useState(0);
   const [dataAbertura, setDataAbertura] = useState<Date>(new Date(2026, 0, 1));
+  const [banco, setBanco] = useState('');
+  const [codigoBanco, setCodigoBanco] = useState('');
+  const [agencia, setAgencia] = useState('');
+  const [numeroConta, setNumeroConta] = useState('');
   const [paymentConta, setPaymentConta] = useState<{ id: string; nome: string; fatura: number } | null>(null);
 
   const now = new Date();
