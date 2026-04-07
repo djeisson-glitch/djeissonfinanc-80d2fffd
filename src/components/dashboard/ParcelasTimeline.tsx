@@ -24,6 +24,8 @@ interface MonthGroup {
   total: number;
   items: Parcela[];
   terminam: { descricao: string; valor: number; parcelaInfo: string }[];
+  isCurrent: boolean;
+  isPast: boolean;
 }
 
 export function ParcelasTimeline({ parcelas }: ParcelasTimelineProps) {
