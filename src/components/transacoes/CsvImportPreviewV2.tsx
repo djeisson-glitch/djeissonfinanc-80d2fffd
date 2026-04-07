@@ -3,10 +3,11 @@ import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { CheckCircle2, XCircle, AlertTriangle, RefreshCw, ChevronDown, ChevronRight } from 'lucide-react';
+import { CheckCircle2, XCircle, AlertTriangle, RefreshCw, ChevronDown, ChevronRight, Sparkles } from 'lucide-react';
 import { useEnterSubmit } from '@/hooks/useEnterSubmit';
 import { useState } from 'react';
 import type { ClassifiedTransaction } from '@/lib/csv-parser';
+import { autoCategorizarTransacao } from '@/lib/auto-categorize';
 
 export interface InstallmentGroup {
   descricao: string;
