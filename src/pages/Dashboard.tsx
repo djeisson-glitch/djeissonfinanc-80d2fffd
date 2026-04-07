@@ -13,6 +13,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { AlertTriangle, BarChart3, CreditCard } from 'lucide-react';
 import { MonthSelector } from '@/components/MonthSelector';
 import { ParcelasTimeline } from '@/components/dashboard/ParcelasTimeline';
+import { AiInsightsCard } from '@/components/dashboard/AiInsightsCard';
 
 export default function DashboardPage() {
   const { user } = useAuth();
@@ -293,6 +294,24 @@ export default function DashboardPage() {
 
         <ParcelasTimeline parcelas={parcelasFuturas || []} />
 
+
+        <AiInsightsCard context={{
+          receita,
+          totalDespesas,
+          totalReceitas,
+          saldoProjetado,
+          percentGasto,
+          reserva,
+          totalEssencial,
+          totalNaoEssencial,
+          pctEssencial,
+          topCategorias: categoryRanking.slice(0, 5),
+          parcelasAtivas: parcelasFuturas?.length,
+          faturasPendentes: creditCards.filter(c => {
+            const f = faturaData?.[c.id];
+            return f && f.despesas > 0 && f.pagamentos < f.despesas;
+          }).length,
+        }} />
 
         <Card className="md:col-span-2">
           <CardHeader>

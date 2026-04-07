@@ -7,6 +7,7 @@ import { Slider } from '@/components/ui/slider';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Home, TrendingDown, TrendingUp } from 'lucide-react';
+import { AiFinancingAnalysis } from './AiFinancingAnalysis';
 import {
   LineChart,
   Line,
@@ -276,6 +277,25 @@ export function FinanciamentoCalculadora({ receitaMensal, totalDespesasMensal }:
               </div>
             </CardContent>
           </Card>
+
+          {/* AI Analysis */}
+          <AiFinancingAnalysis context={{
+            valorImovel: valorImovelNum,
+            entrada: entradaNum,
+            percEntrada,
+            financiado,
+            taxaAnual: taxaAnualNum,
+            prazoAnos,
+            sistema,
+            parcelaInicial: calc.parcelaInicial,
+            totalJuros: calc.totalJuros,
+            receitaMensal,
+            despesasMensais: totalDespesasMensal,
+            saldoLivre: receitaMensal - totalDespesasMensal,
+            saldoComFinanciamento: calc.saldoComFinanciamento,
+            percRenda: calc.percRenda,
+            semaforo: calc.semaforo,
+          }} />
 
           {/* Context from user data */}
           <Card>
