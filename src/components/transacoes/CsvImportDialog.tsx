@@ -214,13 +214,25 @@ export function CsvImportDialog({ open, onOpenChange }: Props) {
       const parsed = parseOFX(text);
       contaDetectada = parsed.contaDetectada;
       accountType = parsed.accountType;
-      transactions = parsed.transactions.map((t) => ({
-        ...t,
-        descricao_normalizada: normalizeDescription(t.descricao),
-        codigo_cartao: null,
-        valor_dolar: null,
-        classification: t.tipo === 'receita' ? 'payment' as const : 'simple' as const,
+      transactions = parsed.transactions;
+
+      // Try matching by account number
+      if (parsed.accountNumber && contasList) {
+        const matchByNum = contasList.find((c: any) => c.numero_conta === parsed.accountNumber);
+        if (matchByNum) {
+          contaDetectada = matchByNum.nome;
+        }
+      }
+
+      // Generate lineLogs for OFX
+      lineLogs = transactions.map((t, i) => ({
+        lineNumber: i + 1,
+        content: `${t.data} | ${t.descricao} | ${t.valor}`,
+        status: 'importada' as const,
+        reason: 'Transação OFX',
+        hash_transacao: t.hash_transacao,
       }));
+      totalLines = transactions.length;
     } else {
       const text = await f.text();
       const parsed = parseSicrediCSV(text);
