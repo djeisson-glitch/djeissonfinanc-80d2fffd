@@ -143,7 +143,7 @@ export function CsvImportDialog({ open, onOpenChange }: Props) {
 
   const loadContas = useCallback(async () => {
     if (!user) return;
-    const { data } = await supabase.from("contas").select("id, nome, tipo").eq("user_id", user.id);
+    const { data } = await supabase.from("contas").select("id, nome, tipo, numero_conta").eq("user_id", user.id);
     setContas(data || []);
     return data || [];
   }, [user]);
@@ -214,13 +214,25 @@ export function CsvImportDialog({ open, onOpenChange }: Props) {
       const parsed = parseOFX(text);
       contaDetectada = parsed.contaDetectada;
       accountType = parsed.accountType;
-      transactions = parsed.transactions.map((t) => ({
-        ...t,
-        descricao_normalizada: normalizeDescription(t.descricao),
-        codigo_cartao: null,
-        valor_dolar: null,
-        classification: t.tipo === 'receita' ? 'payment' as const : 'simple' as const,
+      transactions = parsed.transactions;
+
+      // Try matching by account number
+      if (parsed.accountNumber && contasList) {
+        const matchByNum = contasList.find((c: any) => c.numero_conta === parsed.accountNumber);
+        if (matchByNum) {
+          contaDetectada = matchByNum.nome;
+        }
+      }
+
+      // Generate lineLogs for OFX
+      lineLogs = transactions.map((t, i) => ({
+        lineNumber: i + 1,
+        content: `${t.data} | ${t.descricao} | ${t.valor}`,
+        status: 'importada' as const,
+        reason: 'Transação OFX',
+        hash_transacao: t.hash_transacao,
       }));
+      totalLines = transactions.length;
     } else {
       const text = await f.text();
       const parsed = parseSicrediCSV(text);
@@ -246,7 +258,10 @@ export function CsvImportDialog({ open, onOpenChange }: Props) {
     setDueYear(defaultDue.year);
 
     if (contaDetectada && contasList) {
-      const match = contasList.find((c) => c.nome.toLowerCase().includes(contaDetectada!.toLowerCase()));
+      const match = contasList.find((c: any) =>
+        c.nome.toLowerCase().includes(contaDetectada!.toLowerCase()) ||
+        (c.numero_conta && contaDetectada === c.numero_conta)
+      );
       if (match) {
         setSelectedConta(match.id);
         setNeedsManualSelect(false);
@@ -624,10 +639,7 @@ export function CsvImportDialog({ open, onOpenChange }: Props) {
     const context = validateBeforeImport();
     if (!context) return;
 
-    if (fileType === "ofx") {
-      await handleImport();
-      return;
-    }
+    // All file types now use preview
 
     setImporting(true);
     setProgress(5);
@@ -1007,17 +1019,13 @@ export function CsvImportDialog({ open, onOpenChange }: Props) {
                     {importing && <Progress value={progress} />}
 
                     <Button
-                      onClick={fileType === "csv" || fileType === "pdf" ? handleOpenPreview : handleImport}
+                      onClick={handleOpenPreview}
                       disabled={importing || (isCredito && !dueConfirmed)}
                       className="w-full"
                     >
                       {importing
-                        ? fileType === "csv" || fileType === "pdf"
-                          ? "Analisando transações..."
-                          : "Importando..."
-                        : fileType === "csv" || fileType === "pdf"
-                          ? `Revisar ${parsedTransactions.length} transações antes de importar`
-                          : `Importar ${parsedTransactions.length} Transações`}
+                        ? "Analisando transações..."
+                        : `Revisar ${parsedTransactions.length} transações antes de importar`}
                     </Button>
                   </>
                 )}

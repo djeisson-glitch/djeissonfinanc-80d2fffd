@@ -37,6 +37,10 @@ export default function ContasPage() {
   const [tipo, setTipo] = useState<'credito' | 'debito'>('debito');
   const [saldoInicial, setSaldoInicial] = useState(0);
   const [dataAbertura, setDataAbertura] = useState<Date>(new Date(2026, 0, 1));
+  const [banco, setBanco] = useState('');
+  const [codigoBanco, setCodigoBanco] = useState('');
+  const [agencia, setAgencia] = useState('');
+  const [numeroConta, setNumeroConta] = useState('');
   const [paymentConta, setPaymentConta] = useState<{ id: string; nome: string; fatura: number } | null>(null);
 
   const now = new Date();
@@ -111,9 +115,9 @@ export default function ContasPage() {
       const finalSaldo = tipo === 'credito' ? 0 : saldoInicial;
 
       if (editConta) {
-        await supabase.from('contas').update({ nome, tipo, saldo_inicial: finalSaldo, data_abertura: dataAberturaStr }).eq('id', editConta.id);
+        await supabase.from('contas').update({ nome, tipo, saldo_inicial: finalSaldo, data_abertura: dataAberturaStr, banco: banco || null, codigo_banco: codigoBanco || null, agencia: agencia || null, numero_conta: numeroConta || null }).eq('id', editConta.id);
       } else {
-        const { data: newConta, error } = await supabase.from('contas').insert({ user_id: user!.id, nome, tipo, saldo_inicial: finalSaldo, data_abertura: dataAberturaStr }).select('id').single();
+        const { data: newConta, error } = await supabase.from('contas').insert({ user_id: user!.id, nome, tipo, saldo_inicial: finalSaldo, data_abertura: dataAberturaStr, banco: banco || null, codigo_banco: codigoBanco || null, agencia: agencia || null, numero_conta: numeroConta || null }).select('id').single();
         if (error) throw error;
 
         // Create opening balance transaction for debit accounts
@@ -152,6 +156,10 @@ export default function ContasPage() {
     setTipo('debito');
     setSaldoInicial(0);
     setDataAbertura(new Date(2026, 0, 1));
+    setBanco('');
+    setCodigoBanco('');
+    setAgencia('');
+    setNumeroConta('');
   };
 
   const openEdit = (conta: any) => {
@@ -160,6 +168,10 @@ export default function ContasPage() {
     setTipo(conta.tipo);
     setSaldoInicial(conta.saldo_inicial);
     setDataAbertura(conta.data_abertura ? new Date(conta.data_abertura + 'T00:00:00') : new Date(2026, 0, 1));
+    setBanco(conta.banco || '');
+    setCodigoBanco(conta.codigo_banco || '');
+    setAgencia(conta.agencia || '');
+    setNumeroConta(conta.numero_conta || '');
     setDialogOpen(true);
   };
 
@@ -271,6 +283,37 @@ export default function ContasPage() {
                   <SelectItem value="credito">Crédito</SelectItem>
                 </SelectContent>
               </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>Banco</Label>
+              <Select value={banco} onValueChange={(v) => {
+                const banks: Record<string, string> = { 'Sicredi': '748', 'Itaú': '341', 'Bradesco': '237', 'Santander': '033', 'Caixa': '104', 'Banco do Brasil': '001', 'Nubank': '260', 'Inter': '077', 'Mercado Pago': '323' };
+                setBanco(v);
+                setCodigoBanco(banks[v] || '');
+              }}>
+                <SelectTrigger><SelectValue placeholder="Selecione o banco" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="Sicredi">Sicredi (748)</SelectItem>
+                  <SelectItem value="Itaú">Itaú (341)</SelectItem>
+                  <SelectItem value="Bradesco">Bradesco (237)</SelectItem>
+                  <SelectItem value="Santander">Santander (033)</SelectItem>
+                  <SelectItem value="Caixa">Caixa (104)</SelectItem>
+                  <SelectItem value="Banco do Brasil">Banco do Brasil (001)</SelectItem>
+                  <SelectItem value="Nubank">Nubank (260)</SelectItem>
+                  <SelectItem value="Inter">Inter (077)</SelectItem>
+                  <SelectItem value="Mercado Pago">Mercado Pago (323)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div className="space-y-2">
+                <Label>Agência</Label>
+                <Input value={agencia} onChange={e => setAgencia(e.target.value)} placeholder="0001" />
+              </div>
+              <div className="space-y-2">
+                <Label>Nº Conta</Label>
+                <Input value={numeroConta} onChange={e => setNumeroConta(e.target.value)} placeholder="885890" />
+              </div>
             </div>
             <div className="space-y-2">
               <Label>Data de Abertura</Label>

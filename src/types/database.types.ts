@@ -13,6 +13,11 @@ export interface Conta {
   nome: string;
   tipo: 'credito' | 'debito';
   saldo_inicial: number;
+  data_abertura: string;
+  banco: string;
+  codigo_banco: string;
+  agencia: string;
+  numero_conta: string;
   created_at: string;
 }
 
@@ -218,8 +223,8 @@ export const getSubcategorias = (categoria: string): string[] => {
 };
 
 export const CONTAS_PADRAO: Omit<Conta, 'id' | 'user_id' | 'created_at'>[] = [
-  { nome: 'Sicredi Secundário', tipo: 'debito', saldo_inicial: 0 },
-  { nome: 'Sicredi Principal', tipo: 'debito', saldo_inicial: 0 },
-  { nome: 'Black', tipo: 'credito', saldo_inicial: 0 },
-  { nome: 'Mercado Pago', tipo: 'credito', saldo_inicial: 0 },
+  { nome: 'Sicredi Conta Corrente', tipo: 'debito', saldo_inicial: 163.66, banco: 'Sicredi', codigo_banco: '748', numero_conta: '885890', agencia: '', data_abertura: '2026-01-01' },
+  { nome: 'Sicredi Conta 2', tipo: 'debito', saldo_inicial: -469.57, banco: 'Sicredi', codigo_banco: '748', numero_conta: '939935', agencia: '', data_abertura: '2026-01-01' },
+  { nome: 'Black', tipo: 'credito', saldo_inicial: 0, banco: 'Sicredi', codigo_banco: '748', numero_conta: '', agencia: '', data_abertura: '2026-01-01' },
+  { nome: 'Mercado Pago', tipo: 'credito', saldo_inicial: 0, banco: 'Mercado Pago', codigo_banco: '323', numero_conta: '', agencia: '', data_abertura: '2026-01-01' },
 ];
