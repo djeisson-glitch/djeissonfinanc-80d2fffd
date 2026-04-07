@@ -285,6 +285,37 @@ export default function ContasPage() {
               </Select>
             </div>
             <div className="space-y-2">
+              <Label>Banco</Label>
+              <Select value={banco} onValueChange={(v) => {
+                const banks: Record<string, string> = { 'Sicredi': '748', 'Itaú': '341', 'Bradesco': '237', 'Santander': '033', 'Caixa': '104', 'Banco do Brasil': '001', 'Nubank': '260', 'Inter': '077', 'Mercado Pago': '323' };
+                setBanco(v);
+                setCodigoBanco(banks[v] || '');
+              }}>
+                <SelectTrigger><SelectValue placeholder="Selecione o banco" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="Sicredi">Sicredi (748)</SelectItem>
+                  <SelectItem value="Itaú">Itaú (341)</SelectItem>
+                  <SelectItem value="Bradesco">Bradesco (237)</SelectItem>
+                  <SelectItem value="Santander">Santander (033)</SelectItem>
+                  <SelectItem value="Caixa">Caixa (104)</SelectItem>
+                  <SelectItem value="Banco do Brasil">Banco do Brasil (001)</SelectItem>
+                  <SelectItem value="Nubank">Nubank (260)</SelectItem>
+                  <SelectItem value="Inter">Inter (077)</SelectItem>
+                  <SelectItem value="Mercado Pago">Mercado Pago (323)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div className="space-y-2">
+                <Label>Agência</Label>
+                <Input value={agencia} onChange={e => setAgencia(e.target.value)} placeholder="0001" />
+              </div>
+              <div className="space-y-2">
+                <Label>Nº Conta</Label>
+                <Input value={numeroConta} onChange={e => setNumeroConta(e.target.value)} placeholder="885890" />
+              </div>
+            </div>
+            <div className="space-y-2">
               <Label>Data de Abertura</Label>
               <Popover>
                 <PopoverTrigger asChild>
