@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { parseSicrediCSV } from '@/lib/csv-parser';
+import { parseSicrediCSV, normalizeDescription } from '@/lib/csv-parser';
 
 describe('parseSicrediCSV', () => {
-  it('importa devolução como receita com valor 718.80', () => {
+  it('importa devolução como receita (payment) com valor 718.80', () => {
     const csv = [
       'Relatório Sicredi',
       'Data;Descrição;Parcela;Valor;Extra;Codigo;Pessoa;Obs',
@@ -19,6 +19,7 @@ describe('parseSicrediCSV', () => {
       valor: 718.8,
       tipo: 'receita',
       pessoa: 'Djeisson Mauss',
+      classification: 'payment',
       source_line_number: 3,
     });
     expect(result.skippedLines).toHaveLength(0);
@@ -38,5 +39,79 @@ describe('parseSicrediCSV', () => {
     expect(result.transactions).toHaveLength(2);
     expect(result.transactions[0].hash_transacao).not.toBe(result.transactions[1].hash_transacao);
     expect(result.transactions[1].hash_transacao).toContain('_seq1');
+  });
+
+  it('classifica parcela 01/X como new_installment', () => {
+    const csv = [
+      'Relatório Sicredi',
+      'Data;Descrição;Parcela;Valor',
+      '01/03/2026;BRASIL PARAL*BrasilPar;(01/12);"R$ 22,90"',
+    ].join('\n');
+
+    const result = parseSicrediCSV(csv);
+    expect(result.transactions[0].classification).toBe('new_installment');
+    expect(result.transactions[0].parcela_atual).toBe(1);
+    expect(result.transactions[0].parcela_total).toBe(12);
+  });
+
+  it('classifica parcela N/X (N>1) como ongoing_installment', () => {
+    const csv = [
+      'Relatório Sicredi',
+      'Data;Descrição;Parcela;Valor',
+      '30/01/2026;SAO JOAO FARMACIAS;(02/03);"R$ 20,02"',
+    ].join('\n');
+
+    const result = parseSicrediCSV(csv);
+    expect(result.transactions[0].classification).toBe('ongoing_installment');
+    expect(result.transactions[0].parcela_atual).toBe(2);
+  });
+
+  it('classifica transação sem parcela como simple', () => {
+    const csv = [
+      'Relatório Sicredi',
+      'Data;Descrição;Parcela;Valor',
+      '28/02/2026;NETFLIX ENTRETENIMENTO;;"R$ 59,90"',
+    ].join('\n');
+
+    const result = parseSicrediCSV(csv);
+    expect(result.transactions[0].classification).toBe('simple');
+  });
+
+  it('classifica valor negativo como payment', () => {
+    const csv = [
+      'Relatório Sicredi',
+      'Data;Descrição;Parcela;Valor',
+      '18/02/2026;PAGAMENTO 011398085;;"R$ -7.038,96"',
+    ].join('\n');
+
+    const result = parseSicrediCSV(csv);
+    expect(result.transactions[0].classification).toBe('payment');
+    expect(result.transactions[0].tipo).toBe('receita');
+    expect(result.transactions[0].valor).toBe(7038.96);
+  });
+
+  it('extrai codigo_cartao e pessoa corretamente', () => {
+    const csv = [
+      'Relatório Sicredi',
+      'Data;Descrição;Parcela;Valor;Valor Dolar;Adicional;Nome',
+      '30/01/2026;SAO JOAO FARMACIAS;(02/03);"R$ 20,02";;0219;Maiara Martins',
+    ].join('\n');
+
+    const result = parseSicrediCSV(csv);
+    expect(result.transactions[0].codigo_cartao).toBe('0219');
+    expect(result.transactions[0].pessoa).toBe('Maiara Martins');
+  });
+});
+
+describe('normalizeDescription', () => {
+  it('normaliza descrição para deduplicação', () => {
+    expect(normalizeDescription('CONSULTORIO DR FBS PASSO FUNDO   BRA')).toBe('CONSULTORIO DR FBS PASSO FUNDO');
+    expect(normalizeDescription('netflix entretenimento')).toBe('NETFLIX ENTRETENIMENTO');
+    expect(normalizeDescription('BRASIL PARAL*BrasilPar')).toBe('BRASIL PARALBrasilPar'.toUpperCase());
+  });
+
+  it('trunca em 40 caracteres', () => {
+    const long = 'A'.repeat(50);
+    expect(normalizeDescription(long).length).toBe(40);
   });
 });
