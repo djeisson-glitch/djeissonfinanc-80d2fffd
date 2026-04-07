@@ -1,4 +1,5 @@
 import { generateHash, normalizeDescription, type ClassifiedTransaction, type TransactionClassification } from './csv-parser';
+import { autoCategorizarTransacao } from './auto-categorize';
 
 export interface OFXParseResult {
   contaDetectada: string | null;
