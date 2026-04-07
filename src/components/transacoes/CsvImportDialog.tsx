@@ -1016,17 +1016,13 @@ export function CsvImportDialog({ open, onOpenChange }: Props) {
                     {importing && <Progress value={progress} />}
 
                     <Button
-                      onClick={fileType === "csv" || fileType === "pdf" ? handleOpenPreview : handleImport}
+                      onClick={handleOpenPreview}
                       disabled={importing || (isCredito && !dueConfirmed)}
                       className="w-full"
                     >
                       {importing
-                        ? fileType === "csv" || fileType === "pdf"
-                          ? "Analisando transações..."
-                          : "Importando..."
-                        : fileType === "csv" || fileType === "pdf"
-                          ? `Revisar ${parsedTransactions.length} transações antes de importar`
-                          : `Importar ${parsedTransactions.length} Transações`}
+                        ? "Analisando transações..."
+                        : `Revisar ${parsedTransactions.length} transações antes de importar`}
                     </Button>
                   </>
                 )}
