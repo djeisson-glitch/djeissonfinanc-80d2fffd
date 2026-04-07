@@ -1007,15 +1007,15 @@ export function CsvImportDialog({ open, onOpenChange }: Props) {
                     {importing && <Progress value={progress} />}
 
                     <Button
-                      onClick={fileType === "csv" ? handleOpenPreview : handleImport}
+                      onClick={fileType === "csv" || fileType === "pdf" ? handleOpenPreview : handleImport}
                       disabled={importing || (isCredito && !dueConfirmed)}
                       className="w-full"
                     >
                       {importing
-                        ? fileType === "csv"
-                          ? "Analisando linhas do CSV..."
+                        ? fileType === "csv" || fileType === "pdf"
+                          ? "Analisando transações..."
                           : "Importando..."
-                        : fileType === "csv"
+                        : fileType === "csv" || fileType === "pdf"
                           ? `Revisar ${parsedTransactions.length} transações antes de importar`
                           : `Importar ${parsedTransactions.length} Transações`}
                     </Button>
