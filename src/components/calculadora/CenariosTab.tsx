@@ -496,8 +496,13 @@ export function CenariosTab({ params }: Props) {
             <TrendingUp className="h-4 w-4 text-primary" />
             Dados Reais do Sistema
             <Badge variant="secondary" className="ml-auto text-xs">
-              {realData.mesesAnalisados > 0 ? `${realData.mesesAnalisados} meses analisados` : 'Sem dados'}
+              {realData.totalTransacoes > 0
+                ? `${realData.totalTransacoes} transações em ${realData.mesesAnalisados} meses`
+                : 'Sem dados'}
             </Badge>
+            <Button variant="ghost" size="icon" className="h-6 w-6" onClick={fetchRealData} title="Atualizar dados">
+              <RefreshCw className="h-3.5 w-3.5" />
+            </Button>
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
