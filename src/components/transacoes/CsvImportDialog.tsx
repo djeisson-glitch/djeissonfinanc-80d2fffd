@@ -713,6 +713,108 @@ export function CsvImportDialog({ open, onOpenChange }: Props) {
     }
   };
 
+  const handleCheckDateCorrection = async () => {
+    if (!user || !selectedConta || !isCredito || !dueConfirmed) return;
+    setImporting(true);
+    setProgress(10);
+
+    try {
+      const billingPeriod = `${dueYear}-${String(dueMonth + 1).padStart(2, "0")}`;
+
+      const { data: existing } = await supabase
+        .from("transacoes")
+        .select("id, descricao, descricao_normalizada, valor, data, parcela_atual, parcela_total, mes_competencia")
+        .eq("user_id", user.id)
+        .eq("conta_id", selectedConta)
+        .or(`mes_competencia.eq.${billingPeriod},data.gte.${billingPeriod}-01`);
+
+      setProgress(50);
+
+      if (!existing || existing.length === 0) {
+        toast({ title: "Nenhuma transação encontrada para este período", variant: "destructive" });
+        setImporting(false);
+        return;
+      }
+
+      const corrections: DateCorrectionItem[] = [];
+      for (const csvTx of parsedTransactions) {
+        const csvNorm = csvTx.descricao_normalizada;
+        const match = existing.find((e) => {
+          if (e.descricao_normalizada !== csvNorm) return false;
+          if (Math.abs(Number(e.valor) - csvTx.valor) > 0.01) return false;
+          if (e.parcela_atual !== csvTx.parcela_atual) return false;
+          if (e.parcela_total !== csvTx.parcela_total) return false;
+          return true;
+        });
+
+        if (match && match.data !== csvTx.data) {
+          corrections.push({
+            transactionId: match.id,
+            descricao: csvTx.descricao,
+            valor: csvTx.valor,
+            currentDate: match.data,
+            correctDate: csvTx.data,
+            parcela: csvTx.parcela_atual ? `${csvTx.parcela_atual}/${csvTx.parcela_total}` : null,
+            billingPeriod,
+          });
+        }
+      }
+
+      setProgress(100);
+
+      if (corrections.length === 0) {
+        toast({ title: "Todas as datas já estão corretas", description: "Nenhuma correção necessária." });
+      } else {
+        setDateCorrectionItems(corrections);
+      }
+    } catch (err) {
+      console.error(err);
+      toast({ title: "Erro ao verificar datas", variant: "destructive" });
+    } finally {
+      setImporting(false);
+    }
+  };
+
+  const handleApplyDateCorrection = async () => {
+    if (!dateCorrectionItems || dateCorrectionItems.length === 0) return;
+    setImporting(true);
+    setProgress(10);
+
+    try {
+      let updated = 0;
+      const billingPeriod = dateCorrectionItems[0].billingPeriod;
+
+      for (let i = 0; i < dateCorrectionItems.length; i++) {
+        const item = dateCorrectionItems[i];
+        const { error } = await supabase
+          .from("transacoes")
+          .update({
+            data: item.correctDate,
+            data_original: item.correctDate,
+            mes_competencia: billingPeriod,
+          })
+          .eq("id", item.transactionId);
+
+        if (!error) updated++;
+        setProgress(10 + (90 * (i + 1)) / dateCorrectionItems.length);
+      }
+
+      toast({
+        title: `${updated} datas corrigidas`,
+        description: `${dateCorrectionItems.length} transações processadas, ${updated} atualizadas.`,
+      });
+      setDateCorrectionItems(null);
+      setDateCorrectMode(false);
+      queryClient.invalidateQueries({ queryKey: ["transacoes"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+    } catch (err) {
+      console.error(err);
+      toast({ title: "Erro ao corrigir datas", variant: "destructive" });
+    } finally {
+      setImporting(false);
+    }
+  };
+
   const handleImport = async () => {
     const context = validateBeforeImport();
     if (!context) return;
