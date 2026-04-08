@@ -352,6 +352,17 @@ export default function DashboardPage() {
           </CardContent>
         </Card>
       </div>
+
+      <FaturaDrawer
+        open={faturaDrawer.open}
+        onOpenChange={(open) => setFaturaDrawer(prev => ({ ...prev, open }))}
+        cardId={faturaDrawer.cardId}
+        cardName={faturaDrawer.cardName}
+        start={start}
+        end={end}
+        month={month}
+        year={year}
+      />
     </div>
   );
 }
