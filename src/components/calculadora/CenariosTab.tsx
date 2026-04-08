@@ -105,9 +105,10 @@ export function CenariosTab({ params }: Props) {
   const { user } = useAuth();
   const [loading, setLoading] = useState(true);
   const [realData, setRealData] = useState<RealData>({
-    receitaMedia: 0, mesesAnalisados: 0,
+    receitaMedia: 0, receitaFonte: 'banco', mesesAnalisados: 0, totalTransacoes: 0,
     fixos: { moradia: 0, emprestimos: 0, assinaturas: 0, seguros: 0, telecom: 0, tarifas: 0 },
     variaveis: { alimentacao: 0, combustivel: 0, saude: 0, beleza: 0, casa: 0, comprasOnline: 0, transporte: 0, impostos: 0, educacao: 0, outros: 0 },
+    catMesesMap: {},
   });
   const [overrides, setOverrides] = useState<Partial<Record<string, number>>>({});
   const [scenarioParams, setScenarioParams] = useState<ScenarioParams>({
@@ -139,72 +140,124 @@ export function CenariosTab({ params }: Props) {
   async function fetchRealData() {
     setLoading(true);
     try {
+      // Fetch transactions with category names via join
       const { data: transactions } = await supabase
         .from('transacoes')
-        .select('data, valor, tipo, categoria, ignorar_dashboard')
+        .select('data, valor, tipo, ignorar_dashboard, categoria, categoria_id, categorias!transacoes_categoria_id_fkey(nome)')
         .eq('user_id', user!.id)
         .order('data', { ascending: true });
 
       if (!transactions || transactions.length === 0) {
+        // Use rendaBruta from Viabilidade if available
+        if (params.rendaBruta > 0) {
+          setRealData(prev => ({ ...prev, receitaMedia: params.rendaBruta, receitaFonte: 'viabilidade' }));
+        }
         setLoading(false);
         return;
       }
 
-      const byMonth: Record<string, typeof transactions> = {};
+      // Get distinct months
+      const allMonths = new Set<string>();
       for (const t of transactions) {
-        const month = t.data.slice(0, 7);
-        if (!byMonth[month]) byMonth[month] = [];
-        byMonth[month].push(t);
+        allMonths.add(t.data.slice(0, 7));
       }
+      const numMonths = allMonths.size;
 
-      const months = Object.keys(byMonth).sort();
-      const numMonths = months.length;
-
-      let totalReceita = 0;
-      for (const m of months) {
-        for (const t of byMonth[m]) {
-          if (t.tipo === 'Receita' || (t.valor > 0 && t.categoria === 'Receita')) {
-            totalReceita += Math.abs(t.valor);
-          }
-        }
-      }
-
+      // Build per-category totals and per-category month sets
       const catTotals: Record<string, number> = {};
-      for (const m of months) {
-        for (const t of byMonth[m]) {
-          if (t.ignorar_dashboard) continue;
-          if (t.tipo === 'Receita' || t.valor > 0) continue;
-          if (EXCLUDED_CATEGORIES.includes(t.categoria)) continue;
-          catTotals[t.categoria] = (catTotals[t.categoria] || 0) + Math.abs(t.valor);
-        }
+      const catMonths: Record<string, Set<string>> = {};
+      let totalTransacoes = 0;
+
+      for (const t of transactions) {
+        if (t.ignorar_dashboard) continue;
+        if (t.tipo === 'receita' || t.valor > 0) continue;
+        
+        // Get category name: prefer joined categorias.nome, fallback to categoria field
+        const catRow = t.categorias as any;
+        const catName = catRow?.nome || t.categoria || 'Outros';
+        
+        if (EXCLUDED_CATEGORIES.includes(catName)) continue;
+        
+        const month = t.data.slice(0, 7);
+        const absVal = Math.abs(t.valor);
+        catTotals[catName] = (catTotals[catName] || 0) + absVal;
+        if (!catMonths[catName]) catMonths[catName] = new Set();
+        catMonths[catName].add(month);
+        totalTransacoes++;
       }
 
       const fixos = { moradia: 0, emprestimos: 0, assinaturas: 0, seguros: 0, telecom: 0, tarifas: 0 };
       const variaveis = { alimentacao: 0, combustivel: 0, saude: 0, beleza: 0, casa: 0, comprasOnline: 0, transporte: 0, impostos: 0, educacao: 0, outros: 0 };
+      const catMesesMap: Record<string, number> = {};
 
       let totalMapped = 0;
       for (const [cat, total] of Object.entries(catTotals)) {
-        const avg = total / numMonths;
+        const mesesComDados = catMonths[cat]?.size || 1;
+        const avg = total / mesesComDados;
+        
         if (FIXED_CATEGORIES[cat]) {
-          fixos[FIXED_CATEGORIES[cat]] += avg;
+          const key = FIXED_CATEGORIES[cat];
+          fixos[key] += avg;
+          catMesesMap[key] = Math.max(catMesesMap[key] || 0, mesesComDados);
           totalMapped += total;
         } else if (VARIABLE_CATEGORIES[cat]) {
-          variaveis[VARIABLE_CATEGORIES[cat]] += avg;
+          const key = VARIABLE_CATEGORIES[cat];
+          variaveis[key] += avg;
+          catMesesMap[key] = Math.max(catMesesMap[key] || 0, mesesComDados);
           totalMapped += total;
         }
       }
 
+      // "Outros" = unmapped expenses / months with any expense
       const totalExpenses = Object.values(catTotals).reduce((s, v) => s + v, 0);
-      variaveis.outros = (totalExpenses - totalMapped) / numMonths;
+      const unmapped = totalExpenses - totalMapped;
+      if (unmapped > 0) {
+        // Count months that have any unmapped category
+        const unmappedMonths = new Set<string>();
+        for (const [cat, months] of Object.entries(catMonths)) {
+          if (!FIXED_CATEGORIES[cat] && !VARIABLE_CATEGORIES[cat]) {
+            months.forEach(m => unmappedMonths.add(m));
+          }
+        }
+        variaveis.outros = unmapped / (unmappedMonths.size || 1);
+        catMesesMap['outros'] = unmappedMonths.size;
+      }
 
       for (const k of Object.keys(fixos) as (keyof typeof fixos)[]) fixos[k] = Math.round(fixos[k]);
       for (const k of Object.keys(variaveis) as (keyof typeof variaveis)[]) variaveis[k] = Math.round(variaveis[k]);
 
+      // Revenue: priority 1 = rendaBruta from Viabilidade, priority 2 = avg credits
+      let receitaMedia = 0;
+      let receitaFonte: RealData['receitaFonte'] = 'banco';
+      
+      if (params.rendaBruta > 0) {
+        receitaMedia = params.rendaBruta;
+        receitaFonte = 'viabilidade';
+      } else {
+        // Average monthly credits excluding transfers/refunds
+        let totalReceita = 0;
+        const receitaMonths = new Set<string>();
+        for (const t of transactions) {
+          if (t.ignorar_dashboard) continue;
+          const catRow = t.categorias as any;
+          const catName = catRow?.nome || t.categoria || '';
+          if (['Pagamento de Fatura', 'Transferência'].includes(catName)) continue;
+          if (t.tipo === 'receita' || t.valor > 0) {
+            totalReceita += Math.abs(t.valor);
+            receitaMonths.add(t.data.slice(0, 7));
+          }
+        }
+        receitaMedia = receitaMonths.size > 0 ? Math.round(totalReceita / receitaMonths.size) : 0;
+      }
+
       setRealData({
-        receitaMedia: Math.round(totalReceita / numMonths),
+        receitaMedia,
+        receitaFonte,
         mesesAnalisados: numMonths,
+        totalTransacoes,
         fixos,
         variaveis,
+        catMesesMap,
       });
     } catch (e) {
       console.error('Error fetching real data:', e);
