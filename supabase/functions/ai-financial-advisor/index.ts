@@ -71,6 +71,33 @@ Contexto financeiro:
         break;
       }
 
+      case "scenario_analysis": {
+        systemPrompt = `Você é um consultor financeiro e imobiliário brasileiro. Analise os 4 cenários de compra de imóvel apresentados, todos baseados em dados financeiros reais do usuário. Sua resposta deve conter exatamente estas 5 seções em Markdown:
+1. **Qual cenário recomenda e por quê** — com base nos números reais
+2. **Timing** — o melhor momento para comprar e por quê
+3. **Riscos** — alertas sobre a situação financeira
+4. **Alavancas** — sugestões de redução de gastos para melhorar o saldo
+5. **Meta de reserva** — quanto manter de reserva antes de comprar
+
+Seja objetivo, use os números fornecidos e dê um parecer claro.`;
+        const c = context;
+        userPrompt = `Análise de cenários para compra de imóvel:
+
+Dados do usuário (baseados em ${c.mesesAnalisados} meses de dados reais):
+- Receita média mensal: R$ ${c.receita}
+- Imóvel: R$ ${c.parametros.valorImovel} | Entrada: R$ ${c.parametros.entrada}
+- Saldo devedor carro: R$ ${c.parametros.saldoDevedorCarro}
+- Parcela carro: R$ ${c.parametros.parcelaCarro}/mês
+- Meses restantes carro: ${c.parametros.mesesRestantesCarro}
+- Empréstimos ativos: R$ ${c.parametros.emprestimosAtivos}/mês
+
+Cenário 0 (Atual): Saldo livre R$ ${c.cenario0.saldo}/mês | 12 meses: R$ ${c.cenario0.saldo12}
+Cenário 1 (Compra+Carro): Saldo R$ ${c.cenario1.saldo}/mês | Δ ${c.cenario1.delta}/mês
+Cenário 2 (Quita Carro): Saldo R$ ${c.cenario2.saldo}/mês | Δ ${c.cenario2.delta}/mês | Custo quitar: R$ ${c.cenario2.custoQuitar}
+Cenário 3 (Carro Quita Sozinho): Saldo com carro R$ ${c.cenario3.saldoComCarro}, sem carro R$ ${c.cenario3.saldoSemCarro}, melhora no mês ${c.cenario3.mesMelhora}`;
+        break;
+      }
+
       default:
         return new Response(JSON.stringify({ error: "Tipo de análise inválido" }), {
           status: 400,
