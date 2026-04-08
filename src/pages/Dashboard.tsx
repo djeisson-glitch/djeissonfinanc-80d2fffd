@@ -14,6 +14,7 @@ import { AlertTriangle, BarChart3, CreditCard } from 'lucide-react';
 import { MonthSelector } from '@/components/MonthSelector';
 import { ParcelasTimeline } from '@/components/dashboard/ParcelasTimeline';
 import { AiInsightsCard } from '@/components/dashboard/AiInsightsCard';
+import { FaturaDrawer } from '@/components/dashboard/FaturaDrawer';
 
 export default function DashboardPage() {
   const { user } = useAuth();
