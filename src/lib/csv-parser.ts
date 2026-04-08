@@ -313,5 +313,4 @@ export function parseSicrediCSV(csvText: string): ParseResult {
     totalLines: lines.length,
     lineLogs,
   };
-  };
 }
