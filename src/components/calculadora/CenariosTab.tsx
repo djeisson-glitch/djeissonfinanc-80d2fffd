@@ -26,7 +26,9 @@ interface Props {
 
 interface RealData {
   receitaMedia: number;
+  receitaFonte: 'viabilidade' | 'banco' | 'manual';
   mesesAnalisados: number;
+  totalTransacoes: number;
   fixos: {
     moradia: number;
     emprestimos: number;
@@ -47,6 +49,7 @@ interface RealData {
     educacao: number;
     outros: number;
   };
+  catMesesMap: Record<string, number>; // category key -> months with data
 }
 
 interface ScenarioParams {
