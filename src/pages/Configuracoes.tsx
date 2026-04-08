@@ -8,16 +8,21 @@ import { Label } from '@/components/ui/label';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import { useToast } from '@/hooks/use-toast';
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Save, Trash2, Settings, AlertTriangle, RefreshCw } from 'lucide-react';
+import { Save, Trash2, Settings, AlertTriangle, RefreshCw, CalendarDays, Upload, ArrowRight } from 'lucide-react';
 import { useEnterSubmit } from '@/hooks/useEnterSubmit';
 import { ImportHistory } from '@/components/configuracoes/ImportHistory';
 import { DebugPanel } from '@/components/configuracoes/DebugPanel';
 import { autoCategorizarTransacao, REQUIRED_CATEGORIES, CATEGORY_COLORS } from '@/lib/auto-categorize';
 import { useCategorias } from '@/hooks/useCategorias';
+import { parseSicrediCSV, normalizeDescription } from '@/lib/csv-parser';
+import { Progress } from '@/components/ui/progress';
+import { formatCurrency } from '@/lib/format';
 
 export default function ConfiguracoesPage() {
   const { user } = useAuth();
