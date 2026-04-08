@@ -1003,6 +1003,8 @@ export function CsvImportDialog({ open, onOpenChange }: Props) {
     setPendingConflicts(null);
     setConflictContext(null);
     setDueConfirmed(false);
+    setDateCorrectionItems(null);
+    setDateCorrectMode(false);
     onOpenChange(false);
   };
 
