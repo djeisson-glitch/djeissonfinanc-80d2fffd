@@ -281,7 +281,249 @@ export default function ConfiguracoesPage() {
         </CardContent>
       </Card>
 
-      {/* Danger Zone */}
+      {/* Date Correction Tool */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-lg flex items-center gap-2">
+            <CalendarDays className="h-5 w-5" />
+            Corrigir Datas de Faturas Importadas
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <p className="text-sm text-muted-foreground">
+            Se transações de cartão de crédito foram importadas com datas incorretas (ex: todas com dia 01/mês), 
+            faça re-upload do CSV original para corrigir as datas de compra.
+          </p>
+
+          {!dateCorrectionPreview ? (
+            <div className="space-y-3">
+              <label className="flex flex-col items-center justify-center border-2 border-dashed rounded-lg p-4 cursor-pointer hover:border-foreground/30 transition-colors">
+                <Upload className="h-5 w-5 text-muted-foreground mb-1" />
+                <span className="text-sm text-muted-foreground">
+                  {dateCorrectionFile ? dateCorrectionFile.name : 'Selecione o CSV da fatura'}
+                </span>
+                <input
+                  type="file"
+                  accept=".csv"
+                  className="hidden"
+                  onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    if (f) setDateCorrectionFile(f);
+                  }}
+                />
+              </label>
+
+              {dateCorrecting && <Progress value={dateCorrectionProgress} />}
+
+              <Button
+                disabled={!dateCorrectionFile || dateCorrecting}
+                onClick={async () => {
+                  if (!dateCorrectionFile || !user) return;
+                  setDateCorrecting(true);
+                  setDateCorrectionProgress(10);
+
+                  try {
+                    const text = await dateCorrectionFile.text();
+                    const parsed = parseSicrediCSV(text);
+                    setDateCorrectionProgress(30);
+
+                    if (parsed.transactions.length === 0) {
+                      toast({ title: 'Nenhuma transação encontrada no CSV', variant: 'destructive' });
+                      setDateCorrecting(false);
+                      return;
+                    }
+
+                    // Detect billing period
+                    let billingPeriod = '';
+                    if (parsed.detectedDueDate) {
+                      billingPeriod = `${parsed.detectedDueDate.year}-${String(parsed.detectedDueDate.month + 1).padStart(2, '0')}`;
+                    } else {
+                      // Guess from transaction dates
+                      const dates = parsed.transactions.map(t => new Date(t.data + 'T00:00:00'));
+                      const latest = new Date(Math.max(...dates.map(d => d.getTime())));
+                      latest.setMonth(latest.getMonth() + 1);
+                      billingPeriod = `${latest.getFullYear()}-${String(latest.getMonth() + 1).padStart(2, '0')}`;
+                    }
+
+                    // Find credit card accounts
+                    const { data: contas } = await supabase
+                      .from('contas')
+                      .select('id, nome, tipo')
+                      .eq('user_id', user.id)
+                      .eq('tipo', 'credito');
+
+                    if (!contas || contas.length === 0) {
+                      toast({ title: 'Nenhuma conta de cartão encontrada', variant: 'destructive' });
+                      setDateCorrecting(false);
+                      return;
+                    }
+
+                    setDateCorrectionProgress(50);
+
+                    // Try each card account
+                    let bestMatch: typeof dateCorrectionPreview = null;
+
+                    for (const conta of contas) {
+                      const { data: existing } = await supabase
+                        .from('transacoes')
+                        .select('id, descricao_normalizada, valor, data, parcela_atual, parcela_total')
+                        .eq('user_id', user.id)
+                        .eq('conta_id', conta.id);
+
+                      if (!existing) continue;
+
+                      const corrections: typeof dateCorrectionPreview extends null ? never : NonNullable<typeof dateCorrectionPreview>['items'] = [];
+
+                      for (const csvTx of parsed.transactions) {
+                        const match = existing.find(e => {
+                          if (e.descricao_normalizada !== csvTx.descricao_normalizada) return false;
+                          if (Math.abs(Number(e.valor) - csvTx.valor) > 0.01) return false;
+                          if (e.parcela_atual !== csvTx.parcela_atual) return false;
+                          if (e.parcela_total !== csvTx.parcela_total) return false;
+                          return true;
+                        });
+
+                        if (match && match.data !== csvTx.data) {
+                          corrections.push({
+                            id: match.id,
+                            descricao: csvTx.descricao,
+                            valor: csvTx.valor,
+                            currentDate: match.data,
+                            correctDate: csvTx.data,
+                            parcela: csvTx.parcela_atual ? `${csvTx.parcela_atual}/${csvTx.parcela_total}` : null,
+                          });
+                        }
+                      }
+
+                      if (corrections.length > 0 && (!bestMatch || corrections.length > bestMatch.items.length)) {
+                        bestMatch = { items: corrections, billingPeriod, contaId: conta.id };
+                      }
+                    }
+
+                    setDateCorrectionProgress(100);
+
+                    if (!bestMatch || bestMatch.items.length === 0) {
+                      toast({ title: 'Todas as datas já estão corretas', description: 'Nenhuma correção necessária.' });
+                    } else {
+                      setDateCorrectionPreview(bestMatch);
+                    }
+                  } catch (err) {
+                    console.error(err);
+                    toast({ title: 'Erro ao processar CSV', variant: 'destructive' });
+                  } finally {
+                    setDateCorrecting(false);
+                  }
+                }}
+              >
+                <CalendarDays className={`mr-2 h-4 w-4 ${dateCorrecting ? 'animate-spin' : ''}`} />
+                {dateCorrecting ? 'Analisando...' : 'Verificar datas'}
+              </Button>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              <div className="grid grid-cols-2 gap-2">
+                <div className="rounded-lg border bg-muted/40 p-3">
+                  <p className="text-xs text-muted-foreground">Datas a corrigir</p>
+                  <p className="text-lg font-semibold">{dateCorrectionPreview.items.length}</p>
+                </div>
+                <div className="rounded-lg border bg-muted/40 p-3">
+                  <p className="text-xs text-muted-foreground">Período</p>
+                  <p className="text-lg font-semibold">{dateCorrectionPreview.billingPeriod}</p>
+                </div>
+              </div>
+
+              <ScrollArea className="h-[250px]">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Descrição</TableHead>
+                      <TableHead className="w-24">Data atual</TableHead>
+                      <TableHead className="w-4"></TableHead>
+                      <TableHead className="w-24">Data correta</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {dateCorrectionPreview.items.map((item) => (
+                      <TableRow key={item.id}>
+                        <TableCell className="text-xs">
+                          {item.descricao}
+                          {item.parcela && <Badge variant="outline" className="ml-1 text-xs">{item.parcela}</Badge>}
+                        </TableCell>
+                        <TableCell className="text-xs text-destructive line-through">
+                          {item.currentDate.split('-').reverse().join('/')}
+                        </TableCell>
+                        <TableCell><ArrowRight className="h-3 w-3 text-muted-foreground" /></TableCell>
+                        <TableCell className="text-xs text-primary font-medium">
+                          {item.correctDate.split('-').reverse().join('/')}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </ScrollArea>
+
+              {dateCorrecting && <Progress value={dateCorrectionProgress} />}
+
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  className="flex-1"
+                  disabled={dateCorrecting}
+                  onClick={() => { setDateCorrectionPreview(null); setDateCorrectionFile(null); }}
+                >
+                  Cancelar
+                </Button>
+                <Button
+                  className="flex-1"
+                  disabled={dateCorrecting}
+                  onClick={async () => {
+                    if (!dateCorrectionPreview) return;
+                    setDateCorrecting(true);
+                    setDateCorrectionProgress(10);
+
+                    try {
+                      let updated = 0;
+                      const bp = dateCorrectionPreview.billingPeriod;
+
+                      for (let i = 0; i < dateCorrectionPreview.items.length; i++) {
+                        const item = dateCorrectionPreview.items[i];
+                        const { error } = await supabase
+                          .from('transacoes')
+                          .update({
+                            data: item.correctDate,
+                            data_original: item.correctDate,
+                            mes_competencia: bp,
+                          })
+                          .eq('id', item.id);
+
+                        if (!error) updated++;
+                        setDateCorrectionProgress(10 + (90 * (i + 1)) / dateCorrectionPreview.items.length);
+                      }
+
+                      toast({
+                        title: `${updated} datas corrigidas`,
+                        description: `${dateCorrectionPreview.items.length} transações processadas.`,
+                      });
+                      setDateCorrectionPreview(null);
+                      setDateCorrectionFile(null);
+                      queryClient.invalidateQueries({ queryKey: ['transacoes'] });
+                      queryClient.invalidateQueries({ queryKey: ['dashboard'] });
+                    } catch (err) {
+                      console.error(err);
+                      toast({ title: 'Erro ao corrigir datas', variant: 'destructive' });
+                    } finally {
+                      setDateCorrecting(false);
+                    }
+                  }}
+                >
+                  {dateCorrecting ? 'Corrigindo...' : `Corrigir ${dateCorrectionPreview.items.length} datas`}
+                </Button>
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
       <Card className="border-destructive/50">
         <CardHeader>
           <CardTitle className="text-lg flex items-center gap-2 text-destructive">
