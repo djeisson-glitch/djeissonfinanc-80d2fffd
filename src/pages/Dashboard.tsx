@@ -228,7 +228,7 @@ export default function DashboardPage() {
                   : { label: 'Em aberto', emoji: '🔴', color: '#ef4444' };
 
             return (
-              <Card key={card.id}>
+              <Card key={card.id} className="cursor-pointer hover:bg-muted/50 transition-colors" onClick={() => setFaturaDrawer({ open: true, cardId: card.id, cardName: card.nome })}>
                 <CardContent className="p-4">
                   <div className="flex items-center gap-2 mb-2">
                     <CreditCard className="h-4 w-4 text-muted-foreground" />
