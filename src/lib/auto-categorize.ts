@@ -13,7 +13,7 @@ const RULES: CategoriaRule[] = [
   { patterns: ['PAGTO FATURA', 'PAGAMENTO FATURA', 'PAGTO FAT', 'PAG FATURA'], categoria: 'Pagamento de Fatura' },
 
   // EMPRÉSTIMO
-  { patterns: ['LIQUIDACAO DE PARCELA', 'LIQUIDAÇÃO DE PARCELA', 'PARCELA-C5A'], categoria: 'Empréstimo' },
+  { patterns: ['LIQUIDACAO DE PARCELA', 'LIQUIDAÇÃO DE PARCELA', 'PARCELA-C5A'], categoria: 'Empréstimos' },
 
   // TARIFAS BANCÁRIAS
   { patterns: ['IOF BASICO', 'IOF ADICIONAL', 'IOF COMPRA', 'CESTA DE RELACIONAMENTO', 'INTEGR.CAPITAL SUBSCRITO', 'INTEGRCAPITAL SUBSCRITO', 'JUROS UTILIZ', 'MENSALID TAG'], categoria: 'Tarifas Bancárias' },
@@ -31,7 +31,7 @@ const RULES: CategoriaRule[] = [
   { patterns: ['SUICA SEGURAD', 'ASAASIP*SUICA', 'ASAAS*SUICA', 'ASAASIPSUICA', 'ASAASSUICA'], categoria: 'Seguro do Carro' },
 
   // ASSINATURAS
-  { patterns: ['NETFLIX', 'SPOTIFY', 'AMAZON PRIME', 'YOUTUBE PREMIUM', 'YOUTUBE PREMI', 'APPLECOMBILL', 'APPLE.COM', 'APPLECOM', 'BUDGI', 'PIXIESET', 'GODADDY', 'BRASIL PARAL', 'BRASILPAR', 'KIWIFY', 'HOTMART'], categoria: 'Assinatura' },
+  { patterns: ['NETFLIX', 'SPOTIFY', 'AMAZON PRIME', 'YOUTUBE PREMIUM', 'YOUTUBE PREMI', 'APPLECOMBILL', 'APPLE.COM', 'APPLECOM', 'BUDGI', 'PIXIESET', 'GODADDY', 'BRASIL PARAL', 'BRASILPAR', 'KIWIFY', 'HOTMART'], categoria: 'Assinaturas' },
 
   // EDUCAÇÃO
   { patterns: ['HTM*SIMONE', 'HTMSIMONE', 'SIMONE DE OLIVE', 'CURSO', 'ESCOLA', 'FACULDADE', 'MENTORIA'], categoria: 'Educação' },
@@ -113,8 +113,8 @@ export function autoCategorizarTransacao(descricao: string): string | null {
  */
 export const REQUIRED_CATEGORIES = [
   'Alimentação', 'Combustível', 'Saúde', 'Beleza', 'Seguro de Vida',
-  'Seguro do Carro', 'Assinatura', 'Educação', 'Transporte', 'Telecom',
-  'Moradia', 'Casa', 'Compras Online', 'Empréstimo', 'Tarifas Bancárias',
+  'Seguro do Carro', 'Assinaturas', 'Educação', 'Transporte', 'Telecom',
+  'Moradia', 'Casa', 'Compras Online', 'Empréstimos', 'Tarifas Bancárias',
   'Impostos', 'Investimentos', 'Pagamento de Fatura', 'Receita', 'Outros',
 ];
 
@@ -128,14 +128,14 @@ export const CATEGORY_COLORS: Record<string, string> = {
   'Beleza': '#f97316',
   'Seguro de Vida': '#8b5cf6',
   'Seguro do Carro': '#6366f1',
-  'Assinatura': '#a855f7',
+  'Assinaturas': '#a855f7',
   'Educação': '#3b82f6',
   'Transporte': '#0ea5e9',
   'Telecom': '#14b8a6',
   'Moradia': '#0891b2',
   'Casa': '#0ea5e9',
   'Compras Online': '#d946ef',
-  'Empréstimo': '#ef4444',
+  'Empréstimos': '#ef4444',
   'Tarifas Bancárias': '#78716c',
   'Impostos': '#dc2626',
   'Investimentos': '#3b82f6',

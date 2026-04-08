@@ -61,29 +61,53 @@ interface ScenarioParams {
   novosGastosImovel: number;
 }
 
-const FIXED_CATEGORIES: Record<string, keyof RealData['fixos']> = {
-  'Moradia': 'moradia',
-  'Empréstimo': 'emprestimos',
-  'Assinatura': 'assinaturas',
-  'Seguro de Vida': 'seguros',
-  'Seguro do Carro': 'seguros',
-  'Telecom': 'telecom',
-  'Tarifas Bancárias': 'tarifas',
-};
+// Flexible category matching: normalizes name to a scenario bucket key
+// Handles singular/plural, case, accents, and subcategories
+function normCatName(name: string): string {
+  return name
+    .toLowerCase()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '') // remove accents
+    .trim();
+}
 
-const VARIABLE_CATEGORIES: Record<string, keyof RealData['variaveis']> = {
-  'Alimentação': 'alimentacao',
-  'Combustível': 'combustivel',
-  'Saúde': 'saude',
-  'Beleza': 'beleza',
-  'Casa': 'casa',
-  'Compras Online': 'comprasOnline',
-  'Transporte': 'transporte',
-  'Impostos': 'impostos',
-  'Educação': 'educacao',
-};
+type BucketKey = keyof RealData['fixos'] | keyof RealData['variaveis'] | 'excluded' | null;
 
-const EXCLUDED_CATEGORIES = ['Pagamento de Fatura', 'Transferência', 'Receita', 'Investimento'];
+function resolveBucket(catName: string): BucketKey {
+  const n = normCatName(catName);
+  
+  // Excluded categories
+  if (n.startsWith('pagamento de fatura') || n === 'transferencia' || n.startsWith('transferencia entre')
+    || n === 'receita' || n.startsWith('investimento') || n.startsWith('investimentos')
+    || n === 'outras receitas' || n.startsWith('receita produtora') || n.startsWith('salario')
+    || n.startsWith('freelance') || n === 'devolucoes' || n === 'reembolsos'
+    || n === 'operacao bancaria') {
+    return 'excluded';
+  }
+  
+  // Fixed
+  if (n === 'moradia' || n === 'aluguel' || n === 'condominio' || n === 'luz' || n === 'gas' || n === 'internet') return 'moradia';
+  if (n.startsWith('emprestimo') || n === 'financiamento') return 'emprestimos';
+  if (n.startsWith('assinatura')) return 'assinaturas';
+  if (n.startsWith('seguro')) return 'seguros'; // Seguro de Vida, Seguro do Carro, Seguro carro
+  if (n === 'telecom') return 'telecom';
+  if (n.startsWith('tarifa')) return 'tarifas';
+  
+  // Variable
+  if (n.startsWith('alimenta')) return 'alimentacao';
+  if (n.startsWith('combustivel') || n === 'combustivel') return 'combustivel';
+  if (n.startsWith('saude') || n === 'saude') return 'saude';
+  if (n === 'beleza' || n === 'estetica') return 'beleza';
+  if (n === 'casa' || n === 'moveis' || n === 'eletrodomesticos') return 'casa';
+  if (n.startsWith('compras')) return 'comprasOnline';
+  if (n === 'transporte' || n === 'pedagio' || n === 'manutencao') return 'transporte';
+  if (n.startsWith('imposto') || n === 'ipva') return 'impostos';
+  if (n.startsWith('educa')) return 'educacao';
+  
+  return null; // → goes to "outros"
+}
+
+const FIXED_KEYS = new Set<string>(['moradia', 'emprestimos', 'assinaturas', 'seguros', 'telecom', 'tarifas']);
+const VARIABLE_KEYS = new Set<string>(['alimentacao', 'combustivel', 'saude', 'beleza', 'casa', 'comprasOnline', 'transporte', 'impostos', 'educacao']);
 
 function SmallCurrencyInput({ value, onChange, label }: { value: number; onChange: (v: number) => void; label: string }) {
   return (
@@ -176,7 +200,7 @@ export function CenariosTab({ params }: Props) {
         const catRow = t.categorias as any;
         const catName = catRow?.nome || t.categoria || 'Outros';
         
-        if (EXCLUDED_CATEGORIES.includes(catName)) continue;
+        if (resolveBucket(catName) === 'excluded') continue;
         
         const month = t.data.slice(0, 7);
         const absVal = Math.abs(t.valor);
@@ -190,41 +214,49 @@ export function CenariosTab({ params }: Props) {
       const variaveis = { alimentacao: 0, combustivel: 0, saude: 0, beleza: 0, casa: 0, comprasOnline: 0, transporte: 0, impostos: 0, educacao: 0, outros: 0 };
       const catMesesMap: Record<string, number> = {};
 
+      // Build per-bucket totals
+      const bucketTotals: Record<string, number> = {};
+      const bucketMonths: Record<string, Set<string>> = {};
       let totalMapped = 0;
+      let unmappedTotal = 0;
+      const unmappedMonths = new Set<string>();
+
       for (const [cat, total] of Object.entries(catTotals)) {
         const mesesComDados = catMonths[cat]?.size || 1;
-        const avg = total / mesesComDados;
+        const bucket = resolveBucket(cat);
         
-        if (FIXED_CATEGORIES[cat]) {
-          const key = FIXED_CATEGORIES[cat];
-          fixos[key] += avg;
-          catMesesMap[key] = Math.max(catMesesMap[key] || 0, mesesComDados);
+        console.log(`[Cenários] Cat: "${cat}" → bucket: "${bucket}", total: ${total.toFixed(2)}, meses: ${mesesComDados}`);
+        
+        if (bucket === 'excluded') continue;
+        
+        if (bucket) {
+          bucketTotals[bucket] = (bucketTotals[bucket] || 0) + total;
+          if (!bucketMonths[bucket]) bucketMonths[bucket] = new Set();
+          catMonths[cat]?.forEach(m => bucketMonths[bucket].add(m));
           totalMapped += total;
-        } else if (VARIABLE_CATEGORIES[cat]) {
-          const key = VARIABLE_CATEGORIES[cat];
-          variaveis[key] += avg;
-          catMesesMap[key] = Math.max(catMesesMap[key] || 0, mesesComDados);
-          totalMapped += total;
+        } else {
+          unmappedTotal += total;
+          catMonths[cat]?.forEach(m => unmappedMonths.add(m));
         }
       }
 
-      // "Outros" = unmapped expenses / months with any expense
-      const totalExpenses = Object.values(catTotals).reduce((s, v) => s + v, 0);
-      const unmapped = totalExpenses - totalMapped;
-      if (unmapped > 0) {
-        // Count months that have any unmapped category
-        const unmappedMonths = new Set<string>();
-        for (const [cat, months] of Object.entries(catMonths)) {
-          if (!FIXED_CATEGORIES[cat] && !VARIABLE_CATEGORIES[cat]) {
-            months.forEach(m => unmappedMonths.add(m));
-          }
+      // Distribute bucket totals into fixos/variaveis using weighted month average
+      for (const [bucket, total] of Object.entries(bucketTotals)) {
+        const months = bucketMonths[bucket]?.size || 1;
+        const avg = Math.round(total / months);
+        catMesesMap[bucket] = months;
+        if (FIXED_KEYS.has(bucket)) {
+          (fixos as any)[bucket] = avg;
+        } else if (VARIABLE_KEYS.has(bucket)) {
+          (variaveis as any)[bucket] = avg;
         }
-        variaveis.outros = unmapped / (unmappedMonths.size || 1);
+      }
+
+      // "Outros" = unmapped expenses
+      if (unmappedTotal > 0) {
+        variaveis.outros = Math.round(unmappedTotal / (unmappedMonths.size || 1));
         catMesesMap['outros'] = unmappedMonths.size;
       }
-
-      for (const k of Object.keys(fixos) as (keyof typeof fixos)[]) fixos[k] = Math.round(fixos[k]);
-      for (const k of Object.keys(variaveis) as (keyof typeof variaveis)[]) variaveis[k] = Math.round(variaveis[k]);
 
       // Revenue: priority 1 = rendaBruta from Viabilidade, priority 2 = avg credits
       let receitaMedia = 0;
