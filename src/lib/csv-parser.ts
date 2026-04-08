@@ -135,6 +135,7 @@ export function parseSicrediCSV(csvText: string): ParseResult {
   const lines = normalizedText.split(/\r?\n/);
 
   let contaDetectada: string | null = null;
+  let detectedDueDate: { month: number; year: number } | null = null;
   const headerLines = lines.slice(0, 10).join(' ');
 
   if (headerLines.includes('Mastercard Black') || headerLines.includes('Black')) {
@@ -143,6 +144,18 @@ export function parseSicrediCSV(csvText: string): ParseResult {
     contaDetectada = 'Mercado Pago';
   } else if (headerLines.includes('Conta Corrente')) {
     contaDetectada = 'Sicredi Principal';
+  }
+
+  // Try to detect due date from header (e.g. "Data de Vencimento ;15/03/2026")
+  for (const line of lines.slice(0, 15)) {
+    const dueDateMatch = line.match(/[Vv]encimento\s*;?\s*(\d{2})\/(\d{2})\/(\d{4})/);
+    if (dueDateMatch) {
+      detectedDueDate = {
+        month: parseInt(dueDateMatch[2]) - 1, // 0-indexed
+        year: parseInt(dueDateMatch[3]),
+      };
+      break;
+    }
   }
 
   const headerIndex = lines.findIndex((l) =>
