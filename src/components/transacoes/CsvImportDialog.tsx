@@ -116,6 +116,8 @@ export function CsvImportDialog({ open, onOpenChange }: Props) {
   const [preparedPlan, setPreparedPlan] = useState<PreparedImportPlan | null>(null);
   const [pendingConflicts, setPendingConflicts] = useState<ConflictMatch[] | null>(null);
   const [conflictContext, setConflictContext] = useState<{ contaId: string; userId: string } | null>(null);
+  const [dateCorrectionItems, setDateCorrectionItems] = useState<DateCorrectionItem[] | null>(null);
+  const [dateCorrectMode, setDateCorrectMode] = useState(false);
 
   const [dueMonth, setDueMonth] = useState<number>(0);
   const [dueYear, setDueYear] = useState<number>(2026);
