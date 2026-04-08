@@ -38,6 +38,7 @@ export function SimuladorAmortizacaoTab({ params }: Props) {
     const rowAtMes = rows[mesIdx];
     const saldoNoMes = rowAtMes.saldoDevedor;
     const parcelaNormal = rowAtMes.parcelaNormal;
+    const taxaTotal = taxaMensal + trMensal;
 
     // OPÇÃO A: pagar parcelas normais
     let parcelasCobertas = 0;
@@ -46,42 +47,53 @@ export function SimuladorAmortizacaoTab({ params }: Props) {
     for (let i = mesIdx; i < rows.length; i++) {
       if (totalDesembolsadoA + rows[i].parcelaNormal > valorDisponivel) break;
       totalDesembolsadoA += rows[i].parcelaNormal;
-      saldoA = rows[i].saldoComExtra; // saldo after normal amort
       parcelasCobertas++;
     }
-    // Recalculate saldoA properly
     saldoA = saldoNoMes - amortFixa * parcelasCobertas;
-    const prazoRestanteA = params.prazoMeses - mesAmortizacao - parcelasCobertas + 1;
+    const prazoRestanteA = amortFixa > 0 ? Math.ceil(Math.max(0, saldoA) / amortFixa) : 0;
+
+    // Total juros+TR restantes para opção A (SAC closed form: S × rate × (P+1)/2)
+    const totalJurosTrA = Math.max(0, saldoA) * taxaTotal * (prazoRestanteA + 1) / 2;
 
     // OPÇÃO B: amortizar antecipado
-    const totalDesembolsadoB = valorDisponivel;
+    const totalDesembolsadoB = Math.min(valorDisponivel, saldoNoMes);
     const saldoB = Math.max(0, saldoNoMes - valorDisponivel);
     const prazoRestanteB = amortFixa > 0 ? Math.ceil(saldoB / amortFixa) : 0;
     const mesesEconomizados = Math.max(0, prazoRestanteA - prazoRestanteB);
 
-    // Estimar juros economizados nos meses economizados
-    let jurosEconomizados = 0;
-    const startMes = params.prazoMeses - mesesEconomizados;
-    for (let i = startMes; i < rows.length && i < params.prazoMeses; i++) {
-      if (rows[i]) {
-        jurosEconomizados += rows[i].juros + rows[i].correcaoTR;
-      }
-    }
+    // Total juros+TR restantes para opção B
+    const totalJurosTrB = saldoB * taxaTotal * (prazoRestanteB + 1) / 2;
+
+    // Economia real = diferença entre juros totais dos dois cenários
+    const jurosEconomizados = Math.max(0, totalJurosTrA - totalJurosTrB);
+
+    // Taxa de retorno implícita da amortização (= taxa do financiamento)
+    const taxaRetornoAnual = params.taxaAnualNominal + params.trAnual;
 
     // Veredicto
     let veredicto: 'amortizar' | 'equivalente' | 'parcelas';
-    if (mesesEconomizados > 6) veredicto = 'amortizar';
-    else if (mesesEconomizados >= 1) veredicto = 'equivalente';
-    else veredicto = 'parcelas';
+    if (jurosEconomizados > 0 && mesesEconomizados > 0) {
+      // Check if savings < 2% of amount used
+      const threshold = totalDesembolsadoB * 0.02;
+      if (jurosEconomizados < threshold) {
+        veredicto = 'equivalente';
+      } else {
+        veredicto = 'amortizar';
+      }
+    } else {
+      veredicto = 'parcelas';
+    }
 
     return {
       saldoNoMes, parcelaNormal, amortFixa,
       parcelasCobertas, totalDesembolsadoA, saldoA, prazoRestanteA,
       totalDesembolsadoB, saldoB, prazoRestanteB,
       mesesEconomizados, jurosEconomizados,
+      totalJurosTrA, totalJurosTrB,
+      taxaRetornoAnual,
       veredicto,
     };
-  }, [valorFinanciado, params.prazoMeses, taxaMensal, trMensal, mesAmortizacao, valorDisponivel, amortFixa]);
+  }, [valorFinanciado, params.prazoMeses, taxaMensal, trMensal, mesAmortizacao, valorDisponivel, amortFixa, params.taxaAnualNominal, params.trAnual]);
 
   if (!result) return null;
 
