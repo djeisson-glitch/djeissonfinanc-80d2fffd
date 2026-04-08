@@ -137,7 +137,7 @@ export function CsvImportDialog({ open, onOpenChange }: Props) {
     );
     const dueDate = new Date(dueYear, dueMonth, 1);
     if (dueDate < latestTx) {
-      return `Mês de vencimento (${MONTH_NAMES[dueMonth]}/${dueYear}) é anterior a transações no extrato`;
+      return `Período da fatura (${MONTH_NAMES[dueMonth]}/${dueYear}) é anterior a transações no extrato`;
     }
     return null;
   }, [isCredito, parsedTransactions, dueMonth, dueYear]);
@@ -303,7 +303,7 @@ export function CsvImportDialog({ open, onOpenChange }: Props) {
       return null;
     }
     if (isCredito && !dueConfirmed) {
-      toast({ title: "Confirme o mês de vencimento da fatura", variant: "destructive" });
+      toast({ title: "Confirme o período da fatura", variant: "destructive" });
       return null;
     }
     if (!selectedConta) {
