@@ -517,7 +517,14 @@ export function CenariosTab({ params }: Props) {
           <div className="grid grid-cols-2 gap-4">
             <div>
               <p className="text-xs font-medium mb-2">Receita</p>
-              <div className="group">{renderEditableRow('Receita média mensal', 'receita', realData.receitaMedia)}</div>
+              <div className="group">
+                {renderEditableRow(
+                  realData.receitaFonte === 'viabilidade'
+                    ? 'Renda bruta (aba Viabilidade)'
+                    : `Receita média mensal`,
+                  'receita', realData.receitaMedia
+                )}
+              </div>
               <p className="text-xs font-medium mt-3 mb-2">Gastos Fixos</p>
               <div className="space-y-0.5">
                 {[
