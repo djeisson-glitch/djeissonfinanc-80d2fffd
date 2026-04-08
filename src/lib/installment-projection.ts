@@ -66,7 +66,7 @@ export function projectFutureInstallments(
         user_id: t.user_id,
         conta_id: t.conta_id,
         data: isoDate,
-        data_original: projectedOriginal,
+        data_original: baseDate,
         mes_competencia: projectedCompetencia,
         descricao: `${baseDesc} (auto-projetada)`,
         valor: t.valor,
