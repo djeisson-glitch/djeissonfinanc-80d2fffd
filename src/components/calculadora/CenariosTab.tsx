@@ -61,29 +61,53 @@ interface ScenarioParams {
   novosGastosImovel: number;
 }
 
-const FIXED_CATEGORIES: Record<string, keyof RealData['fixos']> = {
-  'Moradia': 'moradia',
-  'Empréstimo': 'emprestimos',
-  'Assinatura': 'assinaturas',
-  'Seguro de Vida': 'seguros',
-  'Seguro do Carro': 'seguros',
-  'Telecom': 'telecom',
-  'Tarifas Bancárias': 'tarifas',
-};
+// Flexible category matching: normalizes name to a scenario bucket key
+// Handles singular/plural, case, accents, and subcategories
+function normCatName(name: string): string {
+  return name
+    .toLowerCase()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '') // remove accents
+    .trim();
+}
 
-const VARIABLE_CATEGORIES: Record<string, keyof RealData['variaveis']> = {
-  'Alimentação': 'alimentacao',
-  'Combustível': 'combustivel',
-  'Saúde': 'saude',
-  'Beleza': 'beleza',
-  'Casa': 'casa',
-  'Compras Online': 'comprasOnline',
-  'Transporte': 'transporte',
-  'Impostos': 'impostos',
-  'Educação': 'educacao',
-};
+type BucketKey = keyof RealData['fixos'] | keyof RealData['variaveis'] | 'excluded' | null;
 
-const EXCLUDED_CATEGORIES = ['Pagamento de Fatura', 'Transferência', 'Receita', 'Investimento'];
+function resolveBucket(catName: string): BucketKey {
+  const n = normCatName(catName);
+  
+  // Excluded categories
+  if (n.startsWith('pagamento de fatura') || n === 'transferencia' || n.startsWith('transferencia entre')
+    || n === 'receita' || n.startsWith('investimento') || n.startsWith('investimentos')
+    || n === 'outras receitas' || n.startsWith('receita produtora') || n.startsWith('salario')
+    || n.startsWith('freelance') || n === 'devolucoes' || n === 'reembolsos'
+    || n === 'operacao bancaria') {
+    return 'excluded';
+  }
+  
+  // Fixed
+  if (n === 'moradia' || n === 'aluguel' || n === 'condominio' || n === 'luz' || n === 'gas' || n === 'internet') return 'moradia';
+  if (n.startsWith('emprestimo') || n === 'financiamento') return 'emprestimos';
+  if (n.startsWith('assinatura')) return 'assinaturas';
+  if (n.startsWith('seguro')) return 'seguros'; // Seguro de Vida, Seguro do Carro, Seguro carro
+  if (n === 'telecom') return 'telecom';
+  if (n.startsWith('tarifa')) return 'tarifas';
+  
+  // Variable
+  if (n.startsWith('alimenta')) return 'alimentacao';
+  if (n.startsWith('combustivel') || n === 'combustivel') return 'combustivel';
+  if (n.startsWith('saude') || n === 'saude') return 'saude';
+  if (n === 'beleza' || n === 'estetica') return 'beleza';
+  if (n === 'casa' || n === 'moveis' || n === 'eletrodomesticos') return 'casa';
+  if (n.startsWith('compras')) return 'comprasOnline';
+  if (n === 'transporte' || n === 'pedagio' || n === 'manutencao') return 'transporte';
+  if (n.startsWith('imposto') || n === 'ipva') return 'impostos';
+  if (n.startsWith('educa')) return 'educacao';
+  
+  return null; // → goes to "outros"
+}
+
+const FIXED_KEYS = new Set<string>(['moradia', 'emprestimos', 'assinaturas', 'seguros', 'telecom', 'tarifas']);
+const VARIABLE_KEYS = new Set<string>(['alimentacao', 'combustivel', 'saude', 'beleza', 'casa', 'comprasOnline', 'transporte', 'impostos', 'educacao']);
 
 function SmallCurrencyInput({ value, onChange, label }: { value: number; onChange: (v: number) => void; label: string }) {
   return (
