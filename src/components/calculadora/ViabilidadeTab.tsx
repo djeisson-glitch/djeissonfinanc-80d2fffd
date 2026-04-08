@@ -4,10 +4,10 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Slider } from '@/components/ui/slider';
-import { Badge } from '@/components/ui/badge';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { CheckCircle, XCircle, Info, TrendingDown, ArrowRight, Car } from 'lucide-react';
-import { SacParams, calcViabilidade, ViabilidadeResult } from '@/lib/sac-utils';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { CheckCircle, XCircle, Info, ArrowRight, Car, ChevronDown, AlertTriangle, Wallet } from 'lucide-react';
+import { SacParams, calcViabilidade } from '@/lib/sac-utils';
 import { AiFinancingAnalysis } from './AiFinancingAnalysis';
 
 interface Props {
@@ -96,199 +96,245 @@ export function ViabilidadeTab({ params, onChange }: Props) {
 
   const diagEmoji = v.diagnostico === 'viavel' ? '🟢' : v.diagnostico === 'parcial' ? '🟡' : '🔴';
   const diagLabel = v.diagnostico === 'viavel' ? 'VIÁVEL' : v.diagnostico === 'parcial' ? 'PARCIALMENTE VIÁVEL' : 'INVIÁVEL';
+  const showSuggestions = v.diagnostico !== 'viavel';
 
   return (
     <div className="space-y-4">
-      {/* Bloco A - Dados do Imóvel */}
-      <Card>
-        <CardHeader className="pb-2"><CardTitle className="text-sm">Dados do Imóvel e Financiamento</CardTitle></CardHeader>
-        <CardContent className="space-y-4">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <CurrencyInput label="Valor do imóvel" value={params.valorImovel} onChange={v => onChange({ valorImovel: v })} />
-            <CurrencyInput label={`Entrada (${v.entradaPercent.toFixed(1)}%)`} value={params.entrada} onChange={v => onChange({ entrada: v })} />
-          </div>
-          <div className="space-y-1.5">
-            <Label className="text-xs">Prazo: {Math.floor(params.prazoMeses / 12)} anos ({params.prazoMeses} meses)</Label>
-            <Slider value={[params.prazoMeses]} onValueChange={([val]) => onChange({ prazoMeses: val })} min={120} max={420} step={12} className="mt-2" />
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <PercentInput label="Taxa de juros anual" value={params.taxaAnualNominal} onChange={v => onChange({ taxaAnualNominal: v })} />
-            <PercentInput label="TR estimada anual" value={params.trAnual} onChange={v => onChange({ trAnual: v })} tooltip="Use ~0% para cenário conservador" />
-          </div>
-          <div className="bg-muted/50 rounded-lg p-3 space-y-1 text-sm">
-            <StatRow label="Valor financiado" value={formatCurrency(v.valorFinanciado)} />
-            <StatRow label="Taxa mensal efetiva" value={`${(v.taxaMensal * 100).toFixed(4)}%`} />
-            <StatRow label="Amortização fixa/mês" value={formatCurrency(v.amortFixa)} />
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Bloco E - Resumo Rápido */}
-      <Card>
-        <CardHeader className="pb-2"><CardTitle className="text-sm">Resumo de Parcelas SAC</CardTitle></CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
-            {[
-              { label: 'Mês 1', val: v.parcelaMes1 },
-              { label: 'Mês 12', val: v.parcelaMes12 },
-              { label: 'Mês 60', val: v.parcelaMes60 },
-              { label: 'Mês 120', val: v.parcelaMes120 },
-              ...(params.prazoMeses >= 240 ? [{ label: 'Mês 240', val: v.parcelaMes240 }] : []),
-              { label: 'Última', val: v.parcelaUltima },
-            ].map(item => (
-              <div key={item.label} className="bg-muted/50 rounded-lg p-2 text-center">
-                <p className="text-[10px] text-muted-foreground">{item.label}</p>
-                <p className="text-xs font-bold">{formatCurrency(item.val)}</p>
-              </div>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Bloco B - Custos de Aquisição */}
-      <Card>
-        <CardHeader className="pb-2"><CardTitle className="text-sm">Custos de Aquisição</CardTitle></CardHeader>
-        <CardContent className="space-y-3">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <PercentInput label="ITBI" value={params.itbiPercent} onChange={v => onChange({ itbiPercent: v })} tooltip="Imposto sobre Transmissão de Bens Imóveis" />
-            <PercentInput label="Escritura + Registro" value={params.escrituraPercent} onChange={v => onChange({ escrituraPercent: v })} />
-          </div>
-          <div className="bg-muted/50 rounded-lg p-3 space-y-1 text-sm">
-            <StatRow label="ITBI" value={formatCurrency(v.itbiRS)} />
-            <StatRow label="Escritura + Registro" value={formatCurrency(v.escrituraRS)} />
-            <StatRow label="Total desembolso inicial" value={formatCurrency(v.totalDesembolso)} className="font-bold" />
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Bloco C - Renda */}
-      <Card>
-        <CardHeader className="pb-2"><CardTitle className="text-sm">Renda e Capacidade</CardTitle></CardHeader>
-        <CardContent className="space-y-3">
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <CurrencyInput label="Renda bruta familiar" value={params.rendaBruta} onChange={v => onChange({ rendaBruta: v })} />
-            <CurrencyInput label="Dívidas mensais (carro, etc.)" value={params.dividasMensais} onChange={v => onChange({ dividasMensais: v })} />
-            <PercentInput label="Limite comprometimento" value={params.limiteComprometimento} onChange={v => onChange({ limiteComprometimento: v })} />
-          </div>
-          <div className="bg-muted/50 rounded-lg p-3 space-y-1 text-sm">
-            <StatRow label="Máx. disponível p/ parcela" value={formatCurrency(v.maxDisponivel)} />
-            <StatRow
-              label="% comprometida da renda"
-              value={`${v.percentComprometida.toFixed(1)}%`}
-              className={v.percentComprometida > params.limiteComprometimento ? 'text-destructive' : 'text-green-500'}
-            />
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Bloco D - Capital */}
-      <Card>
-        <CardHeader className="pb-2"><CardTitle className="text-sm">Capital Disponível</CardTitle></CardHeader>
-        <CardContent className="space-y-3">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <CurrencyInput label="Capital disponível" value={params.capitalDisponivel} onChange={v => onChange({ capitalDisponivel: v })} />
+      {/* Row 1: Dados do Imóvel + Resumo Rápido */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <Card>
+          <CardHeader className="pb-2"><CardTitle className="text-sm">Dados do Imóvel e Financiamento</CardTitle></CardHeader>
+          <CardContent className="space-y-3">
+            <div className="grid grid-cols-2 gap-3">
+              <CurrencyInput label="Valor do imóvel" value={params.valorImovel} onChange={v => onChange({ valorImovel: v })} />
+              <CurrencyInput label={`Entrada (${v.entradaPercent.toFixed(1)}%)`} value={params.entrada} onChange={v => onChange({ entrada: v })} />
+            </div>
             <div className="space-y-1.5">
-              <Label className="text-xs">Reserva de emergência ({params.reservaMeses} meses)</Label>
-              <Slider value={[params.reservaMeses]} onValueChange={([val]) => onChange({ reservaMeses: val })} min={3} max={12} step={1} className="mt-2" />
+              <Label className="text-xs">Prazo: {Math.floor(params.prazoMeses / 12)}a ({params.prazoMeses}m)</Label>
+              <Slider value={[params.prazoMeses]} onValueChange={([val]) => onChange({ prazoMeses: val })} min={120} max={420} step={12} className="mt-1" />
             </div>
-          </div>
-          <div className="bg-muted/50 rounded-lg p-3 space-y-1 text-sm">
-            <StatRow label="Reserva necessária" value={formatCurrency(v.reservaNecessaria)} />
-            <StatRow
-              label="Capital restante após tudo"
-              value={formatCurrency(v.capitalRestante)}
-              className={v.capitalRestante >= 0 ? 'text-green-500' : 'text-destructive'}
-            />
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Bloco F - Totais */}
-      <Card>
-        <CardHeader className="pb-2"><CardTitle className="text-sm">Totais do Financiamento</CardTitle></CardHeader>
-        <CardContent>
-          <div className="bg-muted/50 rounded-lg p-3 space-y-1 text-sm">
-            <StatRow label="Total amortizado" value={formatCurrency(v.totalAmortizado)} />
-            <StatRow label="Total pago em TR" value={formatCurrency(v.totalTR)} />
-            <StatRow label="Total pago em juros" value={formatCurrency(v.totalJuros)} className="text-destructive" />
-            <div className="border-t pt-1 mt-1">
-              <StatRow label="TOTAL GERAL PAGO" value={formatCurrency(v.totalGeralPago)} className="font-bold text-base" />
+            <div className="grid grid-cols-2 gap-3">
+              <PercentInput label="Taxa juros a.a." value={params.taxaAnualNominal} onChange={v => onChange({ taxaAnualNominal: v })} />
+              <PercentInput label="TR a.a." value={params.trAnual} onChange={v => onChange({ trAnual: v })} tooltip="Use ~0% para cenário conservador" />
             </div>
-            <StatRow label="Custo efetivo total (CET)" value={formatCurrency(v.custoEfetivoTotal)} className="text-muted-foreground" />
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Bloco G - Checklist */}
-      <Card>
-        <CardHeader className="pb-2"><CardTitle className="text-sm">Checklist de Viabilidade</CardTitle></CardHeader>
-        <CardContent className="space-y-2">
-          <CheckItem ok={v.checkEntrada} label={`Entrada ≥ 20% do imóvel (${v.entradaPercent.toFixed(1)}%)`} />
-          <CheckItem ok={v.checkParcela} label={`Parcela + dívidas ≤ ${params.limiteComprometimento}% da renda (${v.percentComprometida.toFixed(1)}%)`} />
-          <CheckItem ok={v.checkCapital} label={`Capital cobre desembolso + reserva (sobra ${formatCurrency(v.capitalRestante)})`} />
-          <CheckItem ok={v.checkPrazo} label={`Prazo ≤ 420 meses (${params.prazoMeses} meses)`} />
-        </CardContent>
-      </Card>
-
-      {/* Bloco H - Sugestões */}
-      <Card>
-        <CardHeader className="pb-2"><CardTitle className="text-sm">O que Ajustar se Não Viável</CardTitle></CardHeader>
-        <CardContent>
-          <ul className="space-y-1.5 text-sm text-muted-foreground">
-            <li className="flex items-start gap-2"><ArrowRight className="h-4 w-4 mt-0.5 shrink-0 text-primary" /> Aumentar a entrada → reduz saldo financiado e parcela</li>
-            <li className="flex items-start gap-2"><ArrowRight className="h-4 w-4 mt-0.5 shrink-0 text-primary" /> Ampliar o prazo → parcela menor (mais juros no total)</li>
-            <li className="flex items-start gap-2"><ArrowRight className="h-4 w-4 mt-0.5 shrink-0 text-primary" /> Buscar imóvel de menor valor</li>
-            <li className="flex items-start gap-2"><ArrowRight className="h-4 w-4 mt-0.5 shrink-0 text-primary" /> Aumentar renda familiar (cônjuge, freelance, etc.)</li>
-            <li className="flex items-start gap-2"><ArrowRight className="h-4 w-4 mt-0.5 shrink-0 text-primary" /> Quitar outras dívidas antes → libera margem de renda</li>
-            <li className="flex items-start gap-2"><ArrowRight className="h-4 w-4 mt-0.5 shrink-0 text-primary" /> Acumular mais capital antes de comprar</li>
-          </ul>
-        </CardContent>
-      </Card>
-
-      {/* Bloco I - Custo de Transição */}
-      <Card>
-        <CardHeader className="pb-2"><CardTitle className="text-sm">Custo de Transição</CardTitle></CardHeader>
-        <CardContent className="space-y-3">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <CurrencyInput label="Aluguel atual" value={params.aluguelAtual} onChange={v => onChange({ aluguelAtual: v })} />
-            <CurrencyInput label="Condomínio atual" value={params.condominioAtual} onChange={v => onChange({ condominioAtual: v })} />
-          </div>
-          <div className="bg-muted/50 rounded-lg p-3 space-y-1 text-sm">
-            <StatRow label="Total habitação hoje" value={formatCurrency(v.totalHabitacaoHoje)} />
-            <StatRow label="Parcela mês 1" value={formatCurrency(v.parcelaMes1)} />
-            <StatRow
-              label="Delta mensal"
-              value={`${v.deltaMensal >= 0 ? '+' : ''}${formatCurrency(v.deltaMensal)}`}
-              className={v.deltaMensal > 0 ? 'text-destructive' : 'text-green-500'}
-            />
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Bloco J - Cenário Carro */}
-      <Card>
-        <CardHeader className="pb-2">
-          <CardTitle className="text-sm flex items-center gap-2">
-            <Car className="h-4 w-4" />
-            Cenário: Quitação do Carro
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          <CurrencyInput label="Saldo devedor do carro hoje" value={params.saldoDevedorCarro} onChange={v => onChange({ saldoDevedorCarro: v })} />
-          <div className="bg-muted/50 rounded-lg p-3 space-y-1 text-sm">
-            <StatRow label="Capital líquido após quitar carro" value={formatCurrency(v.capitalLiquidoSemCarro)} />
-            <StatRow label="Nova entrada estimada" value={formatCurrency(v.novaEntradaEst)} />
-            <StatRow label="Novo valor financiado" value={formatCurrency(v.novoValorFinanciado)} />
-            <div className="border-t pt-1 mt-1">
-              <StatRow label="% renda SEM quitação" value={`${v.percentSemQuitacao.toFixed(1)}%`} className="text-destructive" />
-              <StatRow label="% renda COM quitação" value={`${v.percentComQuitacao.toFixed(1)}%`} className="text-green-500" />
-              <StatRow label="Melhora" value={`${v.melhoraComprometimento.toFixed(1)} p.p.`} className="font-bold text-primary" />
+            <div className="bg-muted/50 rounded-lg p-2.5 space-y-0.5 text-sm">
+              <StatRow label="Financiado" value={formatCurrency(v.valorFinanciado)} />
+              <StatRow label="Taxa mensal" value={`${(v.taxaMensal * 100).toFixed(4)}%`} />
+              <StatRow label="Amort. fixa/mês" value={formatCurrency(v.amortFixa)} />
             </div>
-          </div>
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
 
-      {/* AI Analysis */}
+        <Card>
+          <CardHeader className="pb-2"><CardTitle className="text-sm">Resumo de Parcelas SAC</CardTitle></CardHeader>
+          <CardContent>
+            <div className="space-y-1.5">
+              {[
+                { label: 'Mês 1 (primeira)', val: v.parcelaMes1 },
+                { label: 'Mês 12 (1 ano)', val: v.parcelaMes12 },
+                { label: 'Mês 60 (5 anos)', val: v.parcelaMes60 },
+                { label: 'Mês 120 (10 anos)', val: v.parcelaMes120 },
+                ...(params.prazoMeses >= 240 ? [{ label: 'Mês 240 (20 anos)', val: v.parcelaMes240 }] : []),
+                { label: 'Última parcela', val: v.parcelaUltima },
+              ].map(item => (
+                <StatRow key={item.label} label={item.label} value={formatCurrency(item.val)} />
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Row 2: Custos + Capital | Totais */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="space-y-4">
+          <Card>
+            <CardHeader className="pb-2"><CardTitle className="text-sm">Custos de Aquisição</CardTitle></CardHeader>
+            <CardContent className="space-y-3">
+              <div className="grid grid-cols-2 gap-3">
+                <PercentInput label="ITBI" value={params.itbiPercent} onChange={v => onChange({ itbiPercent: v })} tooltip="Imposto sobre Transmissão de Bens Imóveis" />
+                <PercentInput label="Escritura + Registro" value={params.escrituraPercent} onChange={v => onChange({ escrituraPercent: v })} />
+              </div>
+              <div className="bg-muted/50 rounded-lg p-2.5 space-y-0.5 text-sm">
+                <StatRow label="ITBI" value={formatCurrency(v.itbiRS)} />
+                <StatRow label="Escritura" value={formatCurrency(v.escrituraRS)} />
+                <StatRow label="Total desembolso" value={formatCurrency(v.totalDesembolso)} className="font-bold" />
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="pb-2"><CardTitle className="text-sm">Capital Disponível</CardTitle></CardHeader>
+            <CardContent className="space-y-3">
+              <div className="grid grid-cols-2 gap-3">
+                <CurrencyInput label="Capital disponível" value={params.capitalDisponivel} onChange={v => onChange({ capitalDisponivel: v })} />
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Reserva ({params.reservaMeses} meses)</Label>
+                  <Slider value={[params.reservaMeses]} onValueChange={([val]) => onChange({ reservaMeses: val })} min={3} max={12} step={1} className="mt-1" />
+                </div>
+              </div>
+              <div className="bg-muted/50 rounded-lg p-2.5 space-y-0.5 text-sm">
+                <StatRow label="Reserva necessária" value={formatCurrency(v.reservaNecessaria)} />
+                <StatRow label="Capital restante" value={formatCurrency(v.capitalRestante)} className={v.capitalRestante >= 0 ? 'text-green-500' : 'text-destructive'} />
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        <Card>
+          <CardHeader className="pb-2"><CardTitle className="text-sm">Totais do Financiamento</CardTitle></CardHeader>
+          <CardContent>
+            <div className="bg-muted/50 rounded-lg p-3 space-y-1 text-sm">
+              <StatRow label="Total amortizado" value={formatCurrency(v.totalAmortizado)} />
+              <StatRow label="Total pago em TR" value={formatCurrency(v.totalTR)} />
+              <StatRow label="Total pago em juros" value={formatCurrency(v.totalJuros)} className="text-destructive" />
+              <div className="border-t pt-1 mt-1">
+                <StatRow label="TOTAL GERAL PAGO" value={formatCurrency(v.totalGeralPago)} className="font-bold text-base" />
+              </div>
+              <StatRow label="CET (Custo Efetivo Total)" value={formatCurrency(v.custoEfetivoTotal)} className="text-muted-foreground" />
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Row 3: Renda | Checklist + Diagnóstico */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <Card>
+          <CardHeader className="pb-2"><CardTitle className="text-sm">Renda e Capacidade</CardTitle></CardHeader>
+          <CardContent className="space-y-3">
+            <div className="grid grid-cols-2 gap-3">
+              <CurrencyInput label="Renda bruta familiar" value={params.rendaBruta} onChange={v => onChange({ rendaBruta: v })} />
+              <PercentInput label="Limite comprometimento" value={params.limiteComprometimento} onChange={v => onChange({ limiteComprometimento: v })} />
+            </div>
+            <CurrencyInput label="Dívidas mensais (carro, etc.)" value={params.dividasMensais} onChange={v => onChange({ dividasMensais: v })} tooltip="Usado no cenário de quitação do carro abaixo. Não entra no cálculo de comprometimento bancário." />
+            <div className="bg-muted/50 rounded-lg p-2.5 space-y-0.5 text-sm">
+              <StatRow label="Máx. parcela (limite)" value={formatCurrency(v.maxDisponivel)} />
+              <StatRow
+                label="% comprometida da renda"
+                value={`${v.percentComprometida.toFixed(1)}%`}
+                className={v.percentComprometida > params.limiteComprometimento ? 'text-destructive' : 'text-green-500'}
+              />
+            </div>
+          </CardContent>
+        </Card>
+
+        <div className="space-y-4">
+          <Card>
+            <CardHeader className="pb-2"><CardTitle className="text-sm">Checklist de Viabilidade</CardTitle></CardHeader>
+            <CardContent className="space-y-2">
+              <CheckItem ok={v.checkEntrada} label={`Entrada ≥ 20% (${v.entradaPercent.toFixed(1)}%)`} />
+              <CheckItem ok={v.checkParcela} label={`Parcela ≤ ${params.limiteComprometimento}% da renda (${v.percentComprometida.toFixed(1)}%)`} />
+              <CheckItem ok={v.checkCapital} label={`Capital cobre desembolso + reserva (${formatCurrency(v.capitalRestante)})`} />
+              <CheckItem ok={v.checkPrazo} label={`Prazo ≤ 420 meses (${params.prazoMeses}m)`} />
+            </CardContent>
+          </Card>
+
+          <Card className={diagColor}>
+            <CardContent className="p-4">
+              <div className="text-lg font-bold mb-1">{diagEmoji} {diagLabel}</div>
+              <p className="text-sm text-muted-foreground">{v.diagnosticoTexto}</p>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+
+      {/* Row 4: Custo de Transição + Impacto | Cenário Carro */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="space-y-4">
+          <Card>
+            <CardHeader className="pb-2"><CardTitle className="text-sm">Custo de Transição</CardTitle></CardHeader>
+            <CardContent className="space-y-3">
+              <div className="grid grid-cols-2 gap-3">
+                <CurrencyInput label="Aluguel atual" value={params.aluguelAtual} onChange={v => onChange({ aluguelAtual: v })} />
+                <CurrencyInput label="Condomínio atual" value={params.condominioAtual} onChange={v => onChange({ condominioAtual: v })} />
+              </div>
+              <div className="bg-muted/50 rounded-lg p-2.5 space-y-0.5 text-sm">
+                <StatRow label="Total habitação hoje" value={formatCurrency(v.totalHabitacaoHoje)} />
+                <StatRow label="Parcela mês 1" value={formatCurrency(v.parcelaMes1)} />
+                <StatRow label="Delta mensal" value={`${v.deltaMensal >= 0 ? '+' : ''}${formatCurrency(v.deltaMensal)}`} className={v.deltaMensal > 0 ? 'text-destructive' : 'text-green-500'} />
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm flex items-center gap-2">
+                <Wallet className="h-4 w-4" />
+                Impacto no Orçamento Mensal
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="bg-muted/50 rounded-lg p-2.5 space-y-0.5 text-sm">
+                <StatRow label="Habitação atual" value={formatCurrency(v.totalHabitacaoHoje)} />
+                <StatRow label="+ Parcela financiamento" value={formatCurrency(v.parcelaMes1)} />
+                <div className="border-t pt-1 mt-1">
+                  <StatRow label="Novo custo mensal est." value={formatCurrency(v.totalHabitacaoHoje + v.parcelaMes1)} className="font-bold" />
+                  <StatRow label="Saldo livre estimado" value={formatCurrency(params.rendaBruta - v.totalHabitacaoHoje - v.parcelaMes1)} className={(params.rendaBruta - v.totalHabitacaoHoje - v.parcelaMes1) >= 0 ? 'text-green-500' : 'text-destructive'} />
+                </div>
+              </div>
+              {params.dividasMensais > 0 && (
+                <div className="mt-3 p-2.5 rounded-lg bg-amber-500/10 border border-amber-500/30 flex items-start gap-2">
+                  <AlertTriangle className="h-4 w-4 text-amber-500 shrink-0 mt-0.5" />
+                  <p className="text-xs text-amber-700 dark:text-amber-400">
+                    Você possui {formatCurrency(params.dividasMensais)}/mês em outras dívidas (carro, etc.) que impactam seu orçamento mas não são consideradas pelo banco no limite de comprometimento.
+                  </p>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm flex items-center gap-2">
+              <Car className="h-4 w-4" />
+              Cenário: Quitação do Carro
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <CurrencyInput label="Saldo devedor do carro" value={params.saldoDevedorCarro} onChange={v => onChange({ saldoDevedorCarro: v })} />
+            <div className="bg-muted/50 rounded-lg p-2.5 space-y-0.5 text-sm">
+              <StatRow label="Capital líquido após quitar" value={formatCurrency(v.capitalLiquidoSemCarro)} />
+              <StatRow label="Nova entrada estimada" value={formatCurrency(v.novaEntradaEst)} />
+              <StatRow label="Novo valor financiado" value={formatCurrency(v.novoValorFinanciado)} />
+              <div className="border-t pt-1 mt-1">
+                <StatRow label="% renda SEM quitação" value={`${v.percentSemQuitacao.toFixed(1)}%`} className="text-destructive" />
+                <StatRow label="% renda COM quitação" value={`${v.percentComQuitacao.toFixed(1)}%`} className="text-green-500" />
+                <StatRow label="Melhora" value={`${v.melhoraComprometimento.toFixed(1)} p.p.`} className="font-bold text-primary" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Bloco H - Sugestões (collapsible, only when not viable) */}
+      {showSuggestions && (
+        <Collapsible>
+          <Card>
+            <CollapsibleTrigger className="w-full">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm flex items-center gap-2">
+                  O que Ajustar
+                  <ChevronDown className="h-4 w-4 ml-auto transition-transform" />
+                </CardTitle>
+              </CardHeader>
+            </CollapsibleTrigger>
+            <CollapsibleContent>
+              <CardContent>
+                <ul className="space-y-1.5 text-sm text-muted-foreground">
+                  <li className="flex items-start gap-2"><ArrowRight className="h-4 w-4 mt-0.5 shrink-0 text-primary" /> Aumentar a entrada → reduz saldo financiado e parcela</li>
+                  <li className="flex items-start gap-2"><ArrowRight className="h-4 w-4 mt-0.5 shrink-0 text-primary" /> Ampliar o prazo → parcela menor (mais juros no total)</li>
+                  <li className="flex items-start gap-2"><ArrowRight className="h-4 w-4 mt-0.5 shrink-0 text-primary" /> Buscar imóvel de menor valor</li>
+                  <li className="flex items-start gap-2"><ArrowRight className="h-4 w-4 mt-0.5 shrink-0 text-primary" /> Aumentar renda familiar (cônjuge, freelance, etc.)</li>
+                  <li className="flex items-start gap-2"><ArrowRight className="h-4 w-4 mt-0.5 shrink-0 text-primary" /> Quitar outras dívidas antes → libera margem de renda</li>
+                  <li className="flex items-start gap-2"><ArrowRight className="h-4 w-4 mt-0.5 shrink-0 text-primary" /> Acumular mais capital antes de comprar</li>
+                </ul>
+              </CardContent>
+            </CollapsibleContent>
+          </Card>
+        </Collapsible>
+      )}
+
+      {/* Row 5: AI Analysis (full width) */}
       <AiFinancingAnalysis context={{
         valorImovel: params.valorImovel,
         entrada: params.entrada,
@@ -306,16 +352,6 @@ export function ViabilidadeTab({ params, onChange }: Props) {
         percRenda: v.percentComprometida,
         semaforo: v.diagnostico === 'viavel' ? 'verde' : v.diagnostico === 'parcial' ? 'amarelo' : 'vermelho',
       }} />
-
-      {/* Diagnóstico Final */}
-      <Card className={diagColor}>
-        <CardContent className="p-4">
-          <div className="text-lg font-bold mb-1">
-            {diagEmoji} {diagLabel}
-          </div>
-          <p className="text-sm text-muted-foreground">{v.diagnosticoTexto}</p>
-        </CardContent>
-      </Card>
     </div>
   );
 }
