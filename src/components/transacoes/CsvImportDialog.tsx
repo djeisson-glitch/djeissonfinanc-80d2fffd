@@ -1171,15 +1171,29 @@ export function CsvImportDialog({ open, onOpenChange }: Props) {
 
                     {importing && <Progress value={progress} />}
 
-                    <Button
-                      onClick={handleOpenPreview}
-                      disabled={importing || (isCredito && !dueConfirmed)}
-                      className="w-full"
-                    >
-                      {importing
-                        ? "Analisando transações..."
-                        : `Revisar ${parsedTransactions.length} transações antes de importar`}
-                    </Button>
+                    <div className="flex flex-col gap-2">
+                      <Button
+                        onClick={handleOpenPreview}
+                        disabled={importing || (isCredito && !dueConfirmed)}
+                        className="w-full"
+                      >
+                        {importing
+                          ? "Analisando transações..."
+                          : `Revisar ${parsedTransactions.length} transações antes de importar`}
+                      </Button>
+
+                      {isCredito && dueConfirmed && (
+                        <Button
+                          variant="outline"
+                          onClick={handleCheckDateCorrection}
+                          disabled={importing}
+                          className="w-full"
+                        >
+                          <CalendarDays className="mr-2 h-4 w-4" />
+                          Corrigir datas de importação anterior
+                        </Button>
+                      )}
+                    </div>
                   </>
                 )}
               </div>
