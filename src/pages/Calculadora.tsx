@@ -1,9 +1,10 @@
 import { useState } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Home, Table2, ArrowDownUp } from 'lucide-react';
+import { Home, Table2, ArrowDownUp, BarChart3 } from 'lucide-react';
 import { ViabilidadeTab } from '@/components/calculadora/ViabilidadeTab';
 import { AmortizacaoTab } from '@/components/calculadora/AmortizacaoTab';
 import { SimuladorAmortizacaoTab } from '@/components/calculadora/SimuladorAmortizacaoTab';
+import { CenariosTab } from '@/components/calculadora/CenariosTab';
 import { SacParams } from '@/lib/sac-utils';
 
 const DEFAULT_PARAMS: SacParams = {
@@ -47,6 +48,10 @@ export default function CalculadoraPage() {
             <ArrowDownUp className="h-4 w-4" />
             Simulador
           </TabsTrigger>
+          <TabsTrigger value="cenarios" className="flex-1 gap-1.5">
+            <BarChart3 className="h-4 w-4" />
+            Cenários
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="viabilidade" className="mt-4">
@@ -59,6 +64,10 @@ export default function CalculadoraPage() {
 
         <TabsContent value="simulador" className="mt-4">
           <SimuladorAmortizacaoTab params={params} />
+        </TabsContent>
+
+        <TabsContent value="cenarios" className="mt-4">
+          <CenariosTab params={params} />
         </TabsContent>
       </Tabs>
     </div>
