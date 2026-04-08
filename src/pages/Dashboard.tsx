@@ -151,6 +151,7 @@ export default function DashboardPage() {
   const totalNaoEssencial = totalDespesas - totalEssencial;
   const pctEssencial = totalDespesas > 0 ? (totalEssencial / totalDespesas) * 100 : 0;
 
+  const [faturaDrawer, setFaturaDrawer] = useState<{ open: boolean; cardId: string; cardName: string }>({ open: false, cardId: '', cardName: '' });
 
   if (isLoading) {
     return (
