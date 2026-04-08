@@ -29,6 +29,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { ImportReport, ImportResult, DuplicateInfo, ImportedItem } from "./ImportReport";
 import { CsvImportPreviewV2, type ImportPreviewData, type InstallmentGroup } from "./CsvImportPreviewV2";
 import { ConflictModal } from "./ConflictModal";
+import { DateCorrectionPreview, type DateCorrectionItem } from "./DateCorrectionPreview";
 
 interface Props {
   open: boolean;
