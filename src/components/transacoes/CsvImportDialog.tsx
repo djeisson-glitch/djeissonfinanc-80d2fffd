@@ -245,6 +245,11 @@ export function CsvImportDialog({ open, onOpenChange }: Props) {
       if (contaDetectada && ["black", "mercado pago"].some((n) => contaDetectada!.toLowerCase().includes(n))) {
         accountType = "credito";
       }
+      // Use auto-detected due date from CSV header if available
+      if (parsed.detectedDueDate) {
+        setDueMonth(parsed.detectedDueDate.month);
+        setDueYear(parsed.detectedDueDate.year);
+      }
     }
 
     setDetectedConta(contaDetectada);
@@ -254,9 +259,12 @@ export function CsvImportDialog({ open, onOpenChange }: Props) {
     setParsedTotalLines(totalLines);
     setParsedLineLogs(lineLogs);
 
-    const defaultDue = getDefaultDueDate(transactions);
-    setDueMonth(defaultDue.month);
-    setDueYear(defaultDue.year);
+    // Only set default due date if not already set by CSV header detection
+    if (!('detectedDueDate' in (ext === 'csv' ? { detectedDueDate: true } : {}))) {
+      const defaultDue = getDefaultDueDate(transactions);
+      setDueMonth(defaultDue.month);
+      setDueYear(defaultDue.year);
+    }
 
     if (contaDetectada && contasList) {
       const match = contasList.find((c: any) =>
