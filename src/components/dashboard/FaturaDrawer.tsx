@@ -18,20 +18,34 @@ interface Props {
 
 export function FaturaDrawer({ open, onOpenChange, cardId, cardName, start, end, month, year }: Props) {
   const { user } = useAuth();
+  const billingPeriod = `${year}-${String(month + 1).padStart(2, '0')}`;
 
   const { data: transacoes } = useQuery({
-    queryKey: ['fatura-detail', cardId, start, end],
+    queryKey: ['fatura-detail', cardId, billingPeriod],
     queryFn: async () => {
-      const { data } = await supabase
+      // Get by billing period first
+      const { data: byPeriod } = await supabase
         .from('transacoes')
         .select('*')
         .eq('user_id', user!.id)
         .eq('conta_id', cardId)
         .eq('ignorar_dashboard', false)
+        .eq('mes_competencia', billingPeriod)
+        .order('data', { ascending: false });
+      
+      // Fallback for old imports without mes_competencia
+      const { data: byDate } = await supabase
+        .from('transacoes')
+        .select('*')
+        .eq('user_id', user!.id)
+        .eq('conta_id', cardId)
+        .eq('ignorar_dashboard', false)
+        .is('mes_competencia', null)
         .gte('data', start)
         .lte('data', end)
         .order('data', { ascending: false });
-      return data || [];
+      
+      return [...(byPeriod || []), ...(byDate || [])];
     },
     enabled: open && !!user,
   });

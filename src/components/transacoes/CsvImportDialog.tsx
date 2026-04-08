@@ -973,10 +973,10 @@ export function CsvImportDialog({ open, onOpenChange }: Props) {
                       <div className="space-y-3 p-3 rounded-lg border border-accent/30 bg-accent/5">
                         <div className="flex items-center gap-2">
                           <CalendarDays className="h-4 w-4 text-accent" />
-                          <Label className="text-sm font-medium">Mês de vencimento da fatura</Label>
+                          <Label className="text-sm font-medium">Período da fatura</Label>
                         </div>
                         <p className="text-xs text-muted-foreground">
-                          Todas as transações serão registradas no dia 01 do mês de vencimento selecionado.
+                          Informe a qual fatura estas transações pertencem. As datas originais de cada compra serão preservadas.
                         </p>
                         <div className="flex gap-2">
                           <Select
