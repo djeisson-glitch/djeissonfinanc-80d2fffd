@@ -44,6 +44,8 @@ interface ParseResult {
   skippedLines: SkippedLine[];
   totalLines: number;
   lineLogs: CsvLineLogEntry[];
+  /** Auto-detected due date from CSV header (e.g. "Data de Vencimento ;15/03/2026") */
+  detectedDueDate: { month: number; year: number } | null;
 }
 
 /**
