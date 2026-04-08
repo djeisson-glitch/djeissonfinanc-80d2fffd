@@ -1023,7 +1023,14 @@ export function CsvImportDialog({ open, onOpenChange }: Props) {
           </DialogHeader>
 
           {!result ? (
-            preparedPlan ? (
+            dateCorrectionItems ? (
+              <DateCorrectionPreview
+                items={dateCorrectionItems}
+                confirming={importing}
+                onBack={() => { setDateCorrectionItems(null); setDateCorrectMode(false); }}
+                onConfirm={handleApplyDateCorrection}
+              />
+            ) : preparedPlan ? (
               <CsvImportPreviewV2
                 data={preparedPlan.previewData}
                 confirming={importing}
