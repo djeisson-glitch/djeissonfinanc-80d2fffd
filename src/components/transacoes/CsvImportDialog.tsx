@@ -1034,10 +1034,10 @@ export function CsvImportDialog({ open, onOpenChange }: Props) {
                         >
                           {dueConfirmed ? (
                             <>
-                              <Check className="h-4 w-4 mr-1" /> Vencimento: {MONTH_NAMES[dueMonth]} {dueYear}
+                              <Check className="h-4 w-4 mr-1" /> Fatura: {MONTH_NAMES[dueMonth]} {dueYear}
                             </>
                           ) : (
-                            "Confirmar vencimento"
+                            "Confirmar período da fatura"
                           )}
                         </Button>
                       </div>
