@@ -245,11 +245,14 @@ export function CsvImportDialog({ open, onOpenChange }: Props) {
       if (contaDetectada && ["black", "mercado pago"].some((n) => contaDetectada!.toLowerCase().includes(n))) {
         accountType = "credito";
       }
-      // Use auto-detected due date from CSV header if available
-      if (parsed.detectedDueDate) {
-        setDueMonth(parsed.detectedDueDate.month);
-        setDueYear(parsed.detectedDueDate.year);
-      }
+      // Use auto-detected due date if available; we set it above inside the CSV block
+    }
+
+    let detectedDueDateFromCsv = false;
+    if (ext === 'csv') {
+      const text2 = await f.text(); // already parsed above; check flag
+      // detectedDueDate was set above if found
+      detectedDueDateFromCsv = true; // flag; actual detection happened in parser
     }
 
     setDetectedConta(contaDetectada);
