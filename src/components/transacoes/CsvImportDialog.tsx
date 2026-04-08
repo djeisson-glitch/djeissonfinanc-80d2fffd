@@ -281,14 +281,13 @@ export function CsvImportDialog({ open, onOpenChange }: Props) {
     if (!isCredito || !dueConfirmed) {
       return transactions.map((t) => ({ ...t, _data_original: t.data, _mes_competencia: "" }));
     }
-    const dueDateStr = `${dueYear}-${String(dueMonth + 1).padStart(2, "0")}-01`;
-    const compDate = new Date(dueYear, dueMonth - 1, 1);
-    const mesCompetencia = `${compDate.getFullYear()}-${String(compDate.getMonth() + 1).padStart(2, "0")}`;
+    // Keep original transaction date in `data`, use billing period for `mes_competencia`
+    const billingPeriod = `${dueYear}-${String(dueMonth + 1).padStart(2, "0")}`;
     return transactions.map((t) => ({
       ...t,
       _data_original: t.data,
-      _mes_competencia: mesCompetencia,
-      data: dueDateStr,
+      _mes_competencia: billingPeriod,
+      // data stays as original transaction date (NOT overwritten to 01/month)
     }));
   };
 
