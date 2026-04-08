@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import ReactMarkdown from 'react-markdown';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -87,7 +88,9 @@ export function AiFinancingAnalysis({ context }: Props) {
             <p className="text-xs text-muted-foreground mt-2">Consultando o assistente financeiro...</p>
           </div>
         ) : (
-          <div className="text-sm whitespace-pre-wrap leading-relaxed">{analysis}</div>
+          <div className="prose prose-sm dark:prose-invert max-w-none">
+            <ReactMarkdown>{analysis || ''}</ReactMarkdown>
+          </div>
         )}
       </CardContent>
     </Card>

@@ -170,9 +170,9 @@ export function calcViabilidade(p: SacParams): ViabilidadeResult {
   const totalDesembolso = p.entrada + itbiRS + escrituraRS;
 
   // Bloco C
-  const maxDisponivel = (p.rendaBruta * p.limiteComprometimento / 100) - p.dividasMensais;
+  const maxDisponivel = (p.rendaBruta * p.limiteComprometimento / 100);
   const percentComprometida = p.rendaBruta > 0
-    ? ((parcelaMes1 + p.dividasMensais) / p.rendaBruta) * 100
+    ? (parcelaMes1 / p.rendaBruta) * 100
     : 0;
 
   // Bloco D
@@ -184,7 +184,7 @@ export function calcViabilidade(p: SacParams): ViabilidadeResult {
 
   // Checklist
   const checkEntrada = entradaPercent >= 20;
-  const checkParcela = percentComprometida <= p.limiteComprometimento;
+  const checkParcela = percentComprometida <= p.limiteComprometimento; // Only mortgage vs income
   const checkCapital = capitalRestante >= 0;
   const checkPrazo = p.prazoMeses <= 420;
 

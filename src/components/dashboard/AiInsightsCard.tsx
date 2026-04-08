@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import ReactMarkdown from 'react-markdown';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -33,14 +34,11 @@ export function AiInsightsCard({ context }: AiInsightsCardProps) {
       const { data, error } = await supabase.functions.invoke('ai-financial-advisor', {
         body: { type: 'dashboard_insights', context },
       });
-
       if (error) throw error;
-
       if (data?.error) {
         toast.error(data.error);
         return;
       }
-
       setAnalysis(data.analysis);
     } catch (e: any) {
       console.error('AI error:', e);
@@ -58,12 +56,7 @@ export function AiInsightsCard({ context }: AiInsightsCardProps) {
             <Sparkles className="h-5 w-5 text-primary" />
             <span className="text-sm font-medium">Análise com IA</span>
           </div>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={fetchAnalysis}
-            disabled={context.totalDespesas === 0}
-          >
+          <Button variant="outline" size="sm" onClick={fetchAnalysis} disabled={context.totalDespesas === 0}>
             <Sparkles className="h-4 w-4 mr-1" />
             Gerar insights
           </Button>
@@ -92,7 +85,9 @@ export function AiInsightsCard({ context }: AiInsightsCardProps) {
             <p className="text-xs text-muted-foreground mt-2">Consultando o assistente financeiro...</p>
           </div>
         ) : (
-          <div className="text-sm whitespace-pre-wrap leading-relaxed">{analysis}</div>
+          <div className="prose prose-sm dark:prose-invert max-w-none">
+            <ReactMarkdown>{analysis || ''}</ReactMarkdown>
+          </div>
         )}
       </CardContent>
     </Card>
