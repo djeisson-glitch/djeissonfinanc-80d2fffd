@@ -170,6 +170,7 @@ export function parseSicrediCSV(csvText: string): ParseResult {
   if (headerIndex === -1) {
     return {
       contaDetectada,
+      detectedDueDate,
       transactions: [],
       skippedLines: [{ lineNumber: 0, content: '', reason: 'Cabeçalho não encontrado no arquivo' }],
       totalLines: lines.length,
@@ -306,9 +307,11 @@ export function parseSicrediCSV(csvText: string): ParseResult {
 
   return {
     contaDetectada,
+    detectedDueDate,
     transactions,
     skippedLines,
     totalLines: lines.length,
     lineLogs,
+  };
   };
 }
