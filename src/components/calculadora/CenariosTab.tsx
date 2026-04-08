@@ -421,7 +421,14 @@ export function CenariosTab({ params }: Props) {
 
   const renderEditableRow = (label: string, key: string, original: number) => (
     <div key={key} className="flex items-center justify-between py-1">
-      <span className="text-xs text-muted-foreground">{label}</span>
+      <span className="text-xs text-muted-foreground flex items-center gap-1">
+        {label}
+        {original === 0 && !isOverridden(key) && key !== 'receita' && (
+          <span title="Sem dados importados para esta categoria">
+            <AlertTriangle className="h-3 w-3 text-yellow-500" />
+          </span>
+        )}
+      </span>
       <div className="flex items-center gap-1">
         {isOverridden(key) ? (
           <>
