@@ -29,6 +29,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { ImportReport, ImportResult, DuplicateInfo, ImportedItem } from "./ImportReport";
 import { CsvImportPreviewV2, type ImportPreviewData, type InstallmentGroup } from "./CsvImportPreviewV2";
 import { ConflictModal } from "./ConflictModal";
+import { DateCorrectionPreview, type DateCorrectionItem } from "./DateCorrectionPreview";
 
 interface Props {
   open: boolean;
@@ -115,6 +116,8 @@ export function CsvImportDialog({ open, onOpenChange }: Props) {
   const [preparedPlan, setPreparedPlan] = useState<PreparedImportPlan | null>(null);
   const [pendingConflicts, setPendingConflicts] = useState<ConflictMatch[] | null>(null);
   const [conflictContext, setConflictContext] = useState<{ contaId: string; userId: string } | null>(null);
+  const [dateCorrectionItems, setDateCorrectionItems] = useState<DateCorrectionItem[] | null>(null);
+  const [dateCorrectMode, setDateCorrectMode] = useState(false);
 
   const [dueMonth, setDueMonth] = useState<number>(0);
   const [dueYear, setDueYear] = useState<number>(2026);
@@ -245,6 +248,15 @@ export function CsvImportDialog({ open, onOpenChange }: Props) {
       if (contaDetectada && ["black", "mercado pago"].some((n) => contaDetectada!.toLowerCase().includes(n))) {
         accountType = "credito";
       }
+      // Use auto-detected due date from CSV header
+      if (parsed.detectedDueDate) {
+        setDueMonth(parsed.detectedDueDate.month);
+        setDueYear(parsed.detectedDueDate.year);
+      } else {
+        const defaultDue = getDefaultDueDate(transactions);
+        setDueMonth(defaultDue.month);
+        setDueYear(defaultDue.year);
+      }
     }
 
     setDetectedConta(contaDetectada);
@@ -254,9 +266,12 @@ export function CsvImportDialog({ open, onOpenChange }: Props) {
     setParsedTotalLines(totalLines);
     setParsedLineLogs(lineLogs);
 
-    const defaultDue = getDefaultDueDate(transactions);
-    setDueMonth(defaultDue.month);
-    setDueYear(defaultDue.year);
+    // For non-CSV file types, set default due date
+    if (ext !== 'csv') {
+      const defaultDue = getDefaultDueDate(transactions);
+      setDueMonth(defaultDue.month);
+      setDueYear(defaultDue.year);
+    }
 
     if (contaDetectada && contasList) {
       const match = contasList.find((c: any) =>
@@ -698,6 +713,108 @@ export function CsvImportDialog({ open, onOpenChange }: Props) {
     }
   };
 
+  const handleCheckDateCorrection = async () => {
+    if (!user || !selectedConta || !isCredito || !dueConfirmed) return;
+    setImporting(true);
+    setProgress(10);
+
+    try {
+      const billingPeriod = `${dueYear}-${String(dueMonth + 1).padStart(2, "0")}`;
+
+      const { data: existing } = await supabase
+        .from("transacoes")
+        .select("id, descricao, descricao_normalizada, valor, data, parcela_atual, parcela_total, mes_competencia")
+        .eq("user_id", user.id)
+        .eq("conta_id", selectedConta)
+        .or(`mes_competencia.eq.${billingPeriod},data.gte.${billingPeriod}-01`);
+
+      setProgress(50);
+
+      if (!existing || existing.length === 0) {
+        toast({ title: "Nenhuma transação encontrada para este período", variant: "destructive" });
+        setImporting(false);
+        return;
+      }
+
+      const corrections: DateCorrectionItem[] = [];
+      for (const csvTx of parsedTransactions) {
+        const csvNorm = csvTx.descricao_normalizada;
+        const match = existing.find((e) => {
+          if (e.descricao_normalizada !== csvNorm) return false;
+          if (Math.abs(Number(e.valor) - csvTx.valor) > 0.01) return false;
+          if (e.parcela_atual !== csvTx.parcela_atual) return false;
+          if (e.parcela_total !== csvTx.parcela_total) return false;
+          return true;
+        });
+
+        if (match && match.data !== csvTx.data) {
+          corrections.push({
+            transactionId: match.id,
+            descricao: csvTx.descricao,
+            valor: csvTx.valor,
+            currentDate: match.data,
+            correctDate: csvTx.data,
+            parcela: csvTx.parcela_atual ? `${csvTx.parcela_atual}/${csvTx.parcela_total}` : null,
+            billingPeriod,
+          });
+        }
+      }
+
+      setProgress(100);
+
+      if (corrections.length === 0) {
+        toast({ title: "Todas as datas já estão corretas", description: "Nenhuma correção necessária." });
+      } else {
+        setDateCorrectionItems(corrections);
+      }
+    } catch (err) {
+      console.error(err);
+      toast({ title: "Erro ao verificar datas", variant: "destructive" });
+    } finally {
+      setImporting(false);
+    }
+  };
+
+  const handleApplyDateCorrection = async () => {
+    if (!dateCorrectionItems || dateCorrectionItems.length === 0) return;
+    setImporting(true);
+    setProgress(10);
+
+    try {
+      let updated = 0;
+      const billingPeriod = dateCorrectionItems[0].billingPeriod;
+
+      for (let i = 0; i < dateCorrectionItems.length; i++) {
+        const item = dateCorrectionItems[i];
+        const { error } = await supabase
+          .from("transacoes")
+          .update({
+            data: item.correctDate,
+            data_original: item.correctDate,
+            mes_competencia: billingPeriod,
+          })
+          .eq("id", item.transactionId);
+
+        if (!error) updated++;
+        setProgress(10 + (90 * (i + 1)) / dateCorrectionItems.length);
+      }
+
+      toast({
+        title: `${updated} datas corrigidas`,
+        description: `${dateCorrectionItems.length} transações processadas, ${updated} atualizadas.`,
+      });
+      setDateCorrectionItems(null);
+      setDateCorrectMode(false);
+      queryClient.invalidateQueries({ queryKey: ["transacoes"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+    } catch (err) {
+      console.error(err);
+      toast({ title: "Erro ao corrigir datas", variant: "destructive" });
+    } finally {
+      setImporting(false);
+    }
+  };
+
   const handleImport = async () => {
     const context = validateBeforeImport();
     if (!context) return;
@@ -886,6 +1003,8 @@ export function CsvImportDialog({ open, onOpenChange }: Props) {
     setPendingConflicts(null);
     setConflictContext(null);
     setDueConfirmed(false);
+    setDateCorrectionItems(null);
+    setDateCorrectMode(false);
     onOpenChange(false);
   };
 
@@ -904,7 +1023,14 @@ export function CsvImportDialog({ open, onOpenChange }: Props) {
           </DialogHeader>
 
           {!result ? (
-            preparedPlan ? (
+            dateCorrectionItems ? (
+              <DateCorrectionPreview
+                items={dateCorrectionItems}
+                confirming={importing}
+                onBack={() => { setDateCorrectionItems(null); setDateCorrectMode(false); }}
+                onConfirm={handleApplyDateCorrection}
+              />
+            ) : preparedPlan ? (
               <CsvImportPreviewV2
                 data={preparedPlan.previewData}
                 confirming={importing}
@@ -1045,15 +1171,29 @@ export function CsvImportDialog({ open, onOpenChange }: Props) {
 
                     {importing && <Progress value={progress} />}
 
-                    <Button
-                      onClick={handleOpenPreview}
-                      disabled={importing || (isCredito && !dueConfirmed)}
-                      className="w-full"
-                    >
-                      {importing
-                        ? "Analisando transações..."
-                        : `Revisar ${parsedTransactions.length} transações antes de importar`}
-                    </Button>
+                    <div className="flex flex-col gap-2">
+                      <Button
+                        onClick={handleOpenPreview}
+                        disabled={importing || (isCredito && !dueConfirmed)}
+                        className="w-full"
+                      >
+                        {importing
+                          ? "Analisando transações..."
+                          : `Revisar ${parsedTransactions.length} transações antes de importar`}
+                      </Button>
+
+                      {isCredito && dueConfirmed && (
+                        <Button
+                          variant="outline"
+                          onClick={handleCheckDateCorrection}
+                          disabled={importing}
+                          className="w-full"
+                        >
+                          <CalendarDays className="mr-2 h-4 w-4" />
+                          Corrigir datas de importação anterior
+                        </Button>
+                      )}
+                    </div>
                   </>
                 )}
               </div>
