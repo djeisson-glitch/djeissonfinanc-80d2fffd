@@ -167,7 +167,7 @@ export function SimuladorAmortizacaoTab({ params }: Props) {
             <StatRow label="Saldo devedor após" value={formatCurrency(result.saldoB)} />
             <StatRow label="Prazo restante est." value={`${result.prazoRestanteB} meses`} />
             <StatRow label="Meses economizados" value={`${result.mesesEconomizados} meses`} className="text-green-500 font-bold" />
-            <StatRow label="Juros/TR economizados" value={formatCurrency(result.jurosEconomizados)} className="text-green-500" />
+        <StatRow label="Juros/TR economizados" value={formatCurrency(result.jurosEconomizados)} className="text-green-500" />
           </CardContent>
         </Card>
       </div>
@@ -182,9 +182,12 @@ export function SimuladorAmortizacaoTab({ params }: Props) {
             {result.veredicto === 'amortizar'
               ? `Amortizando antecipado, você economiza ${result.mesesEconomizados} meses de prazo e aproximadamente ${formatCurrency(result.jurosEconomizados)} em juros e TR.`
               : result.veredicto === 'equivalente'
-                ? `A diferença é pequena (${result.mesesEconomizados} meses). Considere fatores como liquidez e oportunidades de investimento.`
+                ? `A diferença é pequena (${result.mesesEconomizados} meses, ${formatCurrency(result.jurosEconomizados)} de economia). Considere fatores como liquidez e oportunidades de investimento.`
                 : `Pagar as parcelas normais pode ser mais vantajoso. O valor disponível cobre ${result.parcelasCobertas} parcelas, mantendo sua liquidez.`
             }
+          </p>
+          <p className="text-xs text-muted-foreground mt-2">
+            💡 Taxa de retorno implícita da amortização: <strong>{result.taxaRetornoAnual.toFixed(2)}% a.a.</strong> — compare com seus investimentos.
           </p>
         </CardContent>
       </Card>
