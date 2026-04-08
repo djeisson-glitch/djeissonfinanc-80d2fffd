@@ -54,6 +54,14 @@ export default function ConfiguracoesPage() {
   const [resetConfirm, setResetConfirm] = useState('');
   const [resetting, setResetting] = useState(false);
   const [recategorizing, setRecategorizing] = useState(false);
+  const [dateCorrectionFile, setDateCorrectionFile] = useState<File | null>(null);
+  const [dateCorrectionProgress, setDateCorrectionProgress] = useState(0);
+  const [dateCorrecting, setDateCorrecting] = useState(false);
+  const [dateCorrectionPreview, setDateCorrectionPreview] = useState<{
+    items: { id: string; descricao: string; valor: number; currentDate: string; correctDate: string; parcela: string | null }[];
+    billingPeriod: string;
+    contaId: string;
+  } | null>(null);
   const { categorias } = useCategorias();
   const resetKeyDown = useEnterSubmit(() => { if (resetConfirm === 'RESETAR') handleReset(); }, resetting || resetConfirm !== 'RESETAR');
 
