@@ -214,41 +214,49 @@ export function CenariosTab({ params }: Props) {
       const variaveis = { alimentacao: 0, combustivel: 0, saude: 0, beleza: 0, casa: 0, comprasOnline: 0, transporte: 0, impostos: 0, educacao: 0, outros: 0 };
       const catMesesMap: Record<string, number> = {};
 
+      // Build per-bucket totals
+      const bucketTotals: Record<string, number> = {};
+      const bucketMonths: Record<string, Set<string>> = {};
       let totalMapped = 0;
+      let unmappedTotal = 0;
+      const unmappedMonths = new Set<string>();
+
       for (const [cat, total] of Object.entries(catTotals)) {
         const mesesComDados = catMonths[cat]?.size || 1;
-        const avg = total / mesesComDados;
+        const bucket = resolveBucket(cat);
         
-        if (FIXED_CATEGORIES[cat]) {
-          const key = FIXED_CATEGORIES[cat];
-          fixos[key] += avg;
-          catMesesMap[key] = Math.max(catMesesMap[key] || 0, mesesComDados);
+        console.log(`[Cenários] Cat: "${cat}" → bucket: "${bucket}", total: ${total.toFixed(2)}, meses: ${mesesComDados}`);
+        
+        if (bucket === 'excluded') continue;
+        
+        if (bucket) {
+          bucketTotals[bucket] = (bucketTotals[bucket] || 0) + total;
+          if (!bucketMonths[bucket]) bucketMonths[bucket] = new Set();
+          catMonths[cat]?.forEach(m => bucketMonths[bucket].add(m));
           totalMapped += total;
-        } else if (VARIABLE_CATEGORIES[cat]) {
-          const key = VARIABLE_CATEGORIES[cat];
-          variaveis[key] += avg;
-          catMesesMap[key] = Math.max(catMesesMap[key] || 0, mesesComDados);
-          totalMapped += total;
+        } else {
+          unmappedTotal += total;
+          catMonths[cat]?.forEach(m => unmappedMonths.add(m));
         }
       }
 
-      // "Outros" = unmapped expenses / months with any expense
-      const totalExpenses = Object.values(catTotals).reduce((s, v) => s + v, 0);
-      const unmapped = totalExpenses - totalMapped;
-      if (unmapped > 0) {
-        // Count months that have any unmapped category
-        const unmappedMonths = new Set<string>();
-        for (const [cat, months] of Object.entries(catMonths)) {
-          if (!FIXED_CATEGORIES[cat] && !VARIABLE_CATEGORIES[cat]) {
-            months.forEach(m => unmappedMonths.add(m));
-          }
+      // Distribute bucket totals into fixos/variaveis using weighted month average
+      for (const [bucket, total] of Object.entries(bucketTotals)) {
+        const months = bucketMonths[bucket]?.size || 1;
+        const avg = Math.round(total / months);
+        catMesesMap[bucket] = months;
+        if (FIXED_KEYS.has(bucket)) {
+          (fixos as any)[bucket] = avg;
+        } else if (VARIABLE_KEYS.has(bucket)) {
+          (variaveis as any)[bucket] = avg;
         }
-        variaveis.outros = unmapped / (unmappedMonths.size || 1);
+      }
+
+      // "Outros" = unmapped expenses
+      if (unmappedTotal > 0) {
+        variaveis.outros = Math.round(unmappedTotal / (unmappedMonths.size || 1));
         catMesesMap['outros'] = unmappedMonths.size;
       }
-
-      for (const k of Object.keys(fixos) as (keyof typeof fixos)[]) fixos[k] = Math.round(fixos[k]);
-      for (const k of Object.keys(variaveis) as (keyof typeof variaveis)[]) variaveis[k] = Math.round(variaveis[k]);
 
       // Revenue: priority 1 = rendaBruta from Viabilidade, priority 2 = avg credits
       let receitaMedia = 0;
