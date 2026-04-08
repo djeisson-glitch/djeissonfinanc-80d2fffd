@@ -38,21 +38,21 @@ export function projectFutureInstallments(
 
     const baseDesc = t.descricao.replace(/\s*\(auto-projetada\)/, '').trim();
 
+    // Use data_original (real purchase date) as base for incrementing, fallback to data
+    const baseDate = t.data_original || t.data;
+
     for (let p = t.parcela_atual + 1; p <= t.parcela_total; p++) {
       const offset = p - t.parcela_atual;
 
-      // Calculate future date
-      const futureDate = new Date(t.data + 'T00:00:00');
+      // Calculate future date from original purchase date
+      const futureDate = new Date(baseDate + 'T00:00:00');
       futureDate.setMonth(futureDate.getMonth() + offset);
       const isoDate = futureDate.toISOString().split('T')[0];
 
       // Only project dates >= 2026-01-01
       if (isoDate < '2026-01-01') continue;
 
-      // Keep data_original (competência) identical to the original installment
-      const projectedOriginal: string | null = t.data_original;
-
-      // Project mes_competencia forward
+      // Project mes_competencia forward from billing period
       let projectedCompetencia: string | null = null;
       if (t.mes_competencia) {
         const [cy, cm] = t.mes_competencia.split('-').map(Number);
@@ -66,7 +66,7 @@ export function projectFutureInstallments(
         user_id: t.user_id,
         conta_id: t.conta_id,
         data: isoDate,
-        data_original: projectedOriginal,
+        data_original: baseDate,
         mes_competencia: projectedCompetencia,
         descricao: `${baseDesc} (auto-projetada)`,
         valor: t.valor,

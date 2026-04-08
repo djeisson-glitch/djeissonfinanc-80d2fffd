@@ -137,7 +137,7 @@ export function CsvImportDialog({ open, onOpenChange }: Props) {
     );
     const dueDate = new Date(dueYear, dueMonth, 1);
     if (dueDate < latestTx) {
-      return `Mês de vencimento (${MONTH_NAMES[dueMonth]}/${dueYear}) é anterior a transações no extrato`;
+      return `Período da fatura (${MONTH_NAMES[dueMonth]}/${dueYear}) é anterior a transações no extrato`;
     }
     return null;
   }, [isCredito, parsedTransactions, dueMonth, dueYear]);
@@ -281,14 +281,13 @@ export function CsvImportDialog({ open, onOpenChange }: Props) {
     if (!isCredito || !dueConfirmed) {
       return transactions.map((t) => ({ ...t, _data_original: t.data, _mes_competencia: "" }));
     }
-    const dueDateStr = `${dueYear}-${String(dueMonth + 1).padStart(2, "0")}-01`;
-    const compDate = new Date(dueYear, dueMonth - 1, 1);
-    const mesCompetencia = `${compDate.getFullYear()}-${String(compDate.getMonth() + 1).padStart(2, "0")}`;
+    // Keep original transaction date in `data`, use billing period for `mes_competencia`
+    const billingPeriod = `${dueYear}-${String(dueMonth + 1).padStart(2, "0")}`;
     return transactions.map((t) => ({
       ...t,
       _data_original: t.data,
-      _mes_competencia: mesCompetencia,
-      data: dueDateStr,
+      _mes_competencia: billingPeriod,
+      // data stays as original transaction date (NOT overwritten to 01/month)
     }));
   };
 
@@ -304,7 +303,7 @@ export function CsvImportDialog({ open, onOpenChange }: Props) {
       return null;
     }
     if (isCredito && !dueConfirmed) {
-      toast({ title: "Confirme o mês de vencimento da fatura", variant: "destructive" });
+      toast({ title: "Confirme o período da fatura", variant: "destructive" });
       return null;
     }
     if (!selectedConta) {
@@ -974,10 +973,10 @@ export function CsvImportDialog({ open, onOpenChange }: Props) {
                       <div className="space-y-3 p-3 rounded-lg border border-accent/30 bg-accent/5">
                         <div className="flex items-center gap-2">
                           <CalendarDays className="h-4 w-4 text-accent" />
-                          <Label className="text-sm font-medium">Mês de vencimento da fatura</Label>
+                          <Label className="text-sm font-medium">Período da fatura</Label>
                         </div>
                         <p className="text-xs text-muted-foreground">
-                          Todas as transações serão registradas no dia 01 do mês de vencimento selecionado.
+                          Informe a qual fatura estas transações pertencem. As datas originais de cada compra serão preservadas.
                         </p>
                         <div className="flex gap-2">
                           <Select
@@ -1035,10 +1034,10 @@ export function CsvImportDialog({ open, onOpenChange }: Props) {
                         >
                           {dueConfirmed ? (
                             <>
-                              <Check className="h-4 w-4 mr-1" /> Vencimento: {MONTH_NAMES[dueMonth]} {dueYear}
+                              <Check className="h-4 w-4 mr-1" /> Fatura: {MONTH_NAMES[dueMonth]} {dueYear}
                             </>
                           ) : (
-                            "Confirmar vencimento"
+                            "Confirmar período da fatura"
                           )}
                         </Button>
                       </div>
