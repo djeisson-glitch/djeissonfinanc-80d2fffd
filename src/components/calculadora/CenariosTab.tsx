@@ -200,7 +200,7 @@ export function CenariosTab({ params }: Props) {
         const catRow = t.categorias as any;
         const catName = catRow?.nome || t.categoria || 'Outros';
         
-        if (EXCLUDED_CATEGORIES.includes(catName)) continue;
+        if (resolveBucket(catName) === 'excluded') continue;
         
         const month = t.data.slice(0, 7);
         const absVal = Math.abs(t.valor);
