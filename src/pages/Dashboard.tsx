@@ -66,21 +66,36 @@ export default function DashboardPage() {
   const creditCards = contas?.filter(c => c.tipo === 'credito') || [];
 
   const { data: faturaData } = useQuery({
-    queryKey: ['dashboard', 'faturas', user?.id, start, end],
+    queryKey: ['dashboard', 'faturas', user?.id, month, year],
     queryFn: async () => {
       if (creditCards.length === 0) return {};
       const cardIds = creditCards.map(c => c.id);
-      const { data } = await supabase
+      const billingPeriod = `${year}-${String(month + 1).padStart(2, '0')}`;
+      
+      // First try to find transactions by mes_competencia (billing period)
+      const { data: byPeriod } = await supabase
         .from('transacoes')
-        .select('conta_id, tipo, valor, descricao')
+        .select('conta_id, tipo, valor, descricao, mes_competencia')
         .eq('user_id', user!.id)
         .eq('ignorar_dashboard', false)
         .in('conta_id', cardIds)
+        .eq('mes_competencia', billingPeriod);
+      
+      // Fallback: also get by date range for older imports without mes_competencia
+      const { data: byDate } = await supabase
+        .from('transacoes')
+        .select('conta_id, tipo, valor, descricao, mes_competencia')
+        .eq('user_id', user!.id)
+        .eq('ignorar_dashboard', false)
+        .in('conta_id', cardIds)
+        .is('mes_competencia', null)
         .gte('data', start)
         .lte('data', end);
 
+      const allTxs = [...(byPeriod || []), ...(byDate || [])];
+      
       const faturas: Record<string, { despesas: number; pagamentos: number }> = {};
-      data?.forEach(t => {
+      allTxs.forEach(t => {
         if (!faturas[t.conta_id]) faturas[t.conta_id] = { despesas: 0, pagamentos: 0 };
         if (t.tipo === 'despesa') {
           faturas[t.conta_id].despesas += Number(t.valor);
@@ -90,7 +105,6 @@ export default function DashboardPage() {
         if (!isDevolution && (desc.includes('pag fat') || desc.includes('pagamento fatura') || desc.includes('pag fat deb cc'))) {
           faturas[t.conta_id].pagamentos += Math.abs(Number(t.valor));
         }
-        // Devoluções reduce the invoice total
         if (isDevolution && t.tipo === 'receita') {
           faturas[t.conta_id].despesas -= Number(t.valor);
         }
