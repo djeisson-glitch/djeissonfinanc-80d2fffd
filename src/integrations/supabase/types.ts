@@ -335,6 +335,75 @@ export type Database = {
           },
         ]
       }
+      simulacoes_financiamento: {
+        Row: {
+          aluguel_atual: number
+          capital_disponivel: number
+          condominio_atual: number
+          created_at: string
+          dividas_mensais: number
+          entrada: number
+          escritura_percent: number
+          id: string
+          itbi_percent: number
+          limite_comprometimento: number
+          nome: string
+          prazo_meses: number
+          renda_bruta: number
+          reserva_meses: number
+          saldo_devedor_carro: number
+          taxa_anual_nominal: number
+          tr_anual: number
+          updated_at: string
+          user_id: string
+          valor_imovel: number
+        }
+        Insert: {
+          aluguel_atual?: number
+          capital_disponivel?: number
+          condominio_atual?: number
+          created_at?: string
+          dividas_mensais?: number
+          entrada: number
+          escritura_percent?: number
+          id?: string
+          itbi_percent?: number
+          limite_comprometimento?: number
+          nome?: string
+          prazo_meses: number
+          renda_bruta: number
+          reserva_meses?: number
+          saldo_devedor_carro?: number
+          taxa_anual_nominal: number
+          tr_anual?: number
+          updated_at?: string
+          user_id: string
+          valor_imovel: number
+        }
+        Update: {
+          aluguel_atual?: number
+          capital_disponivel?: number
+          condominio_atual?: number
+          created_at?: string
+          dividas_mensais?: number
+          entrada?: number
+          escritura_percent?: number
+          id?: string
+          itbi_percent?: number
+          limite_comprometimento?: number
+          nome?: string
+          prazo_meses?: number
+          renda_bruta?: number
+          reserva_meses?: number
+          saldo_devedor_carro?: number
+          taxa_anual_nominal?: number
+          tr_anual?: number
+          updated_at?: string
+          user_id?: string
+          valor_imovel?: number
+        }
+        Relationships: []
+      }
       transacoes: {
         Row: {
           categoria: string
