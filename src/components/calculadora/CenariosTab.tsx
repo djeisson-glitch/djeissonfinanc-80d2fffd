@@ -74,36 +74,40 @@ type BucketKey = keyof RealData['fixos'] | keyof RealData['variaveis'] | 'exclud
 
 function resolveBucket(catName: string): BucketKey {
   const n = normCatName(catName);
-  
-  // Excluded categories
+
+  // Excluded (receitas, transferências, operação bancária)
   if (n.startsWith('pagamento de fatura') || n === 'transferencia' || n.startsWith('transferencia entre')
     || n === 'receita' || n.startsWith('investimento') || n.startsWith('investimentos')
     || n === 'outras receitas' || n.startsWith('receita produtora') || n.startsWith('salario')
     || n.startsWith('freelance') || n === 'devolucoes' || n === 'reembolsos'
-    || n === 'operacao bancaria') {
+    || n.startsWith('operacao bancaria') || n.startsWith('tarifa')
+    || n === 'vendas' || n.startsWith('transferencia')) {
     return 'excluded';
   }
-  
-  // Fixed
-  if (n === 'moradia' || n === 'aluguel' || n === 'condominio' || n === 'luz' || n === 'gas' || n === 'internet') return 'moradia';
+
+  // === FIXOS ===
+  // Casa (canônica) engloba aluguel, condomínio, luz, gás, internet, etc.
+  if (n === 'casa' || n === 'moradia' || n === 'aluguel' || n === 'condominio'
+    || n === 'luz' || n === 'gas' || n === 'internet') return 'moradia';
   if (n.startsWith('emprestimo') || n === 'financiamento') return 'emprestimos';
   if (n.startsWith('assinatura')) return 'assinaturas';
-  if (n.startsWith('seguro')) return 'seguros'; // Seguro de Vida, Seguro do Carro, Seguro carro
-  if (n === 'telecom') return 'telecom';
-  if (n.startsWith('tarifa')) return 'tarifas';
-  
-  // Variable
+  // Serviços (canônica) = celular/telecom — reaproveita bucket 'telecom'
+  if (n === 'servicos' || n === 'telecom' || n === 'celular') return 'telecom';
+  // Seguros (legados) — após consolidação a maioria vira Saúde/Transporte, mas mantém fallback
+  if (n.startsWith('seguro')) return 'seguros';
+
+  // === VARIÁVEIS ===
   if (n.startsWith('alimenta')) return 'alimentacao';
-  if (n.startsWith('combustivel') || n === 'combustivel') return 'combustivel';
-  if (n.startsWith('saude') || n === 'saude') return 'saude';
+  if (n.startsWith('combustivel')) return 'combustivel';
+  if (n.startsWith('saude')) return 'saude';
   if (n === 'beleza' || n === 'estetica') return 'beleza';
-  if (n === 'casa' || n === 'moveis' || n === 'eletrodomesticos') return 'casa';
+  if (n === 'moveis' || n === 'eletrodomesticos') return 'casa';
   if (n.startsWith('compras')) return 'comprasOnline';
   if (n === 'transporte' || n === 'pedagio' || n === 'manutencao') return 'transporte';
   if (n.startsWith('imposto') || n === 'ipva') return 'impostos';
   if (n.startsWith('educa')) return 'educacao';
-  
-  return null; // → goes to "outros"
+
+  return null; // → vai pra "outros"
 }
 
 const FIXED_KEYS = new Set<string>(['moradia', 'emprestimos', 'assinaturas', 'seguros', 'telecom', 'tarifas']);
@@ -577,12 +581,12 @@ export function CenariosTab({ params }: Props) {
               <p className="text-xs font-medium mt-3 mb-2">Gastos Fixos</p>
               <div className="space-y-0.5">
                 {[
-                  ['Moradia', 'moradia', realData.fixos.moradia],
+                  ['Casa', 'moradia', realData.fixos.moradia],
                   ['Empréstimos', 'emprestimos', realData.fixos.emprestimos],
-                  ['Assinaturas', 'assinaturas', realData.fixos.assinaturas],
+                  ['Assinatura', 'assinaturas', realData.fixos.assinaturas],
                   ['Seguros', 'seguros', realData.fixos.seguros],
-                  ['Telecom', 'telecom', realData.fixos.telecom],
-                  ['Tarifas bancárias', 'tarifas', realData.fixos.tarifas],
+                  ['Serviços', 'telecom', realData.fixos.telecom],
+                  ['Outros fixos', 'tarifas', realData.fixos.tarifas],
                 ].map(([l, k, v]) => (
                   <div key={k as string} className="group">{renderEditableRow(l as string, k as string, v as number)}</div>
                 ))}
@@ -600,8 +604,8 @@ export function CenariosTab({ params }: Props) {
                   ['Combustível', 'combustivel', realData.variaveis.combustivel],
                   ['Saúde', 'saude', realData.variaveis.saude],
                   ['Beleza', 'beleza', realData.variaveis.beleza],
-                  ['Casa', 'casa', realData.variaveis.casa],
-                  ['Compras Online', 'comprasOnline', realData.variaveis.comprasOnline],
+                  ['Móveis/Utensílios', 'casa', realData.variaveis.casa],
+                  ['Compras', 'comprasOnline', realData.variaveis.comprasOnline],
                   ['Transporte', 'transporte', realData.variaveis.transporte],
                   ['Impostos', 'impostos', realData.variaveis.impostos],
                   ['Educação', 'educacao', realData.variaveis.educacao],

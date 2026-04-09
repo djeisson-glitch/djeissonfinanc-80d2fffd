@@ -59,7 +59,7 @@ function autoCategorizeMemo(memo: string): { categoria: string; essencial: boole
 
   // Payment detection (affects classification)
   if (upper.includes('PAGTO FATURA') || upper.includes('PAGAMENTO FATURA') || upper.includes('PAG FAT')) {
-    return { categoria: 'Pagamento de Fatura', essencial: false, classification: 'payment' };
+    return { categoria: 'Operação bancária', essencial: false, classification: 'payment' };
   }
 
   // Use the centralized dictionary for categorization
