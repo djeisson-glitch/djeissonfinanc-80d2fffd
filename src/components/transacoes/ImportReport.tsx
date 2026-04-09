@@ -14,6 +14,7 @@ export type DuplicateInfo = {
   data: string;
   descricao: string;
   valor: number;
+  tipo: 'receita' | 'despesa';
   pessoa: string;
   hash_transacao: string;
   existing_data?: string;

@@ -569,6 +569,7 @@ export function CsvImportDialog({ open, onOpenChange }: Props) {
         data: em.planned.data,
         descricao: em.planned.descricao,
         valor: em.planned.valor,
+        tipo: (em.planned as any).tipo || 'despesa',
         pessoa: em.planned.pessoa,
         hash_transacao: em.planned.hash_transacao,
       }));
@@ -950,7 +951,8 @@ export function CsvImportDialog({ open, onOpenChange }: Props) {
           descricao_normalizada: normalizeDescription(item.descricao),
           valor: item.valor,
           categoria,
-          tipo: item.valor > 0 ? "despesa" : "receita",
+          // valor is stored as absolute value in DB — rely on the tipo preserved from the original parse
+          tipo: item.tipo,
           essencial,
           parcela_atual: null,
           parcela_total: null,

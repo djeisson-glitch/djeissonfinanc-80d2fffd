@@ -165,11 +165,17 @@ export function CenariosTab({ params }: Props) {
     setLoading(true);
     try {
       // Fetch transactions with category names via join
-      const { data: transactions } = await supabase
+      const { data: transactions, error: txError } = await supabase
         .from('transacoes')
         .select('data, valor, tipo, ignorar_dashboard, categoria, categoria_id, categorias!transacoes_categoria_id_fkey(nome)')
         .eq('user_id', user!.id)
         .order('data', { ascending: true });
+
+      if (txError) {
+        console.error('[Cenários] Erro ao buscar transações:', txError);
+      }
+
+      console.log(`[Cenários] Total transações retornadas: ${transactions?.length || 0}`);
 
       if (!transactions || transactions.length === 0) {
         // Use rendaBruta from Viabilidade if available
@@ -180,35 +186,40 @@ export function CenariosTab({ params }: Props) {
         return;
       }
 
-      // Get distinct months
-      const allMonths = new Set<string>();
-      for (const t of transactions) {
-        allMonths.add(t.data.slice(0, 7));
-      }
-      const numMonths = allMonths.size;
+      // Get distinct months (only expense months count toward analysis)
+      const expenseMonths = new Set<string>();
 
       // Build per-category totals and per-category month sets
       const catTotals: Record<string, number> = {};
       const catMonths: Record<string, Set<string>> = {};
       let totalTransacoes = 0;
+      let skippedIgnored = 0;
+      let skippedReceita = 0;
+      let skippedExcluded = 0;
 
       for (const t of transactions) {
-        if (t.ignorar_dashboard) continue;
-        if (t.tipo === 'receita' || t.valor > 0) continue;
-        
+        if (t.ignorar_dashboard) { skippedIgnored++; continue; }
+        // NOTE: valor is stored as absolute value in DB — use tipo to distinguish receita/despesa
+        if (t.tipo === 'receita') { skippedReceita++; continue; }
+
         // Get category name: prefer joined categorias.nome, fallback to categoria field
         const catRow = t.categorias as any;
         const catName = catRow?.nome || t.categoria || 'Outros';
-        
-        if (resolveBucket(catName) === 'excluded') continue;
-        
+
+        if (resolveBucket(catName) === 'excluded') { skippedExcluded++; continue; }
+
         const month = t.data.slice(0, 7);
         const absVal = Math.abs(t.valor);
         catTotals[catName] = (catTotals[catName] || 0) + absVal;
         if (!catMonths[catName]) catMonths[catName] = new Set();
         catMonths[catName].add(month);
+        expenseMonths.add(month);
         totalTransacoes++;
       }
+
+      const numMonths = expenseMonths.size || 1;
+
+      console.log(`[Cenários] Despesas contabilizadas: ${totalTransacoes} | Ignoradas (dashboard): ${skippedIgnored} | Receitas puladas: ${skippedReceita} | Excluídas (transfer/fatura): ${skippedExcluded} | Meses com despesa: ${numMonths}`);
 
       const fixos = { moradia: 0, emprestimos: 0, assinaturas: 0, seguros: 0, telecom: 0, tarifas: 0 };
       const variaveis = { alimentacao: 0, combustivel: 0, saude: 0, beleza: 0, casa: 0, comprasOnline: 0, transporte: 0, impostos: 0, educacao: 0, outros: 0 };
@@ -266,18 +277,17 @@ export function CenariosTab({ params }: Props) {
         receitaMedia = params.rendaBruta;
         receitaFonte = 'viabilidade';
       } else {
-        // Average monthly credits excluding transfers/refunds
+        // Average monthly income (tipo='receita') excluding transfers/refunds
         let totalReceita = 0;
         const receitaMonths = new Set<string>();
         for (const t of transactions) {
           if (t.ignorar_dashboard) continue;
+          if (t.tipo !== 'receita') continue;
           const catRow = t.categorias as any;
           const catName = catRow?.nome || t.categoria || '';
-          if (['Pagamento de Fatura', 'Transferência'].includes(catName)) continue;
-          if (t.tipo === 'receita' || t.valor > 0) {
-            totalReceita += Math.abs(t.valor);
-            receitaMonths.add(t.data.slice(0, 7));
-          }
+          if (resolveBucket(catName) === 'excluded') continue;
+          totalReceita += Math.abs(t.valor);
+          receitaMonths.add(t.data.slice(0, 7));
         }
         receitaMedia = receitaMonths.size > 0 ? Math.round(totalReceita / receitaMonths.size) : 0;
       }
