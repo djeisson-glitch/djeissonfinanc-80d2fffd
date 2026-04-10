@@ -243,14 +243,16 @@ export function ViabilidadeTab({ params, onChange }: Props) {
           <Card>
             <CardHeader className="pb-2"><CardTitle className="text-sm">Custo de Transição</CardTitle></CardHeader>
             <CardContent className="space-y-3">
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-3 gap-3">
                 <CurrencyInput label="Aluguel atual" value={params.aluguelAtual} onChange={v => onChange({ aluguelAtual: v })} />
                 <CurrencyInput label="Condomínio atual" value={params.condominioAtual} onChange={v => onChange({ condominioAtual: v })} />
+                <CurrencyInput label="Parcela carro" value={params.parcelaCarro} onChange={v => onChange({ parcelaCarro: v })} />
               </div>
               <div className="bg-muted/50 rounded-lg p-2.5 space-y-0.5 text-sm">
-                <StatRow label="Total habitação hoje" value={formatCurrency(v.totalHabitacaoHoje)} />
-                <StatRow label="Parcela mês 1" value={formatCurrency(v.parcelaMes1)} />
-                <StatRow label="Delta mensal" value={`${v.deltaMensal >= 0 ? '+' : ''}${formatCurrency(v.deltaMensal)}`} className={v.deltaMensal > 0 ? 'text-destructive' : 'text-green-500'} />
+                <StatRow label="Custo atual (aluguel+cond+carro)" value={formatCurrency(v.totalHabitacaoHoje + params.parcelaCarro)} />
+                <StatRow label="Parcela imóvel mês 1" value={formatCurrency(v.parcelaMes1)} />
+                <StatRow label="Delta mensal (economia)" value={`${v.deltaMensal >= 0 ? '+' : ''}${formatCurrency(v.deltaMensal)}`} className={v.deltaMensal > 0 ? 'text-destructive' : 'text-green-500'} />
+                <p className="text-xs text-muted-foreground mt-1">Parcela imóvel − (aluguel + condomínio + carro)</p>
               </div>
             </CardContent>
           </Card>

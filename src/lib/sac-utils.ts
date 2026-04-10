@@ -237,7 +237,7 @@ export function calcViabilidade(p: SacParams): ViabilidadeResult {
     reservaNecessaria, capitalRestante,
     ...totais, custoEfetivoTotal,
     checkEntrada, checkParcela, checkCapital, checkPrazo,
-    totalHabitacaoHoje, deltaMensal,
+    totalHabitacaoHoje, custoAtualTotal, deltaMensal,
     capitalLiquidoSemCarro, novaEntradaEst, novoValorFinanciado,
     percentSemQuitacao, percentComQuitacao, melhoraComprometimento,
     diagnostico, diagnosticoTexto,
