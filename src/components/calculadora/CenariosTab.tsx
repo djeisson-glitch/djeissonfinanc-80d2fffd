@@ -688,7 +688,7 @@ export function CenariosTab({ params }: Props) {
           delta={scenarios.c2.delta}
           items={[
             { label: 'Receita', value: receita, isPositive: true },
-            { label: `Financiamento (entr. ${formatCurrency(scenarios.c2.novaEntrada)})`, value: scenarios.c2.parcela },
+            { label: `Financiamento (mesma entrada)`, value: scenarios.c2.parcela },
             { label: 'Novos custos imóvel', value: d.novosGastosImovel },
             { label: 'Carro', value: 0 },
             { label: 'Empréstimos', value: d.empSemCarro },
