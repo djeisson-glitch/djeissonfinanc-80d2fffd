@@ -1,0 +1,1 @@
+ALTER TABLE public.simulacoes_financiamento ADD COLUMN parcela_carro NUMERIC NOT NULL DEFAULT 1263;

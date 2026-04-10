@@ -42,6 +42,7 @@ const DEFAULT_PARAMS: SacParams = {
   aluguelAtual: 1550,
   condominioAtual: 120,
   saldoDevedorCarro: 33000,
+  parcelaCarro: 1263,
 };
 
 interface SavedSimulation {
@@ -68,6 +69,7 @@ function paramsToRow(params: SacParams) {
     aluguel_atual: params.aluguelAtual,
     condominio_atual: params.condominioAtual,
     saldo_devedor_carro: params.saldoDevedorCarro,
+    parcela_carro: params.parcelaCarro,
   };
 }
 
@@ -88,6 +90,7 @@ function rowToParams(row: any): SacParams {
     aluguelAtual: Number(row.aluguel_atual),
     condominioAtual: Number(row.condominio_atual),
     saldoDevedorCarro: Number(row.saldo_devedor_carro),
+    parcelaCarro: Number(row.parcela_carro ?? 1263),
   };
 }
 
