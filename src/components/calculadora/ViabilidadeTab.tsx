@@ -294,14 +294,6 @@ export function ViabilidadeTab({ params, onChange }: Props) {
                   </div>
                 </div>
               </div>
-              {params.dividasMensais > 0 && (
-                <div className="mt-3 p-2.5 rounded-lg bg-amber-500/10 border border-amber-500/30 flex items-start gap-2">
-                  <AlertTriangle className="h-4 w-4 text-amber-500 shrink-0 mt-0.5" />
-                  <p className="text-xs text-amber-700 dark:text-amber-400">
-                    Você possui {formatCurrency(params.dividasMensais)}/mês em outras dívidas (carro, etc.) que impactam seu orçamento mas não são consideradas pelo banco no limite de comprometimento.
-                  </p>
-                </div>
-              )}
             </CardContent>
           </Card>
         </div>
