@@ -373,7 +373,7 @@ export function CenariosTab({ params }: Props) {
       c2: {
         monthly: c2Monthly, saldo: c2Saldo, saldo12: c2Saldo * 12, delta: c2Delta,
         custoQuitar: scenarioParams.saldoDevedorCarro, capitalRestante: capitalAposQuitarCarro,
-        novaEntrada, financiado: financiado2, parcela: parcela2,
+        parcela: parcela2,
       },
       c3: {
         saldoComCarro: c3SaldoComCarro, saldoSemCarro: c3SaldoSemCarro,
