@@ -348,6 +348,7 @@ export type Database = {
           itbi_percent: number
           limite_comprometimento: number
           nome: string
+          parcela_carro: number
           prazo_meses: number
           renda_bruta: number
           reserva_meses: number
@@ -370,6 +371,7 @@ export type Database = {
           itbi_percent?: number
           limite_comprometimento?: number
           nome?: string
+          parcela_carro?: number
           prazo_meses: number
           renda_bruta: number
           reserva_meses?: number
@@ -392,6 +394,7 @@ export type Database = {
           itbi_percent?: number
           limite_comprometimento?: number
           nome?: string
+          parcela_carro?: number
           prazo_meses?: number
           renda_bruta?: number
           reserva_meses?: number
