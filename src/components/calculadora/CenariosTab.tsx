@@ -361,6 +361,9 @@ export function CenariosTab({ params }: Props) {
     const c2Monthly = parcela2 + scenarioParams.novosGastosImovel + empSemCarro + fixosBase + totalVariaveis;
     const c2Saldo = receita - c2Monthly;
     const c2Delta = c2Saldo - c0Saldo;
+    // Comprometimento: parcela + carro / renda vs parcela only / renda
+    const comprometSemQuitar = receita > 0 ? ((parcela2 + parcelaCarro) / receita) * 100 : 0;
+    const comprometComQuitar = receita > 0 ? (parcela2 / receita) * 100 : 0;
 
     const mesesCarro = scenarioParams.mesesRestantesCarro;
     const c3SaldoComCarro = c1Saldo;
@@ -373,7 +376,7 @@ export function CenariosTab({ params }: Props) {
       c2: {
         monthly: c2Monthly, saldo: c2Saldo, saldo12: c2Saldo * 12, delta: c2Delta,
         custoQuitar: scenarioParams.saldoDevedorCarro, capitalRestante: capitalAposQuitarCarro,
-        parcela: parcela2,
+        parcela: parcela2, comprometSemQuitar, comprometComQuitar,
       },
       c3: {
         saldoComCarro: c3SaldoComCarro, saldoSemCarro: c3SaldoSemCarro,
@@ -679,23 +682,60 @@ export function CenariosTab({ params }: Props) {
             { label: 'Variáveis', value: totalVariaveis },
           ]}
         />
-        <ScenarioColumn
-          title="Cenário 2 — Quita Carro"
-          icon={<Car className="h-3.5 w-3.5" />}
-          color="border-t-green-500"
-          saldo={scenarios.c2.saldo}
-          saldo12={scenarios.c2.saldo12}
-          delta={scenarios.c2.delta}
-          items={[
-            { label: 'Receita', value: receita, isPositive: true },
-            { label: `Financiamento (mesma entrada)`, value: scenarios.c2.parcela },
-            { label: 'Novos custos imóvel', value: d.novosGastosImovel },
-            { label: 'Carro', value: 0 },
-            { label: 'Empréstimos', value: d.empSemCarro },
-            { label: 'Fixos', value: gastosFixosSemMoradia },
-            { label: 'Variáveis', value: totalVariaveis },
-          ]}
-        />
+        <Card className="border-t-4 border-t-green-500">
+          <CardHeader className="pb-2 pt-3 px-3">
+            <CardTitle className="text-xs flex items-center gap-1.5">
+              <Car className="h-3.5 w-3.5" /> Cenário 2 — Quita Carro
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="px-3 pb-3 space-y-2">
+            {/* Saldo devedor (input) */}
+            <SmallCurrencyInput
+              label="Saldo devedor do carro"
+              value={scenarioParams.saldoDevedorCarro}
+              onChange={v => setScenarioParams(p => ({ ...p, saldoDevedorCarro: v }))}
+            />
+            {/* Capital líquido */}
+            <div className="flex justify-between text-xs">
+              <span className="text-muted-foreground">Capital líquido após quitar</span>
+              <span className={`font-mono font-semibold ${scenarios.c2.capitalRestante >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                {formatCurrency(scenarios.c2.capitalRestante)}
+              </span>
+            </div>
+            {/* Comprometimento comparison */}
+            <div className="border-t pt-1.5 space-y-1">
+              <div className="flex justify-between text-xs">
+                <span className="text-muted-foreground">Comprom. sem quitar</span>
+                <span className="font-mono text-red-600">{scenarios.c2.comprometSemQuitar.toFixed(1)}%</span>
+              </div>
+              <div className="flex justify-between text-xs">
+                <span className="text-muted-foreground">Comprom. com quitação</span>
+                <span className="font-mono text-green-600">{scenarios.c2.comprometComQuitar.toFixed(1)}%</span>
+              </div>
+              <div className="flex justify-between text-xs">
+                <span className="text-muted-foreground">Redução</span>
+                <span className="font-mono font-semibold text-green-600">
+                  −{(scenarios.c2.comprometSemQuitar - scenarios.c2.comprometComQuitar).toFixed(1)} p.p.
+                </span>
+              </div>
+            </div>
+            {/* Saldo livre e delta */}
+            <div className="border-t pt-1.5 space-y-1">
+              <div className="flex justify-between text-xs">
+                <span className="text-muted-foreground">Saldo livre mensal</span>
+                <span className={`font-mono font-semibold ${scenarios.c2.saldo >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                  {formatCurrency(scenarios.c2.saldo)}
+                </span>
+              </div>
+              <div className="flex justify-between text-xs">
+                <span className="text-muted-foreground">Δ vs atual</span>
+                <span className={`font-mono font-semibold ${scenarios.c2.delta >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                  {scenarios.c2.delta >= 0 ? '+' : ''}{formatCurrency(scenarios.c2.delta)}/mês
+                </span>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
         <Card className="border-t-4 border-t-orange-500">
           <CardHeader className="pb-2 pt-3 px-3">
             <CardTitle className="text-xs flex items-center gap-1.5">
