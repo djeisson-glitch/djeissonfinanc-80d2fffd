@@ -659,8 +659,7 @@ export function CenariosTab({ params }: Props) {
           items={[
             { label: 'Receita', value: receita, isPositive: true },
             { label: 'Moradia', value: moradiaAtual },
-            { label: 'Carro', value: parcelaCarro },
-            { label: 'Empréstimos', value: scenarios.details.empSemCarro },
+            { label: 'Empréstimos (incl. carro)', value: emprestimosAtual },
             { label: 'Fixos', value: gastosFixosSemMoradia },
             { label: 'Variáveis', value: totalVariaveis },
           ]}
