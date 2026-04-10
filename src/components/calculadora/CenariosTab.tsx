@@ -356,10 +356,14 @@ export function CenariosTab({ params }: Props) {
 
     const capitalComFgts = params.capitalDisponivel + scenarioParams.fgts;
     const capitalAposQuitarCarro = capitalComFgts - scenarioParams.saldoDevedorCarro;
-    const novaEntrada = Math.max(params.entrada, capitalAposQuitarCarro > params.entrada ? capitalAposQuitarCarro : params.entrada);
-    const financiado2 = params.valorImovel - novaEntrada;
+    // After paying off car, less capital available for down payment
+    const itbi = (params.itbiPercent / 100) * params.valorImovel;
+    const escritura = (params.escrituraPercent / 100) * params.valorImovel;
+    const reserva = scenarioParams.parcelaFinanciamento * params.reservaMeses;
+    const novaEntrada = Math.max(0, capitalAposQuitarCarro - itbi - escritura - reserva);
+    const financiado2 = Math.max(0, params.valorImovel - novaEntrada);
     let parcela2 = scenarioParams.parcelaFinanciamento;
-    if (financiado2 > 0 && financiado2 < (params.valorImovel - params.entrada)) {
+    if (financiado2 > 0) {
       const txM = calcTaxaMensal(params.taxaAnualNominal);
       const trM = Math.pow(1 + params.trAnual / 100, 1 / 12) - 1;
       parcela2 = Math.round(calcParcelaSAC(financiado2, params.prazoMeses, txM, trM, 1));
