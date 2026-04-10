@@ -266,11 +266,12 @@ export function ViabilidadeTab({ params, onChange }: Props) {
             </CardHeader>
             <CardContent>
               <div className="bg-muted/50 rounded-lg p-2.5 space-y-0.5 text-sm">
-                <StatRow label="Habitação atual" value={formatCurrency(v.totalHabitacaoHoje)} />
+                <StatRow label="Despesas médias mensais" value={formatCurrency(params.dividasMensais)} />
                 <StatRow label="+ Parcela financiamento" value={formatCurrency(v.parcelaMes1)} />
+                <StatRow label="− Aluguel + condomínio (deixa de pagar)" value={`- ${formatCurrency(v.totalHabitacaoHoje)}`} className="text-green-500" />
                 <div className="border-t pt-1 mt-1">
-                  <StatRow label="Novo custo mensal est." value={formatCurrency(v.totalHabitacaoHoje + v.parcelaMes1)} className="font-bold" />
-                  <StatRow label="Saldo livre estimado" value={formatCurrency(params.rendaBruta - v.totalHabitacaoHoje - v.parcelaMes1)} className={(params.rendaBruta - v.totalHabitacaoHoje - v.parcelaMes1) >= 0 ? 'text-green-500' : 'text-destructive'} />
+                  <StatRow label="Novo custo mensal est." value={formatCurrency(params.dividasMensais + v.parcelaMes1)} className="font-bold" />
+                  <StatRow label="Saldo livre estimado" value={formatCurrency(params.rendaBruta - params.dividasMensais - v.parcelaMes1)} className={(params.rendaBruta - params.dividasMensais - v.parcelaMes1) >= 0 ? 'text-green-500' : 'text-destructive'} />
                 </div>
               </div>
               {params.dividasMensais > 0 && (
