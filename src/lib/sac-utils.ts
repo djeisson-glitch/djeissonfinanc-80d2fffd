@@ -134,6 +134,7 @@ export interface ViabilidadeResult {
   checkCapital: boolean;
   checkPrazo: boolean;
   totalHabitacaoHoje: number;
+  custoAtualTotal: number;
   deltaMensal: number;
   // cenario carro
   capitalLiquidoSemCarro: number;
