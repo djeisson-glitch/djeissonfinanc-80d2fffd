@@ -193,7 +193,7 @@ export function calcViabilidade(p: SacParams): ViabilidadeResult {
   // Bloco I
   const totalHabitacaoHoje = p.aluguelAtual + p.condominioAtual;
   const custoAtualTotal = totalHabitacaoHoje + p.parcelaCarro;
-  const deltaMensal = parcelaMes1 - custoAtualTotal;
+  const deltaMensal = custoAtualTotal - parcelaMes1;
 
   // Bloco J - cenário carro
   const capitalLiquidoSemCarro = p.capitalDisponivel - p.saldoDevedorCarro;

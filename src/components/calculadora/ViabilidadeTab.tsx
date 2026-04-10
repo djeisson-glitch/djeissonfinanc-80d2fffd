@@ -252,11 +252,13 @@ export function ViabilidadeTab({ params, onChange }: Props) {
                 <StatRow label="Custo atual (aluguel+condo+carro)" value={formatCurrency(v.custoAtualTotal)} />
                 <StatRow label="Parcela imóvel mês 1" value={formatCurrency(v.parcelaMes1)} />
                 <StatRow 
-                  label={v.deltaMensal > 0 ? 'Aumento mensal' : 'Economia mensal'} 
-                  value={formatCurrency(Math.abs(v.deltaMensal))} 
-                  className={v.deltaMensal > 0 ? 'text-destructive' : 'text-green-500'} 
+                  label="Variação mensal" 
+                  value={`${v.deltaMensal >= 0 ? '+' : '-'} ${formatCurrency(Math.abs(v.deltaMensal))}`} 
+                  className={v.deltaMensal >= 0 ? 'text-green-500' : 'text-destructive'} 
                 />
-                <p className="text-xs text-muted-foreground mt-1">Parcela imóvel − (aluguel + condomínio + carro)</p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  {v.deltaMensal >= 0 ? 'Economia: você paga menos que hoje' : 'Custo extra: parcela maior que gastos atuais'}
+                </p>
               </div>
             </CardContent>
           </Card>
