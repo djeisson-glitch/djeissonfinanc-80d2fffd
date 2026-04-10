@@ -356,18 +356,8 @@ export function CenariosTab({ params }: Props) {
 
     const capitalComFgts = params.capitalDisponivel + scenarioParams.fgts;
     const capitalAposQuitarCarro = capitalComFgts - scenarioParams.saldoDevedorCarro;
-    // After paying off car, less capital available for down payment
-    const itbi = (params.itbiPercent / 100) * params.valorImovel;
-    const escritura = (params.escrituraPercent / 100) * params.valorImovel;
-    const reserva = scenarioParams.parcelaFinanciamento * params.reservaMeses;
-    const novaEntrada = Math.max(0, capitalAposQuitarCarro - itbi - escritura - reserva);
-    const financiado2 = Math.max(0, params.valorImovel - novaEntrada);
-    let parcela2 = scenarioParams.parcelaFinanciamento;
-    if (financiado2 > 0) {
-      const txM = calcTaxaMensal(params.taxaAnualNominal);
-      const trM = Math.pow(1 + params.trAnual / 100, 1 / 12) - 1;
-      parcela2 = Math.round(calcParcelaSAC(financiado2, params.prazoMeses, txM, trM, 1));
-    }
+    // C2: Same entrada & financing as C1, but no car payment (quita before buying)
+    const parcela2 = scenarioParams.parcelaFinanciamento;
     const c2Monthly = parcela2 + scenarioParams.novosGastosImovel + empSemCarro + fixosBase + totalVariaveis;
     const c2Saldo = receita - c2Monthly;
     const c2Delta = c2Saldo - c0Saldo;
