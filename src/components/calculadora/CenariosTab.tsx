@@ -719,21 +719,6 @@ export function CenariosTab({ params }: Props) {
                 </span>
               </div>
             </div>
-            {/* Saldo livre e delta */}
-            <div className="border-t pt-1.5 space-y-1">
-              <div className="flex justify-between text-xs">
-                <span className="text-muted-foreground">Saldo livre mensal</span>
-                <span className={`font-mono font-semibold ${scenarios.c2.saldo >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                  {formatCurrency(scenarios.c2.saldo)}
-                </span>
-              </div>
-              <div className="flex justify-between text-xs">
-                <span className="text-muted-foreground">Δ vs atual</span>
-                <span className={`font-mono font-semibold ${scenarios.c2.delta >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                  {scenarios.c2.delta >= 0 ? '+' : ''}{formatCurrency(scenarios.c2.delta)}/mês
-                </span>
-              </div>
-            </div>
           </CardContent>
         </Card>
         <Card className="border-t-4 border-t-orange-500">
