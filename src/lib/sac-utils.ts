@@ -18,6 +18,7 @@ export interface SacParams {
   aluguelAtual: number;
   condominioAtual: number;
   saldoDevedorCarro: number;
+  parcelaCarro: number;
 }
 
 export interface SacRow {
@@ -190,7 +191,8 @@ export function calcViabilidade(p: SacParams): ViabilidadeResult {
 
   // Bloco I
   const totalHabitacaoHoje = p.aluguelAtual + p.condominioAtual;
-  const deltaMensal = parcelaMes1 - totalHabitacaoHoje;
+  const custoAtualTotal = totalHabitacaoHoje + p.parcelaCarro;
+  const deltaMensal = parcelaMes1 - custoAtualTotal;
 
   // Bloco J - cenário carro
   const capitalLiquidoSemCarro = p.capitalDisponivel - p.saldoDevedorCarro;
