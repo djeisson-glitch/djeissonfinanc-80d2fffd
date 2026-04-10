@@ -265,13 +265,27 @@ export function ViabilidadeTab({ params, onChange }: Props) {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="bg-muted/50 rounded-lg p-2.5 space-y-0.5 text-sm">
-                <StatRow label="Despesas médias mensais" value={formatCurrency(params.dividasMensais)} />
-                <StatRow label="+ Parcela financiamento" value={formatCurrency(v.parcelaMes1)} />
-                <StatRow label="− Aluguel + condomínio (deixa de pagar)" value={`- ${formatCurrency(v.totalHabitacaoHoje)}`} className="text-green-500" />
-                <div className="border-t pt-1 mt-1">
-                  <StatRow label="Novo custo mensal est." value={formatCurrency(params.dividasMensais + v.parcelaMes1)} className="font-bold" />
-                  <StatRow label="Saldo livre estimado" value={formatCurrency(params.rendaBruta - params.dividasMensais - v.parcelaMes1)} className={(params.rendaBruta - params.dividasMensais - v.parcelaMes1) >= 0 ? 'text-green-500' : 'text-destructive'} />
+              <div className="bg-muted/50 rounded-lg p-2.5 space-y-2 text-sm">
+                {/* Sub-estado 1: Transição */}
+                <div className="space-y-0.5 opacity-60">
+                  <p className="text-xs font-medium text-muted-foreground">Durante a transição</p>
+                  <StatRow label="Habitação atual (aluguel+condo)" value={formatCurrency(v.totalHabitacaoHoje)} />
+                  <StatRow label="+ Parcela financiamento" value={formatCurrency(v.parcelaMes1)} />
+                  <StatRow label="+ Outras dívidas" value={formatCurrency(params.dividasMensais)} />
+                  <div className="border-t pt-1 mt-1">
+                    <StatRow label="Custo total temporário" value={formatCurrency(v.totalHabitacaoHoje + v.parcelaMes1 + params.dividasMensais)} className="font-bold" />
+                    <StatRow label="Saldo livre" value={formatCurrency(params.rendaBruta - v.totalHabitacaoHoje - v.parcelaMes1 - params.dividasMensais)} className={(params.rendaBruta - v.totalHabitacaoHoje - v.parcelaMes1 - params.dividasMensais) >= 0 ? 'text-green-500' : 'text-destructive'} />
+                  </div>
+                </div>
+                {/* Sub-estado 2: Após mudança */}
+                <div className="space-y-0.5 border-t pt-2">
+                  <p className="text-xs font-medium">Após mudança</p>
+                  <StatRow label="Parcela financiamento" value={formatCurrency(v.parcelaMes1)} />
+                  <StatRow label="+ Outras dívidas" value={formatCurrency(params.dividasMensais)} />
+                  <div className="border-t pt-1 mt-1">
+                    <StatRow label="Custo mensal definitivo" value={formatCurrency(v.parcelaMes1 + params.dividasMensais)} className="font-bold" />
+                    <StatRow label="Saldo livre estimado" value={formatCurrency(params.rendaBruta - v.parcelaMes1 - params.dividasMensais)} className={(params.rendaBruta - v.parcelaMes1 - params.dividasMensais) >= 0 ? 'text-green-500' : 'text-destructive'} />
+                  </div>
                 </div>
               </div>
               {params.dividasMensais > 0 && (
