@@ -723,8 +723,20 @@ export function CenariosTab({ params }: Props) {
             </div>
             <div className="border-t pt-1.5 mt-1.5">
               <div className="flex justify-between text-xs">
-                <span className="text-muted-foreground">Δ após quitação</span>
+                <span className="text-muted-foreground">Δ vs hoje (com carro)</span>
+                <span className={`font-mono font-semibold ${(scenarios.c3.saldoComCarro - scenarios.c0.saldo) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                  {(scenarios.c3.saldoComCarro - scenarios.c0.saldo) >= 0 ? '+' : ''}{formatCurrency(scenarios.c3.saldoComCarro - scenarios.c0.saldo)}/mês
+                </span>
+              </div>
+              <div className="flex justify-between text-xs mt-0.5">
+                <span className="text-muted-foreground">Δ vs hoje (após quitação)</span>
                 <span className={`font-mono font-semibold ${scenarios.c3.deltaApos >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                  {scenarios.c3.deltaApos >= 0 ? '+' : ''}{formatCurrency(scenarios.c3.deltaApos)}/mês
+                </span>
+              </div>
+              <div className="flex justify-between text-xs mt-0.5">
+                <span className="text-muted-foreground">Ganho com quitação</span>
+                <span className="font-mono font-semibold text-green-600">
                   +{formatCurrency(parcelaCarro)}/mês
                 </span>
               </div>
