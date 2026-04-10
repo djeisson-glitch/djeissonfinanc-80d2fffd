@@ -249,9 +249,13 @@ export function ViabilidadeTab({ params, onChange }: Props) {
                 <CurrencyInput label="Parcela carro" value={params.parcelaCarro} onChange={v => onChange({ parcelaCarro: v })} />
               </div>
               <div className="bg-muted/50 rounded-lg p-2.5 space-y-0.5 text-sm">
-                <StatRow label="Custo atual (aluguel+cond+carro)" value={formatCurrency(v.totalHabitacaoHoje + params.parcelaCarro)} />
+                <StatRow label="Custo atual (aluguel+condo+carro)" value={formatCurrency(v.custoAtualTotal)} />
                 <StatRow label="Parcela imóvel mês 1" value={formatCurrency(v.parcelaMes1)} />
-                <StatRow label="Delta mensal (economia)" value={`${v.deltaMensal >= 0 ? '+' : ''}${formatCurrency(v.deltaMensal)}`} className={v.deltaMensal > 0 ? 'text-destructive' : 'text-green-500'} />
+                <StatRow 
+                  label={v.deltaMensal > 0 ? 'Aumento mensal' : 'Economia mensal'} 
+                  value={formatCurrency(Math.abs(v.deltaMensal))} 
+                  className={v.deltaMensal > 0 ? 'text-destructive' : 'text-green-500'} 
+                />
                 <p className="text-xs text-muted-foreground mt-1">Parcela imóvel − (aluguel + condomínio + carro)</p>
               </div>
             </CardContent>
