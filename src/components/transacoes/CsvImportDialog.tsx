@@ -14,7 +14,7 @@ import {
   type CsvLineLogEntry,
 } from "@/lib/csv-parser";
 import { autoCategorizarTransacao } from "@/lib/auto-categorize";
-import { extractPdfText, parsePdfText } from "@/lib/pdf-parser";
+import { parsePdfFile } from "@/lib/pdf-parser";
 import { parseOFX } from "@/lib/ofx-parser";
 import {
   projectFutureInstallments,
@@ -182,8 +182,8 @@ export function CsvImportDialog({ open, onOpenChange }: Props) {
 
     if (ext === "pdf") {
       try {
-        const pages = await extractPdfText(f);
-        if (pages.every((p) => p.trim().length < 10)) {
+        const parsed = await parsePdfFile(f);
+        if (parsed.transactions.length === 0 && parsed.totalLines === 0) {
           toast({
             title: "PDF sem texto extraível",
             description: "Este PDF pode ser uma imagem escaneada. Tente exportar diretamente do app/banco.",
@@ -193,7 +193,6 @@ export function CsvImportDialog({ open, onOpenChange }: Props) {
           setFileType(null);
           return;
         }
-        const parsed = parsePdfText(pages);
         transactions = parsed.transactions;
         skippedLines = parsed.skippedLines;
         totalLines = parsed.totalLines;
