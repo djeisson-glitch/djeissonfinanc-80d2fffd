@@ -236,7 +236,7 @@ export function generateProjections(
   const start = startMonth 
     ? new Date(parseInt(startMonth.split('-')[0]), parseInt(startMonth.split('-')[1]) - 1, 1)
     : new Date(now.getFullYear(), now.getMonth(), 1);
-  const endDate = new Date(2026, 11, 1); // Dec 2026
+  const endDate = new Date(now.getFullYear(), 11, 1); // Dec of current year
   
   const projections: MonthProjection[] = [];
   

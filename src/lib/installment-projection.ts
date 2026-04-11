@@ -50,7 +50,8 @@ export function projectFutureInstallments(
       const isoDate = futureDate.toISOString().split('T')[0];
 
       // Only project dates >= 2026-01-01
-      if (isoDate < '2026-01-01') continue;
+      const currentYearStart = `${new Date().getFullYear()}-01-01`;
+      if (isoDate < currentYearStart) continue;
 
       // Project mes_competencia forward from billing period
       let projectedCompetencia: string | null = null;

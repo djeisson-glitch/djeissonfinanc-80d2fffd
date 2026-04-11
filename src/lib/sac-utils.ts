@@ -138,8 +138,6 @@ export interface ViabilidadeResult {
   deltaMensal: number;
   // cenario carro
   capitalLiquidoSemCarro: number;
-  novaEntradaEst: number;
-  novoValorFinanciado: number;
   percentSemQuitacao: number;
   percentComQuitacao: number;
   melhoraComprometimento: number;
@@ -152,7 +150,8 @@ export function calcViabilidade(p: SacParams): ViabilidadeResult {
   const entradaPercent = p.valorImovel > 0 ? (p.entrada / p.valorImovel) * 100 : 0;
   const taxaMensal = calcTaxaMensal(p.taxaAnualNominal);
   const trMensal = calcTaxaMensal(p.trAnual);
-  const amortFixa = valorFinanciado / p.prazoMeses;
+  const prazoSeguro = Math.max(1, p.prazoMeses);
+  const amortFixa = valorFinanciado / prazoSeguro;
 
   const parcelaN = (n: number) => {
     if (n > p.prazoMeses) n = p.prazoMeses;
@@ -196,14 +195,13 @@ export function calcViabilidade(p: SacParams): ViabilidadeResult {
   const deltaMensal = custoAtualTotal - parcelaMes1;
 
   // Bloco J - cenário carro
+  // Quitar o carro NÃO altera entrada/financiamento — o imóvel já está definido.
+  // A comparação é: comprometimento COM parcela do carro vs SEM parcela do carro.
   const capitalLiquidoSemCarro = p.capitalDisponivel - p.saldoDevedorCarro;
-  const novaEntradaEst = Math.max(0, capitalLiquidoSemCarro - itbiRS - escrituraRS - reservaNecessaria);
-  const novoValorFinanciado = Math.max(0, p.valorImovel - novaEntradaEst);
-  const novaParcelaMes1 = novoValorFinanciado / p.prazoMeses + novoValorFinanciado * (taxaMensal + trMensal);
-  const percentSemQuitacao = percentComprometida;
-  const percentComQuitacao = p.rendaBruta > 0
-    ? (novaParcelaMes1 / p.rendaBruta) * 100
+  const percentSemQuitacao = p.rendaBruta > 0
+    ? ((parcelaMes1 + p.parcelaCarro) / p.rendaBruta) * 100
     : 0;
+  const percentComQuitacao = percentComprometida; // só a parcela do imóvel
   const melhoraComprometimento = percentSemQuitacao - percentComQuitacao;
 
   // Diagnóstico
@@ -239,7 +237,7 @@ export function calcViabilidade(p: SacParams): ViabilidadeResult {
     ...totais, custoEfetivoTotal,
     checkEntrada, checkParcela, checkCapital, checkPrazo,
     totalHabitacaoHoje, custoAtualTotal, deltaMensal,
-    capitalLiquidoSemCarro, novaEntradaEst, novoValorFinanciado,
+    capitalLiquidoSemCarro,
     percentSemQuitacao, percentComQuitacao, melhoraComprometimento,
     diagnostico, diagnosticoTexto,
   };

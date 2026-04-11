@@ -23,7 +23,7 @@ function StatRow({ label, value, className }: { label: string; value: string; cl
 
 export function SimuladorAmortizacaoTab({ params }: Props) {
   const [valorDisponivel, setValorDisponivel] = useState(25000);
-  const [mesAmortizacao, setMesAmortizacao] = useState(12);
+  const [mesAmortizacao, setMesAmortizacao] = useState(Math.min(12, params.prazoMeses || 12));
 
   const taxaMensal = calcTaxaMensal(params.taxaAnualNominal);
   const trMensal = calcTaxaMensal(params.trAnual);
