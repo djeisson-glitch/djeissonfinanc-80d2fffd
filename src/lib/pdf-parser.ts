@@ -50,11 +50,16 @@ function decodeMpText(text: string): string {
   return text.split('').map(ch => MP_CHAR_MAP[ch] ?? ch).join('');
 }
 
+/** Normalize fontName — some PDF.js builds return empty/undefined */
+function normFontName(fn: any): string {
+  return (typeof fn === 'string' && fn.length > 0) ? fn : '__unknown__';
+}
+
 function detectGarbledFonts(items: any[]): Set<string> {
   const garbledFonts = new Set<string>();
   for (const item of items) {
-    if (item.str && item.str.includes('$4') && item.fontName) {
-      garbledFonts.add(item.fontName);
+    if (item.str && item.str.includes('$4')) {
+      garbledFonts.add(normFontName(item.fontName));
     }
   }
   return garbledFonts;
@@ -73,7 +78,7 @@ function groupItemsIntoRows(items: any[]): PdfTextBlock[] {
     .filter((it: any) => it.str && it.str.trim())
     .map((it: any) => ({
       str: it.str,
-      fontName: it.fontName || '',
+      fontName: normFontName(it.fontName),
       x: it.transform?.[4] ?? 0,
       y: it.transform?.[5] ?? 0,
     }));
@@ -503,12 +508,26 @@ export async function parsePdfFile(file: File): Promise<PdfParseResult> {
     if (structured.isMercadoPago) {
       return parseMercadoPago(structured.pages);
     }
-  } catch {
-    // Fall through to generic parser
+  } catch (err) {
+    console.error('[pdf-parser] extractPdfStructured failed, falling back to generic:', err);
   }
 
-  // Fallback: generic text-based parser
   const pages = await extractPdfText(file);
+
+  // Safety: if text looks like MP, retry structured extraction
+  const combined = pages.join(' ').toLowerCase();
+  if (combined.includes('mercado pago') || combined.includes('mercadopago') || combined.includes('$4 ')) {
+    console.warn('[pdf-parser] Mercado Pago detected in text but structured extraction failed. Retrying...');
+    try {
+      const structured2 = await extractPdfStructured(file);
+      if (structured2.isMercadoPago) {
+        return parseMercadoPago(structured2.pages);
+      }
+    } catch (err2) {
+      console.error('[pdf-parser] Second structured extraction attempt also failed:', err2);
+    }
+  }
+
   return parseGenericPdf(pages);
 }
 
