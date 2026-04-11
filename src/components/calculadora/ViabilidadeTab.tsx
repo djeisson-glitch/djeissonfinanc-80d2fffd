@@ -243,7 +243,7 @@ export function ViabilidadeTab({ params, onChange }: Props) {
           <Card>
             <CardHeader className="pb-2"><CardTitle className="text-sm">Custo de Transição</CardTitle></CardHeader>
             <CardContent className="space-y-3">
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
                 <CurrencyInput label="Aluguel atual" value={params.aluguelAtual} onChange={v => onChange({ aluguelAtual: v })} />
                 <CurrencyInput label="Condomínio atual" value={params.condominioAtual} onChange={v => onChange({ condominioAtual: v })} />
                 <CurrencyInput label="Parcela carro" value={params.parcelaCarro} onChange={v => onChange({ parcelaCarro: v })} />
@@ -309,8 +309,6 @@ export function ViabilidadeTab({ params, onChange }: Props) {
             <CurrencyInput label="Saldo devedor do carro" value={params.saldoDevedorCarro} onChange={v => onChange({ saldoDevedorCarro: v })} />
             <div className="bg-muted/50 rounded-lg p-2.5 space-y-0.5 text-sm">
               <StatRow label="Capital líquido após quitar" value={formatCurrency(v.capitalLiquidoSemCarro)} />
-              <StatRow label="Nova entrada estimada" value={formatCurrency(v.novaEntradaEst)} />
-              <StatRow label="Novo valor financiado" value={formatCurrency(v.novoValorFinanciado)} />
               <div className="border-t pt-1 mt-1">
                 <StatRow label="% renda SEM quitação" value={`${v.percentSemQuitacao.toFixed(1)}%`} className="text-destructive" />
                 <StatRow label="% renda COM quitação" value={`${v.percentComQuitacao.toFixed(1)}%`} className="text-green-500" />

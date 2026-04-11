@@ -106,11 +106,16 @@ export default function CalculadoraPage() {
 
   const fetchSaved = useCallback(async () => {
     if (!user) return;
-    const { data } = await supabase
-      .from('simulacoes_financiamento')
-      .select('id, nome, created_at, updated_at')
-      .order('updated_at', { ascending: false });
-    if (data) setSavedList(data);
+    try {
+      const { data, error } = await supabase
+        .from('simulacoes_financiamento')
+        .select('id, nome, created_at, updated_at')
+        .order('updated_at', { ascending: false });
+      if (error) throw error;
+      if (data) setSavedList(data);
+    } catch (err) {
+      console.error('Erro ao carregar simulações:', err);
+    }
   }, [user]);
 
   useEffect(() => { fetchSaved(); }, [fetchSaved]);

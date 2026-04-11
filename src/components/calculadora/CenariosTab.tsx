@@ -362,8 +362,8 @@ export function CenariosTab({ params }: Props) {
     const c2Saldo = receita - c2Monthly;
     const c2Delta = c2Saldo - c0Saldo;
     // Comprometimento: parcela + carro / renda vs parcela only / renda
-    const comprometSemQuitar = receita > 0 ? ((parcela2 + parcelaCarro) / receita) * 100 : 0;
-    const comprometComQuitar = receita > 0 ? (parcela2 / receita) * 100 : 0;
+    const comprometSemQuitar = receita > 0 ? ((parcela2 + parcelaCarro + empSemCarro) / receita) * 100 : 0;
+    const comprometComQuitar = receita > 0 ? ((parcela2 + empSemCarro) / receita) * 100 : 0;
 
     const mesesCarro = scenarioParams.mesesRestantesCarro;
     const c3SaldoComCarro = c1Saldo;
