@@ -49,11 +49,18 @@ export function projectFutureInstallments(
 ): ProjectedInstallment[] {
   const projected: ProjectedInstallment[] = [];
 
+  // Build group key including value to distinguish different purchases at the same store
+  // e.g., "FARMACIA SAO JOAO|6|59.49|Maiara" vs "FARMACIA SAO JOAO|6|44.05|Maiara"
+  const makeGroupKey = (descricao: string, parcela_total: number, valor: number, pessoa: string) => {
+    const baseDesc = descricao.replace(/\s*\(auto-projetada\)/, '').trim();
+    return baseDesc.substring(0, 25).toUpperCase() + '|' + parcela_total + '|' + valor.toFixed(2) + '|' + pessoa;
+  };
+
   // Collect existing parcela numbers per installment group to avoid projecting parcelas already in the batch
   const existingParcelas = new Map<string, Set<number>>();
   for (const t of transactions) {
     if (!t.parcela_atual || !t.parcela_total) continue;
-    const key = t.descricao.replace(/\s*\(auto-projetada\)/, '').trim().substring(0, 25).toUpperCase() + '|' + t.parcela_total + '|' + t.pessoa;
+    const key = makeGroupKey(t.descricao, t.parcela_total, t.valor, t.pessoa);
     if (!existingParcelas.has(key)) existingParcelas.set(key, new Set());
     existingParcelas.get(key)!.add(t.parcela_atual);
   }
@@ -66,7 +73,7 @@ export function projectFutureInstallments(
     if (t.parcela_atual >= t.parcela_total) continue;
 
     const baseDesc = t.descricao.replace(/\s*\(auto-projetada\)/, '').trim();
-    const groupKey = baseDesc.substring(0, 25).toUpperCase() + '|' + t.parcela_total + '|' + t.pessoa;
+    const groupKey = makeGroupKey(t.descricao, t.parcela_total, t.valor, t.pessoa);
 
     // Only project from the lowest parcela_atual in each group
     if (projected_from.has(groupKey)) continue;
