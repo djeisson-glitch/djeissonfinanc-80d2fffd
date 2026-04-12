@@ -83,7 +83,7 @@ export function createEmptyItem(): BudgetItem {
 
 export function createEmptyBudget(): BudgetData {
   return {
-    id: String(Math.floor(Math.random() * 900) + 100),
+    id: crypto.randomUUID(),
     cliente: '',
     projeto: '',
     items: {

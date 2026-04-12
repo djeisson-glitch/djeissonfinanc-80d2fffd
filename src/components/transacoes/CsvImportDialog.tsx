@@ -119,8 +119,8 @@ export function CsvImportDialog({ open, onOpenChange }: Props) {
   const [dateCorrectionItems, setDateCorrectionItems] = useState<DateCorrectionItem[] | null>(null);
   const [dateCorrectMode, setDateCorrectMode] = useState(false);
 
-  const [dueMonth, setDueMonth] = useState<number>(0);
-  const [dueYear, setDueYear] = useState<number>(2026);
+  const [dueMonth, setDueMonth] = useState<number>(new Date().getMonth());
+  const [dueYear, setDueYear] = useState<number>(new Date().getFullYear());
   const [dueConfirmed, setDueConfirmed] = useState(false);
 
   const isCredito = useMemo(() => {
@@ -182,7 +182,8 @@ export function CsvImportDialog({ open, onOpenChange }: Props) {
 
     if (ext === "pdf") {
       try {
-        const parsed = await parsePdfFile(f);
+        const pessoaNome = user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'Titular';
+        const parsed = await parsePdfFile(f, pessoaNome);
         if (parsed.transactions.length === 0 && parsed.totalLines === 0) {
           toast({
             title: "PDF sem texto extraível",
@@ -214,7 +215,8 @@ export function CsvImportDialog({ open, onOpenChange }: Props) {
       }
     } else if (ext === "ofx") {
       const text = await f.text();
-      const parsed = parseOFX(text);
+      const pessoaNomeOfx = user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'Titular';
+      const parsed = parseOFX(text, pessoaNomeOfx);
       contaDetectada = parsed.contaDetectada;
       accountType = parsed.accountType;
       transactions = parsed.transactions;
@@ -238,7 +240,8 @@ export function CsvImportDialog({ open, onOpenChange }: Props) {
       totalLines = transactions.length;
     } else {
       const text = await f.text();
-      const parsed = parseSicrediCSV(text);
+      const pessoaNomeCsv = user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'Titular';
+      const parsed = parseSicrediCSV(text, pessoaNomeCsv);
       contaDetectada = parsed.contaDetectada;
       transactions = parsed.transactions;
       skippedLines = parsed.skippedLines;
@@ -350,8 +353,8 @@ export function CsvImportDialog({ open, onOpenChange }: Props) {
       if (projMonth !== targetMonth) continue;
 
       const matched = csvTransactions.some((csv) => {
-        const desc1 = proj.descricao.substring(0, 7).trim().toLowerCase();
-        const desc2 = csv.descricao.substring(0, 7).trim().toLowerCase();
+        const desc1 = proj.descricao.replace(/\s*\(auto-projetada\)/, '').substring(0, 20).trim().toLowerCase();
+        const desc2 = csv.descricao.substring(0, 20).trim().toLowerCase();
         const dataMatch = proj.data_original === csv.data;
         const parcelaMatch = proj.parcela_atual === csv.parcela_atual && proj.parcela_total === csv.parcela_total;
         const valorMatch = Math.abs(proj.valor - csv.valor) <= 0.15;

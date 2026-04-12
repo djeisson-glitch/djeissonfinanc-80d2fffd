@@ -50,7 +50,7 @@ export function FinanciamentoCalculadora({ receitaMensal, totalDespesasMensal }:
 
   const financiado = Math.max(0, valorImovelNum - entradaNum);
   const percEntrada = valorImovelNum > 0 ? (entradaNum / valorImovelNum) * 100 : 0;
-  const taxaMensal = taxaAnualNum / 100 / 12;
+  const taxaMensal = Math.pow(1 + taxaAnualNum / 100, 1 / 12) - 1;
 
   const calc = useMemo(() => {
     if (!financiado || !prazoMeses) return null;
@@ -100,11 +100,13 @@ export function FinanciamentoCalculadora({ receitaMensal, totalDespesasMensal }:
     if (sistema === 'price') {
       const parcela = parcelaInicial;
       let saldo = financiado;
-      for (let i = 1; i <= chartMonths; i += chartStep) {
+      for (let i = 1; i <= chartMonths; i++) {
         const jurosMes = saldo * taxaMensal;
         const amortMes = parcela - jurosMes;
         saldo -= amortMes;
-        chartData.push({ mes: i, parcela, juros: jurosMes, amortizacao: amortMes, saldoDevedor: Math.max(0, saldo) });
+        if ((i - 1) % chartStep === 0) {
+          chartData.push({ mes: i, parcela, juros: jurosMes, amortizacao: amortMes, saldoDevedor: Math.max(0, saldo) });
+        }
       }
     } else {
       const amort = financiado / prazoMeses;

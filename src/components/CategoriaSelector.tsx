@@ -25,7 +25,6 @@ export function CategoriaSelector({ value, onValueChange, tipoFilter, placeholde
     : parents;
 
   const selectedCat = value ? getCategoriaById(value) : null;
-  const displayValue = selectedCat ? selectedCat.nome : undefined;
 
   return (
     <Select value={value || undefined} onValueChange={onValueChange}>

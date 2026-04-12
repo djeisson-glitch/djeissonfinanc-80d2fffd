@@ -14,7 +14,13 @@ import { AlertTriangle, BarChart3, CreditCard } from 'lucide-react';
 import { MonthSelector } from '@/components/MonthSelector';
 import { ParcelasTimeline } from '@/components/dashboard/ParcelasTimeline';
 import { AiInsightsCard } from '@/components/dashboard/AiInsightsCard';
+import { SmartInsightsCard } from '@/components/dashboard/SmartInsightsCard';
+import { FinancialHealthCard } from '@/components/dashboard/FinancialHealthCard';
 import { FaturaDrawer } from '@/components/dashboard/FaturaDrawer';
+import type { TransactionRecord } from '@/lib/projection-engine';
+import { detectSpendingTrends, detectAnomalies, detectRecurringCharges } from '@/lib/spending-patterns';
+import { calculateFinancialHealth } from '@/lib/financial-health';
+import { calculateIncomeCommitment } from '@/lib/income-commitment';
 
 export default function DashboardPage() {
   const { user } = useAuth();
@@ -46,7 +52,7 @@ export default function DashboardPage() {
         .select('*')
         .eq('user_id', user!.id)
         .eq('ignorar_dashboard', false)
-        .gte('data', start < '2026-01-01' ? '2026-01-01' : start)
+        .gte('data', start)
         .lte('data', end);
       return data || [];
     },
@@ -115,9 +121,8 @@ export default function DashboardPage() {
   });
 
   const { data: parcelasAno } = useQuery({
-    queryKey: ['dashboard', 'parcelas-ano', user?.id],
+    queryKey: ['dashboard', 'parcelas-ano', user?.id, year],
     queryFn: async () => {
-      const year = new Date().getFullYear();
       const { data } = await supabase
         .from('transacoes')
         .select('*')
@@ -131,13 +136,53 @@ export default function DashboardPage() {
     enabled: !!user,
   });
 
+  // All transactions for pattern analysis (last 12 months)
+  const { data: allTransactions } = useQuery({
+    queryKey: ['dashboard', 'all-transacoes', user?.id],
+    queryFn: async () => {
+      const oneYearAgo = new Date();
+      oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
+      const startDate = `${oneYearAgo.getFullYear()}-${String(oneYearAgo.getMonth() + 1).padStart(2, '0')}-01`;
+      const { data } = await supabase
+        .from('transacoes')
+        .select('data, descricao, valor, tipo, categoria, categoria_id, parcela_atual, parcela_total, grupo_parcela, ignorar_dashboard, essencial, conta_id')
+        .eq('user_id', user!.id)
+        .gte('data', startDate);
+      return (data || []) as TransactionRecord[];
+    },
+    enabled: !!user,
+  });
+
+  // Current balance across accounts
+  const { data: saldoAtual } = useQuery({
+    queryKey: ['dashboard', 'saldo-total', user?.id],
+    queryFn: async () => {
+      const { data: contasList } = await supabase.from('contas').select('id, saldo_inicial, tipo').eq('user_id', user!.id);
+      if (!contasList?.length) return 0;
+      const debitAccounts = contasList.filter(c => c.tipo === 'debito');
+      let total = debitAccounts.reduce((s, c) => s + (c.saldo_inicial || 0), 0);
+      for (const conta of debitAccounts) {
+        const { data: txs } = await supabase.from('transacoes').select('valor, tipo').eq('conta_id', conta.id).eq('user_id', user!.id).eq('ignorar_dashboard', false);
+        if (txs) {
+          for (const t of txs) {
+            total += t.tipo === 'receita' ? Number(t.valor) : -Number(t.valor);
+          }
+        }
+      }
+      return total;
+    },
+    enabled: !!user,
+  });
+
   const receita = config?.receita_mensal_fixa || 13000;
   const reserva = config?.reserva_minima || 2000;
 
   const totalDespesas = transacoesMes?.filter(t => t.tipo === 'despesa').reduce((s, t) => s + Number(t.valor), 0) || 0;
   const totalReceitas = transacoesMes?.filter(t => t.tipo === 'receita').reduce((s, t) => s + Number(t.valor), 0) || 0;
-  const saldoProjetado = receita + totalReceitas - totalDespesas;
-  const percentGasto = receita > 0 ? (totalDespesas / receita) * 100 : 0;
+  // Use the greater of configured income or actual income to avoid double-counting
+  const receitaEfetiva = Math.max(receita, totalReceitas);
+  const saldoProjetado = receitaEfetiva - totalDespesas;
+  const percentGasto = receitaEfetiva > 0 ? (totalDespesas / receitaEfetiva) * 100 : 0;
 
   const categorias = transacoesMes
     ?.filter(t => t.tipo === 'despesa')
@@ -192,19 +237,12 @@ export default function DashboardPage() {
             <p className="text-xs text-muted-foreground">Configurada</p>
           </CardContent>
         </Card>
-        {totalReceitas > 0 ? (
+        {totalReceitas > 0 && (
           <Card className="cursor-pointer hover:bg-muted/50 transition-colors" onClick={() => navigate('/transacoes?tipo=receita')}>
             <CardContent className="p-4">
               <p className="text-sm text-muted-foreground">Receitas do Mês</p>
               <p className="text-2xl font-bold text-success">{formatCurrency(totalReceitas)}</p>
               <p className="text-xs text-muted-foreground">{transacoesMes?.filter(t => t.tipo === 'receita').length} transações</p>
-            </CardContent>
-          </Card>
-        ) : (
-          <Card className="cursor-pointer hover:bg-muted/50 transition-colors" onClick={() => navigate('/transacoes?tipo=despesa')}>
-            <CardContent className="p-4">
-              <p className="text-sm text-muted-foreground">Despesas</p>
-              <p className="text-2xl font-bold text-destructive">{formatCurrency(totalDespesas)}</p>
             </CardContent>
           </Card>
         )}
@@ -325,7 +363,40 @@ export default function DashboardPage() {
             const f = faturaData?.[c.id];
             return f && f.despesas > 0 && f.pagamentos < f.despesas;
           }).length,
+          // Pattern analysis data for enhanced AI
+          ...(allTransactions && allTransactions.length > 0 ? (() => {
+            const trends = detectSpendingTrends(allTransactions);
+            const anomalies = detectAnomalies(allTransactions);
+            const recurring = detectRecurringCharges(allTransactions);
+            const health = calculateFinancialHealth({ transactions: allTransactions, receitaBase: receita, reservaMinima: reserva, saldoAtual: saldoAtual || 0 });
+            const commitment = calculateIncomeCommitment({ transactions: allTransactions, receitaBase: receita });
+            return {
+              spendingTrends: trends.filter(t => t.tendencia !== 'estavel').slice(0, 5),
+              anomalies: anomalies.slice(0, 3),
+              recurringCharges: recurring.slice(0, 10),
+              healthScore: health.score,
+              healthNivel: health.nivel,
+              commitmentAvg: commitment.resumo.mediaComprometimento,
+              commitmentTrend: commitment.resumo.tendencia,
+            };
+          })() : {}),
         }} />
+
+        {allTransactions && allTransactions.length > 0 && (
+          <SmartInsightsCard
+            transactions={allTransactions}
+            receitaBase={receita}
+          />
+        )}
+
+        {allTransactions && allTransactions.length > 0 && (
+          <FinancialHealthCard
+            transactions={allTransactions}
+            receitaBase={receita}
+            reservaMinima={reserva}
+            saldoAtual={saldoAtual || 0}
+          />
+        )}
 
         <Card className="md:col-span-2">
           <CardHeader>

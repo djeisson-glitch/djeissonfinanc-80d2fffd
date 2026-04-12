@@ -44,7 +44,7 @@ const RULES: CategoriaRule[] = [
   { patterns: ['HTM*SIMONE', 'HTMSIMONE', 'SIMONE DE OLIVE', 'CURSO', 'ESCOLA', 'FACULDADE', 'MENTORIA'], categoria: 'Educação' },
 
   // TELECOM → Serviços
-  { patterns: ['CONTA VIVO', 'COPREL TELECOM', 'VIVO', 'CLARO TELECOM', 'TIM'], categoria: 'Serviços' },
+  { patterns: ['CONTA VIVO', 'COPREL TELECOM', 'VIVO', 'CLARO TELECOM', 'TIM CELULAR', 'TIM S.A', 'TIM SA', 'TIM *'], categoria: 'Serviços' },
 
   // SAÚDE
   { patterns: ['FARMACIA', 'FARMACIAS', 'SAO JOAO FARMACIAS', 'DROGARIA', 'CONSULTORIO', 'DR FBS', 'ROSELI MAGALHAES'], categoria: 'Saúde' },
@@ -74,7 +74,7 @@ const RULES: CategoriaRule[] = [
   { patterns: ['RECEBIMENTO PIX', 'PIX SICREDI', 'ADVERSE PRODUTORA', 'VERTATTO NEGOCIOS'], categoria: 'Outras receitas' },
 
   // COMPRAS GENÉRICAS (Mercado Pago catch-all)
-  { patterns: ['MP *', 'MP*'], categoria: 'Compras' },
+  { patterns: ['MP *', 'MP*', 'MERPAG*', 'MERCADOPAGO*'], categoria: 'Compras' },
 ];
 
 /**
@@ -106,7 +106,13 @@ export function autoCategorizarTransacao(descricao: string): string | null {
       // Also create clean version of pattern
       const patternClean = patternUpper.replace(/[^A-Z0-9 ]/g, '').replace(/\s{2,}/g, ' ').trim();
 
-      if (normalized.includes(patternUpper) || normalizedClean.includes(patternClean)) {
+      // For short patterns (<=4 chars after cleaning), require word boundary to avoid false positives
+      if (patternClean.length <= 4) {
+        const wordBoundaryRegex = new RegExp(`(^|\\s)${patternClean.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(\\s|$)`);
+        if (wordBoundaryRegex.test(normalizedClean)) {
+          return rule.categoria;
+        }
+      } else if (normalized.includes(patternUpper) || normalizedClean.includes(patternClean)) {
         return rule.categoria;
       }
     }

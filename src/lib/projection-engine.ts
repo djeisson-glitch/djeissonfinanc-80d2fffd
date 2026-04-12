@@ -316,8 +316,12 @@ export function generateProjections(
       });
     }
     
-    // Calculate totals
-    const totalDespesas = categorias.reduce((s, c) => s + c.valor, 0);
+    // Calculate totals (exclude revenue manual overrides from despesas)
+    const despesaCategorias = categorias.filter(c => {
+      const override = manualOverrides.find(o => o.mes === mes && o.categoria_nome === c.categoria && o.tipo === 'receita');
+      return !override;
+    });
+    const totalDespesas = despesaCategorias.reduce((s, c) => s + c.valor, 0);
     const receitaOverride = manualOverrides.find(o => o.mes === mes && o.tipo === 'receita');
     const totalReceitas = receitaOverride ? receitaOverride.valor : (revenueAvg || receitaBase);
     

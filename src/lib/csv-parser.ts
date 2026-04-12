@@ -130,7 +130,7 @@ function classifyTransaction(parcela_atual: number | null, parcela_total: number
   return 'simple';
 }
 
-export function parseSicrediCSV(csvText: string): ParseResult {
+export function parseSicrediCSV(csvText: string, defaultPessoa: string = 'Titular'): ParseResult {
   const normalizedText = csvText.replace(/^\uFEFF/, '');
   const lines = normalizedText.split(/\r?\n/);
 
@@ -226,7 +226,7 @@ export function parseSicrediCSV(csvText: string): ParseResult {
     // Extract additional fields
     const valorDolarStr = parts.length >= 5 ? parts[4] : '';
     const codigoCartao = parts.length >= 6 ? (parts[5] || null) : null;
-    const pessoa = parts.length >= 7 ? (parts[6] || 'Djeisson Mauss') : 'Djeisson Mauss';
+    const pessoa = parts.length >= 7 ? (parts[6] || defaultPessoa) : defaultPessoa;
 
     if (!data || !descricao) {
       const reason = 'Data ou descrição vazia';
@@ -264,7 +264,7 @@ export function parseSicrediCSV(csvText: string): ParseResult {
     const tipo = valor < 0 ? 'receita' as const : 'despesa' as const;
     const absValor = Math.abs(valor);
     const isoDate = parseDate(data);
-    const finalPessoa = pessoa || 'Djeisson Mauss';
+    const finalPessoa = pessoa || defaultPessoa;
 
     // Parse valor em dólar
     let valorDolar: number | null = null;

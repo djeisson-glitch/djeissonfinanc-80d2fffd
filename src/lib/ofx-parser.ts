@@ -71,7 +71,7 @@ function autoCategorizeMemo(memo: string): { categoria: string; essencial: boole
   return null;
 }
 
-export function parseOFX(ofxText: string): OFXParseResult {
+export function parseOFX(ofxText: string, defaultPessoa: string = 'Titular'): OFXParseResult {
   let contaDetectada: string | null = null;
   let accountType: 'corrente' | 'credito' | null = null;
 
@@ -125,7 +125,7 @@ export function parseOFX(ofxText: string): OFXParseResult {
       const data = parseOFXDate(dateStr);
       const tipo: 'receita' | 'despesa' = valor > 0 ? 'receita' : 'despesa';
       const absValor = Math.abs(valor);
-      const pessoa = 'Djeisson Mauss';
+      const pessoa = defaultPessoa;
       const descricao = memo.trim();
 
       // Use FITID as hash for deduplication if available
@@ -136,7 +136,7 @@ export function parseOFX(ofxText: string): OFXParseResult {
 
       // Auto-categorize
       const autoCat = autoCategorizeMemo(descricao);
-      const classification: TransactionClassification = autoCat?.classification || (valor < 0 ? 'simple' : 'simple');
+      const classification: TransactionClassification = autoCat?.classification || (valor < 0 ? 'payment' : 'simple');
 
       return {
         data,

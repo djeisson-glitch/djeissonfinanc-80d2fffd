@@ -21,6 +21,14 @@ interface AiInsightsCardProps {
     topCategorias: { cat: string; total: number; pct: number }[];
     parcelasAtivas?: number;
     faturasPendentes?: number;
+    // Pattern analysis data
+    spendingTrends?: { categoria: string; tendencia: string; variacao: number; mediaRecente: number }[];
+    anomalies?: { categoria: string; mes: string; valor: number; media: number; excesso: number }[];
+    recurringCharges?: { descricao: string; valor: number }[];
+    healthScore?: number;
+    healthNivel?: string;
+    commitmentAvg?: number;
+    commitmentTrend?: string;
   };
 }
 

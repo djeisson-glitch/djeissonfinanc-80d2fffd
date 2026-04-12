@@ -11,6 +11,7 @@ import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import { TrendingUp, Lock, Activity, Pencil, X, Check, ChevronDown, ChevronRight } from 'lucide-react';
+import { IncomeCommitmentChart } from '@/components/dashboard/IncomeCommitmentChart';
 import { toast } from 'sonner';
 import {
   LineChart,
@@ -52,7 +53,7 @@ export default function ProjecoesPage() {
         .from('transacoes')
         .select('data, descricao, valor, tipo, categoria, categoria_id, parcela_atual, parcela_total, grupo_parcela, ignorar_dashboard, essencial, conta_id')
         .eq('user_id', user!.id)
-        .gte('data', '2026-01-01');
+        .gte('data', `${new Date().getFullYear() - 1}-01-01`);
       return data || [];
     },
     enabled: !!user,
@@ -185,7 +186,7 @@ export default function ProjecoesPage() {
   };
 
   const handleSaveEdit = (mes: string, cat: string) => {
-    const valor = parseFloat(editValue.replace(',', '.'));
+    const valor = parseFloat(editValue.replace(/\./g, '').replace(',', '.'));
     if (isNaN(valor) || valor < 0) {
       toast.error('Valor inválido');
       return;
@@ -395,6 +396,14 @@ export default function ProjecoesPage() {
           </ScrollArea>
         </CardContent>
       </Card>
+
+      {/* Income Commitment Projection */}
+      {transactions && transactions.length > 0 && (
+        <IncomeCommitmentChart
+          transactions={transactions}
+          receitaBase={receitaBase}
+        />
+      )}
 
       {/* Summary Cards */}
       <div className="grid gap-4 md:grid-cols-3">

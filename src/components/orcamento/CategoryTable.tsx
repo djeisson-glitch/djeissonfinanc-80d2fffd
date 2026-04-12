@@ -143,12 +143,6 @@ export function CategoryTable({ category, items, onUpdate }: CategoryTableProps)
                         <Trash2 className="h-3 w-3" />
                       </Button>
                     </td>
-                    {/* Supplier inline row */}
-                    {item.hasSupplier && (
-                      <td colSpan={config.field2 ? 7 : 6} className="px-3 py-1 bg-muted/30">
-                        {/* rendered via separate row below */}
-                      </td>
-                    )}
                   </tr>
                   // Can't have two rows from map easily, so we handle supplier below
                 );

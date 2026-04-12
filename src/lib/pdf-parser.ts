@@ -219,7 +219,8 @@ function classifyTransaction(parcela_atual: number | null, parcela_total: number
 // ── Mercado Pago parser ────────────────────────────────────────
 
 function parseMercadoPago(
-  pages: Array<{ rows: PdfTextBlock[]; garbledFonts: Set<string> }>
+  pages: Array<{ rows: PdfTextBlock[]; garbledFonts: Set<string> }>,
+  defaultPessoa: string = 'Titular'
 ): PdfParseResult {
   const transactions: ClassifiedTransaction[] = [];
   const skippedLines: SkippedLine[] = [];
@@ -333,9 +334,7 @@ function parseMercadoPago(
       const absValor = Math.abs(valor);
 
       const isoDate = parseDate(dateStr, dueYear);
-      const pessoa = 'Djeisson Mauss';
-
-      const baseHash = generateHash(isoDate, descricao, absValor, pessoa);
+      const baseHash = generateHash(isoDate, descricao, absValor, defaultPessoa);
       const count = hashCounts.get(baseHash) || 0;
       hashCounts.set(baseHash, count + 1);
       const hash_transacao = count > 0 ? `${baseHash}_seq${count}` : baseHash;
@@ -350,7 +349,7 @@ function parseMercadoPago(
         tipo,
         parcela_atual,
         parcela_total,
-        pessoa,
+        pessoa: defaultPessoa,
         hash_transacao,
         codigo_cartao: null,
         valor_dolar: null,
@@ -386,7 +385,7 @@ const GENERIC_DATE_REGEX = /(\d{2}\/\d{2}\/\d{4}|\d{2}\/\d{2}\/\d{2})/;
 const GENERIC_VALUE_REGEX = /R?\$?\s*-?\d{1,3}(?:\.\d{3})*,\d{2}|-?\d{1,3}(?:\.\d{3})*,\d{2}/;
 const GENERIC_PARCELA_REGEX = /\(?(\d{1,2})\/(\d{1,2})\)?/;
 
-function parseGenericPdf(pages: string[]): PdfParseResult {
+function parseGenericPdf(pages: string[], defaultPessoa: string = 'Titular'): PdfParseResult {
   const fullText = pages.join('\n');
   const lines = fullText.split(/\n/).flatMap(line => {
     const parts = line.split(/(?=\d{2}\/\d{2}\/\d{4})/);
@@ -455,9 +454,8 @@ function parseGenericPdf(pages: string[]): PdfParseResult {
     const rawValor = valor;
     const tipo = valor < 0 ? 'receita' as const : 'despesa' as const;
     const absValor = Math.abs(valor);
-    const pessoa = 'Djeisson Mauss';
 
-    const baseHash = generateHash(isoDate, descricao, absValor, pessoa);
+    const baseHash = generateHash(isoDate, descricao, absValor, defaultPessoa);
     const count = hashCounts.get(baseHash) || 0;
     hashCounts.set(baseHash, count + 1);
     const hash_transacao = count > 0 ? `${baseHash}_seq${count}` : baseHash;
@@ -472,7 +470,7 @@ function parseGenericPdf(pages: string[]): PdfParseResult {
       tipo,
       parcela_atual,
       parcela_total,
-      pessoa,
+      pessoa: defaultPessoa,
       hash_transacao,
       codigo_cartao: null,
       valor_dolar: null,
@@ -501,12 +499,12 @@ function parseGenericPdf(pages: string[]): PdfParseResult {
 
 // ── Main entry point ───────────────────────────────────────────
 
-export async function parsePdfFile(file: File): Promise<PdfParseResult> {
+export async function parsePdfFile(file: File, defaultPessoa: string = 'Titular'): Promise<PdfParseResult> {
   try {
     const structured = await extractPdfStructured(file);
 
     if (structured.isMercadoPago) {
-      return parseMercadoPago(structured.pages);
+      return parseMercadoPago(structured.pages, defaultPessoa);
     }
   } catch (err) {
     console.error('[pdf-parser] extractPdfStructured failed, falling back to generic:', err);
@@ -521,14 +519,14 @@ export async function parsePdfFile(file: File): Promise<PdfParseResult> {
     try {
       const structured2 = await extractPdfStructured(file);
       if (structured2.isMercadoPago) {
-        return parseMercadoPago(structured2.pages);
+        return parseMercadoPago(structured2.pages, defaultPessoa);
       }
     } catch (err2) {
       console.error('[pdf-parser] Second structured extraction attempt also failed:', err2);
     }
   }
 
-  return parseGenericPdf(pages);
+  return parseGenericPdf(pages, defaultPessoa);
 }
 
 /** @deprecated Use parsePdfFile instead. Kept for backward compatibility. */

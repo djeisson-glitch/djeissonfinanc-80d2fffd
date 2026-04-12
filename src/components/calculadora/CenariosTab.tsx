@@ -78,7 +78,7 @@ function resolveBucket(catName: string): BucketKey {
   // Excluded (receitas, transferências, operação bancária)
   if (n.startsWith('pagamento de fatura') || n === 'transferencia' || n.startsWith('transferencia entre')
     || n === 'receita' || n.startsWith('investimento') || n.startsWith('investimentos')
-    || n === 'outras receitas' || n.startsWith('receita produtora') || n.startsWith('salario')
+    || n === 'outras receitas' || n.startsWith('receita produtora')
     || n.startsWith('freelance') || n === 'devolucoes' || n === 'reembolsos'
     || n.startsWith('operacao bancaria') || n.startsWith('tarifa')
     || n === 'vendas' || n.startsWith('transferencia')) {

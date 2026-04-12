@@ -95,7 +95,7 @@ export default function TransacoesPage() {
         .from('transacoes')
         .select('*')
         .eq('user_id', user!.id)
-        .gte('data', start < '2026-01-01' ? '2026-01-01' : start)
+        .gte('data', start)
         .lte('data', end)
         .order('data', { ascending: false });
       return data || [];
@@ -431,7 +431,9 @@ export default function TransacoesPage() {
                       <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => { setEditingTx({ ...t, subcategoria: null }); setLearnPattern(false); }}>
                         <Pencil className="h-3 w-3" />
                       </Button>
-                      <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => deleteMutation.mutate(t.id)}>
+                      <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => {
+                        if (window.confirm(`Excluir "${t.descricao}"?`)) deleteMutation.mutate(t.id);
+                      }}>
                         <Trash2 className="h-3 w-3" />
                       </Button>
                     </div>

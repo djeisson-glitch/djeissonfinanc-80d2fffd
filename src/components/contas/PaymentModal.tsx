@@ -31,6 +31,7 @@ export function PaymentModal({ open, onOpenChange, contaId, contaNome, faturaTot
   const [parcelas, setParcelas] = useState(2);
   const [submitting, setSubmitting] = useState(false);
 
+  const pessoaNome = user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'Titular';
   const restante = useMemo(() => Math.max(0, faturaTotal - valorPago), [faturaTotal, valorPago]);
   const valorParcela = useMemo(() => parcelas > 0 ? restante / parcelas : 0, [restante, parcelas]);
 
@@ -43,8 +44,8 @@ export function PaymentModal({ open, onOpenChange, contaId, contaNome, faturaTot
       const valorPagamento = mode === 'total' ? faturaTotal : valorPago;
 
       // Create payment transaction
-      const paymentHash = generateHash(baseDate, `Pagamento fatura ${contaNome}`, valorPagamento, 'Djeisson Mauss');
-      await supabase.from('transacoes').insert({
+      const paymentHash = generateHash(baseDate, `Pagamento fatura ${contaNome}`, valorPagamento, pessoaNome);
+      const { data: paymentData, error: paymentError } = await supabase.from('transacoes').insert({
         user_id: user.id,
         conta_id: contaId,
         data: baseDate,
@@ -54,8 +55,10 @@ export function PaymentModal({ open, onOpenChange, contaId, contaNome, faturaTot
         tipo: 'receita',
         essencial: true,
         hash_transacao: paymentHash,
-        pessoa: 'Djeisson Mauss',
-      });
+        pessoa: pessoaNome,
+      }).select('id').single();
+
+      if (paymentError) throw paymentError;
 
       // If partial, create future installments for remaining
       if (mode === 'parcial' && restante > 0 && parcelas > 0) {
@@ -63,8 +66,8 @@ export function PaymentModal({ open, onOpenChange, contaId, contaNome, faturaTot
         const installments = [];
         for (let i = 1; i <= parcelas; i++) {
           const d = new Date(year, month + i, 1);
-          const isoDate = d.toISOString().split('T')[0];
-          const hash = generateHash(isoDate, `Parcelamento fatura ${contaNome}`, valorParcela, 'Djeisson Mauss') + `_p${i}`;
+          const isoDate = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`;
+          const hash = generateHash(isoDate, `Parcelamento fatura ${contaNome}`, valorParcela, pessoaNome) + `_p${i}`;
           installments.push({
             user_id: user.id,
             conta_id: contaId,
@@ -78,10 +81,15 @@ export function PaymentModal({ open, onOpenChange, contaId, contaNome, faturaTot
             parcela_total: parcelas,
             grupo_parcela,
             hash_transacao: hash,
-            pessoa: 'Djeisson Mauss',
+            pessoa: pessoaNome,
           });
         }
-        await supabase.from('transacoes').insert(installments);
+        const { error: installError } = await supabase.from('transacoes').insert(installments);
+        if (installError) {
+          // Rollback: delete the payment if installments fail
+          await supabase.from('transacoes').delete().eq('id', paymentData.id);
+          throw installError;
+        }
       }
 
       queryClient.invalidateQueries({ queryKey: ['transacoes'] });

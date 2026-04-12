@@ -33,23 +33,29 @@ export function ParcelasTimeline({ parcelas }: ParcelasTimelineProps) {
   const [selectedEnding, setSelectedEnding] = useState<MonthGroup | null>(null);
 
   const monthGroups = useMemo(() => {
-    const year = new Date().getFullYear();
-    const currentMonth = new Date().getMonth(); // 0-based
+    const now = new Date();
+    const currentYear = now.getFullYear();
+    const currentMonth = now.getMonth(); // 0-based
 
     // Build map from parcelas data
     const porMes: Record<string, { total: number; items: Parcela[] }> = {};
+    let maxYear = currentYear;
     (parcelas || []).forEach(p => {
       const d = new Date(p.data + 'T00:00:00');
       const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
       if (!porMes[key]) porMes[key] = { total: 0, items: [] };
       porMes[key].total += Number(p.valor);
       porMes[key].items.push(p);
+      if (d.getFullYear() > maxYear) maxYear = d.getFullYear();
     });
 
-    // Generate all 12 months of the current year
-    return Array.from({ length: 12 }, (_, i) => {
-      const key = `${year}-${String(i + 1).padStart(2, '0')}`;
-      const label = `${getMonthName(i)}/${year.toString().slice(2)}`;
+    // Generate months from Jan of current year through Dec of last year with parcelas
+    const totalMonths = (maxYear - currentYear + 1) * 12;
+    return Array.from({ length: totalMonths }, (_, i) => {
+      const monthIdx = i % 12;
+      const yearIdx = currentYear + Math.floor(i / 12);
+      const key = `${yearIdx}-${String(monthIdx + 1).padStart(2, '0')}`;
+      const label = `${getMonthName(monthIdx)}/${yearIdx.toString().slice(2)}`;
       const data = porMes[key] || { total: 0, items: [] };
       const ending = data.items.filter(p => p.parcela_atual != null && p.parcela_total != null && p.parcela_atual === p.parcela_total);
       const terminam = ending.map(p => ({
@@ -57,7 +63,9 @@ export function ParcelasTimeline({ parcelas }: ParcelasTimelineProps) {
         valor: Number(p.valor),
         parcelaInfo: `${p.parcela_atual}/${p.parcela_total}`,
       }));
-      return { mes: label, mesKey: key, total: data.total, items: data.items, terminam, isCurrent: i === currentMonth, isPast: i < currentMonth } as MonthGroup & { isCurrent: boolean; isPast: boolean };
+      const isCurrent = yearIdx === currentYear && monthIdx === currentMonth;
+      const isPast = yearIdx < currentYear || (yearIdx === currentYear && monthIdx < currentMonth);
+      return { mes: label, mesKey: key, total: data.total, items: data.items, terminam, isCurrent, isPast } as MonthGroup;
     });
   }, [parcelas]);
 

@@ -1,5 +1,22 @@
 import { generateHash } from '@/lib/csv-parser';
 
+/**
+ * Adds months to a date without overflow (e.g. Jan 31 + 1 month = Feb 28, not Mar 3).
+ */
+function addMonthsSafe(baseIso: string, months: number): string {
+  const base = new Date(baseIso + 'T00:00:00');
+  const targetMonth = base.getMonth() + months;
+  const targetDate = new Date(base.getFullYear(), targetMonth, 1);
+  // Clamp day to last day of target month
+  const lastDay = new Date(targetDate.getFullYear(), targetDate.getMonth() + 1, 0).getDate();
+  const day = Math.min(base.getDate(), lastDay);
+  targetDate.setDate(day);
+  const y = targetDate.getFullYear();
+  const m = String(targetDate.getMonth() + 1).padStart(2, '0');
+  const d = String(targetDate.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
 export interface ProjectableTransaction {
   data: string;
   descricao: string;
@@ -44,10 +61,8 @@ export function projectFutureInstallments(
     for (let p = t.parcela_atual + 1; p <= t.parcela_total; p++) {
       const offset = p - t.parcela_atual;
 
-      // Calculate future date from original purchase date
-      const futureDate = new Date(baseDate + 'T00:00:00');
-      futureDate.setMonth(futureDate.getMonth() + offset);
-      const isoDate = futureDate.toISOString().split('T')[0];
+      // Calculate future date from original purchase date (safe from month overflow)
+      const isoDate = addMonthsSafe(baseDate, offset);
 
       // Only project dates >= 2026-01-01
       const currentYearStart = `${new Date().getFullYear()}-01-01`;
@@ -56,9 +71,8 @@ export function projectFutureInstallments(
       // Project mes_competencia forward from billing period
       let projectedCompetencia: string | null = null;
       if (t.mes_competencia) {
-        const [cy, cm] = t.mes_competencia.split('-').map(Number);
-        const compDate = new Date(cy, cm - 1 + offset, 1);
-        projectedCompetencia = `${compDate.getFullYear()}-${String(compDate.getMonth() + 1).padStart(2, '0')}`;
+        const compIso = addMonthsSafe(`${t.mes_competencia}-01`, offset);
+        projectedCompetencia = compIso.substring(0, 7);
       }
 
       const hash = generateHash(isoDate, baseDesc, t.valor, t.pessoa) + `_p${p}`;
@@ -135,7 +149,7 @@ export function detectConflicts(
   const autoReplacements: { planned: ProjectableTransaction | ProjectedInstallment; existingId: string }[] = [];
   const conflicts: ConflictMatch[] = [];
 
-  const normalize = (s: string) => s.replace(/\s*\(auto-projetada\)/, '').trim().substring(0, 15).toLowerCase();
+  const normalize = (s: string) => s.replace(/\s*\(auto-projetada\)/, '').trim().substring(0, 25).toLowerCase();
 
   const daysDiff = (a: string, b: string): number => {
     const da = new Date(a + 'T00:00:00');

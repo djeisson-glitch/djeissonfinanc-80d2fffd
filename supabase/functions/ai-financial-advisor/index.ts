@@ -18,7 +18,12 @@ serve(async (req) => {
 
     switch (type) {
       case "dashboard_insights": {
-        systemPrompt = `Você é um consultor financeiro pessoal brasileiro. Analise os dados financeiros e forneça 3-5 insights práticos e acionáveis em português do Brasil. Seja direto, use emojis para destacar pontos importantes. Não repita dados que o usuário já vê no dashboard. Foque em padrões, alertas e oportunidades que não são óbvios.`;
+        systemPrompt = `Você é um consultor financeiro pessoal brasileiro especialista. Analise os dados financeiros e forneça 3-5 insights práticos e acionáveis em português do Brasil. Seja direto, use emojis para destacar pontos importantes. Não repita dados que o usuário já vê no dashboard. Foque em:
+1. Padrões de consumo e tendências (categorias subindo/descendo)
+2. Alertas sobre gastos anômalos ou acima da média
+3. Oportunidades de economia baseadas nos dados reais
+4. Projeção de comprometimento da renda nos próximos meses
+5. Recomendações de decisão financeira baseadas no score de saúde financeira`;
         userPrompt = `Analise este resumo financeiro do mês:
 - Receita base: R$ ${context.receita}
 - Total despesas: R$ ${context.totalDespesas}
@@ -33,7 +38,18 @@ Top categorias de gasto:
 ${context.topCategorias?.map((c: any) => `- ${c.cat}: R$ ${c.total.toFixed(2)} (${c.pct.toFixed(0)}%)`).join('\n') || 'Nenhuma despesa'}
 
 ${context.parcelasAtivas ? `Parcelas ativas: ${context.parcelasAtivas} compromissos futuros` : ''}
-${context.faturasPendentes ? `Faturas de cartão pendentes: ${context.faturasPendentes}` : ''}`;
+${context.faturasPendentes ? `Faturas de cartão pendentes: ${context.faturasPendentes}` : ''}
+
+${context.spendingTrends?.length ? `\nTendências de gastos por categoria:\n${context.spendingTrends.map((t: any) => `- ${t.categoria}: ${t.tendencia} (${t.variacao > 0 ? '+' : ''}${t.variacao.toFixed(0)}%), média recente R$ ${t.mediaRecente.toFixed(0)}`).join('\n')}` : ''}
+
+${context.anomalies?.length ? `\nGastos anômalos detectados:\n${context.anomalies.map((a: any) => `- ${a.categoria} em ${a.mes}: R$ ${a.valor.toFixed(0)} (média R$ ${a.media.toFixed(0)}, excesso R$ ${a.excesso.toFixed(0)})`).join('\n')}` : ''}
+
+${context.recurringCharges?.length ? `\nCobranças recorrentes identificadas (${context.recurringCharges.length} itens): total mensal estimado R$ ${context.recurringCharges.reduce((s: number, r: any) => s + r.valor, 0).toFixed(0)}` : ''}
+
+${context.healthScore ? `\nScore de saúde financeira: ${context.healthScore}/100 (${context.healthNivel})` : ''}
+
+${context.commitmentAvg ? `\nComprometimento médio da renda: ${context.commitmentAvg.toFixed(0)}%` : ''}
+${context.commitmentTrend ? `Tendência de comprometimento: ${context.commitmentTrend}` : ''}`;
         break;
       }
 

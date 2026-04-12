@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
@@ -18,11 +18,14 @@ interface Props {
 }
 
 export function ConflictModal({ open, conflicts, onConfirm, onCancel }: Props) {
-  const [choices, setChoices] = useState<Record<number, 'csv' | 'existing'>>(() => {
+  const [choices, setChoices] = useState<Record<number, 'csv' | 'existing'>>({});
+
+  // Reset choices when conflicts change
+  useEffect(() => {
     const init: Record<number, 'csv' | 'existing'> = {};
     conflicts.forEach((_, i) => { init[i] = 'csv'; });
-    return init;
-  });
+    setChoices(init);
+  }, [conflicts]);
 
   const handleConfirm = () => {
     const resolved = conflicts.map((c, i) => ({

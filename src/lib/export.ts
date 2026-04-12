@@ -38,20 +38,27 @@ function getContaNome(contaId: string, contas: { id: string; nome: string }[]): 
   return contas.find(c => c.id === contaId)?.nome || '';
 }
 
+function sanitizeCell(value: string): string {
+  if (/^[=+\-@]/.test(value)) {
+    return '\t' + value;
+  }
+  return value;
+}
+
 function buildRows(opts: ExportOptions): string[][] {
   const header = ['Data', 'Data Competência', 'Descrição', 'Categoria', 'Valor', 'Tipo', 'Essencial', 'Parcela', 'Pessoa', 'Conta', 'Observações'];
   const rows = opts.transactions.map(t => [
     formatDateBR(t.data),
     t.data_original ? formatDateBR(t.data_original) : formatDateBR(t.data),
-    t.descricao,
-    t.categoria,
+    sanitizeCell(t.descricao),
+    sanitizeCell(t.categoria),
     formatValorBR(t.valor),
     t.tipo === 'receita' ? 'Receita' : 'Despesa',
     t.essencial ? 'Sim' : 'Não',
     t.parcela_atual && t.parcela_total ? `${t.parcela_atual}/${t.parcela_total}` : '',
-    t.pessoa,
-    getContaNome(t.conta_id, opts.contas),
-    t.observacoes || '',
+    sanitizeCell(t.pessoa),
+    sanitizeCell(getContaNome(t.conta_id, opts.contas)),
+    sanitizeCell(t.observacoes || ''),
   ]);
   return [header, ...rows];
 }

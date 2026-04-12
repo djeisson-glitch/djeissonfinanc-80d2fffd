@@ -110,6 +110,7 @@ export default function CalculadoraPage() {
       const { data, error } = await supabase
         .from('simulacoes_financiamento')
         .select('id, nome, created_at, updated_at')
+        .eq('user_id', user.id)
         .order('updated_at', { ascending: false });
       if (error) throw error;
       if (data) setSavedList(data);
