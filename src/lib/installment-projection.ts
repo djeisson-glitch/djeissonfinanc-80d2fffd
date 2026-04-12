@@ -86,16 +86,18 @@ export function projectFutureInstallments(
       // Calculate future date from original purchase date (safe from month overflow)
       const isoDate = addMonthsSafe(baseDate, offset);
 
-      // Only project dates >= current year
-      const currentYearStart = `${new Date().getFullYear()}-01-01`;
-      if (isoDate < currentYearStart) continue;
-
       // Project mes_competencia forward from billing period
       let projectedCompetencia: string | null = null;
       if (t.mes_competencia) {
         const compIso = addMonthsSafe(`${t.mes_competencia}-01`, offset);
         projectedCompetencia = compIso.substring(0, 7);
       }
+
+      // Only project if the billing period (mes_competencia) is >= current year,
+      // or if no mes_competencia, use the transaction date as fallback
+      const checkDate = projectedCompetencia ? `${projectedCompetencia}-01` : isoDate;
+      const currentYearStart = `${new Date().getFullYear()}-01-01`;
+      if (checkDate < currentYearStart) continue;
 
       const hash = generateHash(isoDate, baseDesc, t.valor, t.pessoa) + `_p${p}`;
 
