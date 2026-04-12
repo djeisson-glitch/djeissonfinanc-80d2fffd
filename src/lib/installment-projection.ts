@@ -106,7 +106,7 @@ export function projectFutureInstallments(
       const currentYearStart = `${new Date().getFullYear()}-01-01`;
       if (checkDate < currentYearStart) continue;
 
-      const hash = generateHash(isoDate, baseDesc, t.valor, t.pessoa) + `_p${p}`;
+      const hash = generateHash(isoDate, baseDesc, t.valor, t.pessoa, p, t.parcela_total) + `_p${p}`;
 
       projected.push({
         user_id: t.user_id,

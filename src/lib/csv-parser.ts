@@ -78,8 +78,20 @@ export function normalizeDescription(desc: string): string {
   return normalized.substring(0, 40);
 }
 
-export function generateHash(data: string, descricao: string, valor: number, pessoa: string): string {
-  const str = `${data}|${descricao}|${valor}|${pessoa}`;
+export function generateHash(
+  data: string,
+  descricao: string,
+  valor: number,
+  pessoa: string,
+  parcela_atual?: number | null,
+  parcela_total?: number | null
+): string {
+  let str = `${data}|${descricao}|${valor}|${pessoa}`;
+  // Include parcela info when available to avoid collisions between different
+  // installment months of the same purchase (e.g., parcela 1/6 vs 2/6)
+  if (parcela_atual != null && parcela_total != null) {
+    str += `|${parcela_atual}/${parcela_total}`;
+  }
   let hash = 0;
   for (let i = 0; i < str.length; i++) {
     const char = str.charCodeAt(i);
@@ -154,15 +166,23 @@ export function parseSicrediCSV(csvText: string, defaultPessoa: string = 'Titula
     contaDetectada = 'Sicredi Principal';
   }
 
-  // Try to detect due date from header (e.g. "Data de Vencimento ;15/03/2026")
-  for (const line of lines.slice(0, 15)) {
+  // Try to detect due date and fatura total from header
+  let headerFaturaTotal: number | null = null;
+  for (const line of lines.slice(0, 20)) {
     const dueDateMatch = line.match(/[Vv]encimento\s*;?\s*(\d{2})\/(\d{2})\/(\d{4})/);
     if (dueDateMatch) {
       detectedDueDate = {
         month: parseInt(dueDateMatch[2]) - 1, // 0-indexed
         year: parseInt(dueDateMatch[3]),
       };
-      break;
+    }
+    // Detect total fatura from header: " (=) Total desta fatura (R$) ;"R$ 6.442,76""
+    const totalMatch = line.match(/[Tt]otal\s+desta\s+fatura.*?"?R\$\s*([\d.,\-]+)"?/);
+    if (totalMatch) {
+      const val = parseValue(totalMatch[1]);
+      if (val !== null && val > 0) {
+        headerFaturaTotal = val;
+      }
     }
   }
 
@@ -280,7 +300,7 @@ export function parseSicrediCSV(csvText: string, defaultPessoa: string = 'Titula
       valorDolar = parseValue(valorDolarStr);
     }
 
-    const baseHash = generateHash(isoDate, descricao, absValor, finalPessoa);
+    const baseHash = generateHash(isoDate, descricao, absValor, finalPessoa, parcela_atual, parcela_total);
     const count = hashCounts.get(baseHash) || 0;
     hashCounts.set(baseHash, count + 1);
     const hash_transacao = count > 0 ? `${baseHash}_seq${count}` : baseHash;
@@ -312,6 +332,47 @@ export function parseSicrediCSV(csvText: string, defaultPessoa: string = 'Titula
       hash_transacao,
     });
   });
+
+  // If the CSV header declares a fatura total, compare against sum of parsed lines.
+  // If there's a positive difference (e.g., encargos/fees not listed as individual lines),
+  // inject a synthetic "Encargos da Fatura" transaction to reconcile.
+  if (headerFaturaTotal !== null && headerFaturaTotal > 0 && detectedDueDate) {
+    const sumDespesas = transactions.filter(t => t.tipo === 'despesa').reduce((s, t) => s + t.valor, 0);
+    const sumReceitas = transactions
+      .filter(t => t.tipo === 'receita' && !t.descricao.toLowerCase().includes('pag fat'))
+      .reduce((s, t) => s + t.valor, 0);
+    const linesFatura = sumDespesas - sumReceitas;
+    const missing = headerFaturaTotal - linesFatura;
+
+    if (missing > 0.01) {
+      const dueDate = `${detectedDueDate.year}-${String(detectedDueDate.month + 1).padStart(2, '0')}-01`;
+      const desc = 'Encargos da Fatura';
+      const hash = generateHash(dueDate, desc, parseFloat(missing.toFixed(2)), defaultPessoa);
+
+      transactions.push({
+        data: dueDate,
+        descricao: desc,
+        descricao_normalizada: normalizeDescription(desc),
+        valor: parseFloat(missing.toFixed(2)),
+        tipo: 'despesa',
+        parcela_atual: null,
+        parcela_total: null,
+        pessoa: defaultPessoa,
+        hash_transacao: hash,
+        codigo_cartao: null,
+        valor_dolar: null,
+        classification: 'simple',
+      });
+
+      lineLogs.push({
+        lineNumber: 0,
+        content: `Diferença cabeçalho vs linhas: R$ ${missing.toFixed(2)} (fatura header: R$ ${headerFaturaTotal.toFixed(2)}, soma linhas: R$ ${linesFatura.toFixed(2)})`,
+        status: 'importada',
+        reason: 'Encargos/taxas não listados como transações individuais no CSV',
+        hash_transacao: hash,
+      });
+    }
+  }
 
   return {
     contaDetectada,

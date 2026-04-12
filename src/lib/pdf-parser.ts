@@ -340,7 +340,7 @@ function parseMercadoPago(
       const absValor = Math.abs(valor);
 
       const isoDate = parseDate(dateStr, dueYear);
-      const baseHash = generateHash(isoDate, descricao, absValor, defaultPessoa);
+      const baseHash = generateHash(isoDate, descricao, absValor, defaultPessoa, parcela_atual, parcela_total);
       const count = hashCounts.get(baseHash) || 0;
       hashCounts.set(baseHash, count + 1);
       const hash_transacao = count > 0 ? `${baseHash}_seq${count}` : baseHash;
@@ -461,7 +461,7 @@ function parseGenericPdf(pages: string[], defaultPessoa: string = 'Titular'): Pd
     const tipo = valor < 0 ? 'receita' as const : 'despesa' as const;
     const absValor = Math.abs(valor);
 
-    const baseHash = generateHash(isoDate, descricao, absValor, defaultPessoa);
+    const baseHash = generateHash(isoDate, descricao, absValor, defaultPessoa, parcela_atual, parcela_total);
     const count = hashCounts.get(baseHash) || 0;
     hashCounts.set(baseHash, count + 1);
     const hash_transacao = count > 0 ? `${baseHash}_seq${count}` : baseHash;

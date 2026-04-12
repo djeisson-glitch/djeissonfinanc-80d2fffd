@@ -201,7 +201,7 @@ function ProjectInstallmentsSection({ userId, queryClient }: { userId?: string; 
             projectedCompetencia = `${compDate.getFullYear()}-${String(compDate.getMonth() + 1).padStart(2, '0')}`;
           }
 
-          const hash = generateHash(isoDate, baseDesc, Number(latest.valor), latest.pessoa) + `_p${p}`;
+          const hash = generateHash(isoDate, baseDesc, Number(latest.valor), latest.pessoa, p, latest.parcela_total) + `_p${p}`;
 
           toInsert.push({
             user_id: userId,
