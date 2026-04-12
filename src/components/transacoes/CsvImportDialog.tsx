@@ -440,6 +440,15 @@ export function CsvImportDialog({ open, onOpenChange }: Props) {
     const refundRaw = finalTransactions.filter((t) => t.classification === "refund");
     const paymentRaw = finalTransactions.filter((t) => t.classification === "payment");
 
+    console.log("[Import] Classificação:", {
+      simple: simpleRaw.length,
+      newInstallment: newInstallmentRaw.length,
+      ongoing: ongoingRaw.length,
+      refund: refundRaw.length,
+      payment: paymentRaw.length,
+      refundDetails: refundRaw.map(r => ({ desc: r.descricao, valor: r.valor, tipo: r.tipo })),
+    });
+
     // Check ongoing installments for duplicates
     const { unique: ongoingUnique, duplicates: ongoingDuplicates } = await checkOngoingDuplicates(
       currentUserId,
@@ -868,6 +877,9 @@ export function CsvImportDialog({ open, onOpenChange }: Props) {
       // Step 2: Insert new transactions
       let imported = 0;
       const batchSize = 50;
+
+      const refundsInPlan = plan.newTransactions.filter((t: any) => t.tipo === 'receita');
+      console.log("[Import] Transações a inserir:", plan.newTransactions.length, "| Receitas (devoluções):", refundsInPlan.length, refundsInPlan.map((r: any) => ({ desc: r.descricao, valor: r.valor, tipo: r.tipo, hash: r.hash_transacao })));
 
       for (let i = 0; i < plan.newTransactions.length; i += batchSize) {
         const batch = plan.newTransactions

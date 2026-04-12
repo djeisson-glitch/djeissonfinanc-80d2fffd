@@ -99,7 +99,14 @@ export default function DashboardPage() {
         .lte('data', end);
 
       const allTxs = [...(byPeriod || []), ...(byDate || [])];
-      
+
+      const receitas = allTxs.filter(t => t.tipo === 'receita');
+      const devol = allTxs.filter(t => {
+        const d = t.descricao.toLowerCase();
+        return d.includes('devoluc') || d.includes('devolução') || d.includes('estorno');
+      });
+      console.log("[Dashboard Fatura]", { billingPeriod, totalTxs: allTxs.length, byPeriodCount: byPeriod?.length, byDateCount: byDate?.length, receitas: receitas.length, devolucoes: devol.length, devolDetails: devol.map(d => ({ desc: d.descricao, valor: d.valor, tipo: d.tipo })) });
+
       const faturas: Record<string, { despesas: number; pagamentos: number }> = {};
       allTxs.forEach(t => {
         if (!faturas[t.conta_id]) faturas[t.conta_id] = { despesas: 0, pagamentos: 0 };
