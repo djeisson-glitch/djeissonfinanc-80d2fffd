@@ -632,6 +632,7 @@ export function CsvImportDialog({ open, onOpenChange }: Props) {
 
     const previewData: ImportPreviewData = {
       simpleTransactions: simpleRaw,
+      refunds: refundRaw,
       newInstallments: installmentGroups,
       ongoingInstallments: ongoingUnique,
       duplicateInstallments: ongoingDuplicates,

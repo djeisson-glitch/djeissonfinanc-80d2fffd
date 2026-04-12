@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { CheckCircle2, XCircle, AlertTriangle, RefreshCw, ChevronDown, ChevronRight, Sparkles } from 'lucide-react';
+import { CheckCircle2, XCircle, AlertTriangle, RefreshCw, ChevronDown, ChevronRight, Sparkles, ArrowDownLeft } from 'lucide-react';
 import { useEnterSubmit } from '@/hooks/useEnterSubmit';
 import { useState } from 'react';
 import type { ClassifiedTransaction } from '@/lib/csv-parser';
@@ -22,13 +22,15 @@ export interface InstallmentGroup {
 export interface ImportPreviewData {
   /** Tipo 3: transações simples */
   simpleTransactions: ClassifiedTransaction[];
+  /** Devoluções e estornos (valores negativos importados como receita) */
+  refunds: ClassifiedTransaction[];
   /** Tipo 1: novos parcelamentos */
   newInstallments: InstallmentGroup[];
   /** Tipo 2: parcelas em andamento (não duplicadas) */
   ongoingInstallments: ClassifiedTransaction[];
   /** Tipo 2: parcelas duplicadas */
   duplicateInstallments: ClassifiedTransaction[];
-  /** Tipo 4: pagamentos e estornos */
+  /** Tipo 4: pagamentos de fatura */
   payments: ClassifiedTransaction[];
   /** Linhas rejeitadas do CSV */
   rejectedLines: { lineNumber: number; content: string; reason: string }[];
@@ -92,6 +94,7 @@ export function CsvImportPreviewV2({ data, onBack, onConfirm, confirming }: Prop
   const handleKeyDown = useEnterSubmit(onConfirm, confirming);
   const [openSections, setOpenSections] = useState({
     simple: true,
+    refund: true,
     newInstallment: true,
     ongoing: true,
     ignored: false,
@@ -103,6 +106,7 @@ export function CsvImportPreviewV2({ data, onBack, onConfirm, confirming }: Prop
 
   const totalNewTransactions =
     data.simpleTransactions.length +
+    data.refunds.length +
     data.newInstallments.reduce((sum, g) => sum + g.totalParcelas, 0) +
     data.ongoingInstallments.length;
 
@@ -117,6 +121,7 @@ export function CsvImportPreviewV2({ data, onBack, onConfirm, confirming }: Prop
   const monthlyImpact = data.newInstallments.reduce((sum, g) => sum + g.valorParcela, 0);
 
   const simpleTotal = data.simpleTransactions.reduce((s, t) => s + t.valor, 0);
+  const refundTotal = data.refunds.reduce((s, t) => s + t.valor, 0);
   const ongoingTotal = data.ongoingInstallments.reduce((s, t) => s + t.valor, 0);
   const paymentTotal = data.payments.reduce((s, t) => s + t.valor, 0);
 
@@ -202,6 +207,51 @@ export function CsvImportPreviewV2({ data, onBack, onConfirm, confirming }: Prop
                       })}
                     </TableBody>
                   </Table>
+                </CollapsibleContent>
+              </div>
+            </Collapsible>
+          )}
+
+          {/* Section: Refunds / Devoluções */}
+          {data.refunds.length > 0 && (
+            <Collapsible open={openSections.refund} onOpenChange={() => toggleSection('refund')}>
+              <div className="rounded-lg border border-green-200">
+                <CollapsibleTrigger className="w-full px-3 hover:bg-muted/40 rounded-t-lg">
+                  <SectionHeader
+                    icon={ArrowDownLeft}
+                    iconClass="text-green-500"
+                    title="Devoluções / Estornos"
+                    count={data.refunds.length}
+                    total={refundTotal}
+                    isOpen={openSections.refund}
+                  />
+                </CollapsibleTrigger>
+                <CollapsibleContent>
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="w-24">Data</TableHead>
+                        <TableHead>Descrição</TableHead>
+                        <TableHead className="w-28 text-right">Valor</TableHead>
+                        <TableHead className="w-32">Pessoa</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {data.refunds.map((t, i) => (
+                        <TableRow key={i}>
+                          <TableCell className="text-xs">{formatDate(t.data)}</TableCell>
+                          <TableCell className="text-xs">{t.descricao}</TableCell>
+                          <TableCell className="text-xs text-right font-mono text-green-600">
+                            -{formatCurrency(t.valor)}
+                          </TableCell>
+                          <TableCell className="text-xs">{t.pessoa}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                  <p className="px-3 pb-2 text-xs text-muted-foreground italic">
+                    Devoluções serão subtraídas do valor total da fatura.
+                  </p>
                 </CollapsibleContent>
               </div>
             </Collapsible>
@@ -329,7 +379,7 @@ export function CsvImportPreviewV2({ data, onBack, onConfirm, confirming }: Prop
                     {data.payments.length > 0 && (
                       <div className="p-3 space-y-2">
                         <p className="text-xs font-medium text-muted-foreground">
-                          Pagamentos / Estornos ({data.payments.length})
+                          Pagamentos de fatura ({data.payments.length})
                         </p>
                         {data.payments.map((t, i) => (
                           <div key={i} className="flex items-center justify-between text-xs">
