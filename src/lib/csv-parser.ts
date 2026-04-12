@@ -32,7 +32,8 @@ export type TransactionClassification =
   | 'simple'           // Tipo 3: sem parcela
   | 'new_installment'  // Tipo 1: parcela 01/X
   | 'ongoing_installment' // Tipo 2: parcela N/X (N>1)
-  | 'payment';         // Tipo 4: valor negativo
+  | 'payment'          // Tipo 4: pagamento de fatura (pag fat)
+  | 'refund';          // Tipo 5: devolução/estorno (valor negativo que não é pagamento)
 
 export interface ClassifiedTransaction extends ParsedTransaction {
   classification: TransactionClassification;
@@ -116,9 +117,16 @@ function parseValue(valorStr: string): number | null {
   return isNaN(val) ? null : val;
 }
 
-function classifyTransaction(parcela_atual: number | null, parcela_total: number | null, valor: number): TransactionClassification {
-  // Tipo 4: Payment/Refund (negative value)
-  if (valor < 0) return 'payment';
+function classifyTransaction(parcela_atual: number | null, parcela_total: number | null, valor: number, descricao: string): TransactionClassification {
+  if (valor < 0) {
+    const desc = descricao.toLowerCase();
+    // "Pag Fat" = pagamento de fatura anterior → excluir
+    if (desc.includes('pag fat') || desc.includes('pagamento fatura')) {
+      return 'payment';
+    }
+    // Devoluções, estornos e outros créditos → importar como receita
+    return 'refund';
+  }
 
   // Tipo 1: New installment (01/X where X > 1)
   if (parcela_atual === 1 && parcela_total !== null && parcela_total > 1) return 'new_installment';
@@ -277,7 +285,7 @@ export function parseSicrediCSV(csvText: string, defaultPessoa: string = 'Titula
     hashCounts.set(baseHash, count + 1);
     const hash_transacao = count > 0 ? `${baseHash}_seq${count}` : baseHash;
 
-    const classification = classifyTransaction(parcela_atual, parcela_total, rawValor);
+    const classification = classifyTransaction(parcela_atual, parcela_total, rawValor, descricao);
 
     transactions.push({
       data: isoDate,

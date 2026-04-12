@@ -136,7 +136,16 @@ export function parseOFX(ofxText: string, defaultPessoa: string = 'Titular'): OF
 
       // Auto-categorize
       const autoCat = autoCategorizeMemo(descricao);
-      const classification: TransactionClassification = autoCat?.classification || (valor < 0 ? 'payment' : 'simple');
+      const classification: TransactionClassification = autoCat?.classification || (() => {
+        if (valor < 0) {
+          const desc = descricao.toLowerCase();
+          if (desc.includes('pag fat') || desc.includes('pagamento fatura') || desc.includes('pagto fatura')) {
+            return 'payment' as const;
+          }
+          return 'refund' as const;
+        }
+        return 'simple' as const;
+      })();
 
       return {
         data,

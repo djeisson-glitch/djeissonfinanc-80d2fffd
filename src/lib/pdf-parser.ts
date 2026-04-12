@@ -209,8 +209,14 @@ function parseValue(valorStr: string): number | null {
   return isNaN(val) ? null : val;
 }
 
-function classifyTransaction(parcela_atual: number | null, parcela_total: number | null, valor: number) {
-  if (valor < 0) return 'payment' as const;
+function classifyTransaction(parcela_atual: number | null, parcela_total: number | null, valor: number, descricao: string) {
+  if (valor < 0) {
+    const desc = descricao.toLowerCase();
+    if (desc.includes('pag fat') || desc.includes('pagamento fatura') || desc.includes('pagto fatura')) {
+      return 'payment' as const;
+    }
+    return 'refund' as const;
+  }
   if (parcela_atual === 1 && parcela_total !== null && parcela_total > 1) return 'new_installment' as const;
   if (parcela_atual !== null && parcela_atual > 1 && parcela_total !== null) return 'ongoing_installment' as const;
   return 'simple' as const;
@@ -339,7 +345,7 @@ function parseMercadoPago(
       hashCounts.set(baseHash, count + 1);
       const hash_transacao = count > 0 ? `${baseHash}_seq${count}` : baseHash;
 
-      const classification = classifyTransaction(parcela_atual, parcela_total, rawValor);
+      const classification = classifyTransaction(parcela_atual, parcela_total, rawValor, descricao);
 
       transactions.push({
         data: isoDate,
@@ -460,7 +466,7 @@ function parseGenericPdf(pages: string[], defaultPessoa: string = 'Titular'): Pd
     hashCounts.set(baseHash, count + 1);
     const hash_transacao = count > 0 ? `${baseHash}_seq${count}` : baseHash;
 
-    const classification = classifyTransaction(parcela_atual, parcela_total, rawValor);
+    const classification = classifyTransaction(parcela_atual, parcela_total, rawValor, descricao);
 
     transactions.push({
       data: isoDate,

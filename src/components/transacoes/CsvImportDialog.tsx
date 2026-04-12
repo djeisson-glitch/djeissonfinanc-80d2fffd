@@ -435,6 +435,7 @@ export function CsvImportDialog({ open, onOpenChange }: Props) {
     const simpleRaw = finalTransactions.filter((t) => t.classification === "simple");
     const newInstallmentRaw = finalTransactions.filter((t) => t.classification === "new_installment");
     const ongoingRaw = finalTransactions.filter((t) => t.classification === "ongoing_installment");
+    const refundRaw = finalTransactions.filter((t) => t.classification === "refund");
     const paymentRaw = finalTransactions.filter((t) => t.classification === "payment");
 
     // Check ongoing installments for duplicates
@@ -446,8 +447,8 @@ export function CsvImportDialog({ open, onOpenChange }: Props) {
 
     setProgress(35);
 
-    // Build PlannedTransactions for importable items (simple + new_installment first parcela + ongoing unique)
-    const importableTransactions = [...simpleRaw, ...newInstallmentRaw, ...ongoingUnique];
+    // Build PlannedTransactions for importable items (simple + refunds + new_installment first parcela + ongoing unique)
+    const importableTransactions = [...simpleRaw, ...refundRaw, ...newInstallmentRaw, ...ongoingUnique];
     const allOriginals: PlannedTransaction[] = [];
 
     for (const t of importableTransactions) {

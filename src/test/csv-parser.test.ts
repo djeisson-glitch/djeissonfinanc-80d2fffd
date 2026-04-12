@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { parseSicrediCSV, normalizeDescription } from '@/lib/csv-parser';
 
 describe('parseSicrediCSV', () => {
-  it('importa devolução como receita (payment) com valor 718.80', () => {
+  it('importa devolução como receita (refund) com valor 718.80', () => {
     const csv = [
       'Relatório Sicredi',
       'Data;Descrição;Parcela;Valor;Extra;Codigo;Pessoa;Obs',
@@ -19,7 +19,7 @@ describe('parseSicrediCSV', () => {
       valor: 718.8,
       tipo: 'receita',
       pessoa: 'Djeisson Mauss',
-      classification: 'payment',
+      classification: 'refund',
       source_line_number: 3,
     });
     expect(result.skippedLines).toHaveLength(0);
@@ -77,11 +77,11 @@ describe('parseSicrediCSV', () => {
     expect(result.transactions[0].classification).toBe('simple');
   });
 
-  it('classifica valor negativo como payment', () => {
+  it('classifica pagamento de fatura como payment e outros negativos como refund', () => {
     const csv = [
       'Relatório Sicredi',
       'Data;Descrição;Parcela;Valor',
-      '18/02/2026;PAGAMENTO 011398085;;"R$ -7.038,96"',
+      '18/02/2026;Pag Fat Deb Cc;;"R$ -7.038,96"',
     ].join('\n');
 
     const result = parseSicrediCSV(csv);
