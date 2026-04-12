@@ -355,11 +355,15 @@ export function CsvImportDialog({ open, onOpenChange }: Props) {
       const matched = csvTransactions.some((csv) => {
         const desc1 = proj.descricao.replace(/\s*\(auto-projetada\)/, '').substring(0, 20).trim().toLowerCase();
         const desc2 = csv.descricao.substring(0, 20).trim().toLowerCase();
-        const dataMatch = proj.data_original === csv.data;
+        if (desc1 !== desc2) return false;
         const parcelaMatch = proj.parcela_atual === csv.parcela_atual && proj.parcela_total === csv.parcela_total;
-        const valorMatch = Math.abs(proj.valor - csv.valor) <= 0.15;
+        if (!parcelaMatch) return false;
+        const valorMatch = Math.abs(proj.valor - csv.valor) <= 0.30;
+        if (!valorMatch) return false;
         const pessoaMatch = proj.pessoa === csv.pessoa;
-        return desc1 === desc2 && dataMatch && parcelaMatch && valorMatch && pessoaMatch;
+        if (!pessoaMatch) return false;
+        // Don't require data_original match — dates shift between billing periods
+        return true;
       });
 
       if (!matched) orphanIds.push(proj.id);

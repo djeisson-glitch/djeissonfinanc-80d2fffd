@@ -201,10 +201,8 @@ export function detectConflicts(
         if (e.parcela_atual !== tx.parcela_atual) return false;
         if (e.parcela_total !== tx.parcela_total) return false;
         if (e.pessoa.toLowerCase() !== tx.pessoa.toLowerCase()) return false;
-        // Flexible data_original comparison: ±30 days
-        const txOriginal = (tx as any).data_original || tx.data;
-        const eOriginal = e.data_original || e.data;
-        if (daysDiff(txOriginal, eOriginal) > 30) return false;
+        // Don't compare data_original — auto-projected data_original is the purchase date,
+        // while CSV ongoing has the billing date. These naturally differ.
         return true;
       });
 
