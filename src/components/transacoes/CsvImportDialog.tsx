@@ -908,6 +908,33 @@ export function CsvImportDialog({ open, onOpenChange }: Props) {
         setProgress(80 + (20 * (i + batch.length)) / Math.max(plan.newTransactions.length, 1));
       }
 
+      // Post-import verification: check what's actually in the DB for this billing period
+      const billingPeriod = isCredito && dueConfirmed
+        ? `${dueYear}-${String(dueMonth + 1).padStart(2, "0")}`
+        : null;
+      if (billingPeriod) {
+        const { data: dbCheck } = await supabase
+          .from("transacoes")
+          .select("tipo, valor, descricao")
+          .eq("user_id", user!.id)
+          .eq("conta_id", plan.newTransactions[0]?.conta_id || selectedConta)
+          .eq("mes_competencia", billingPeriod);
+        const dbDespesas = (dbCheck || []).filter(t => t.tipo === 'despesa');
+        const dbReceitas = (dbCheck || []).filter(t => t.tipo === 'receita');
+        const sumDesp = dbDespesas.reduce((s, t) => s + Number(t.valor), 0);
+        const sumRec = dbReceitas.reduce((s, t) => s + Number(t.valor), 0);
+        console.log("[Import] VERIFICAÇÃO PÓS-IMPORT:", {
+          billingPeriod,
+          totalNoBanco: dbCheck?.length,
+          despesas: dbDespesas.length,
+          receitas: dbReceitas.length,
+          sumDespesas: sumDesp.toFixed(2),
+          sumReceitas: sumRec.toFixed(2),
+          fatura: (sumDesp - sumRec).toFixed(2),
+          autoProjetadas: (dbCheck || []).filter(t => t.descricao.includes('(auto-projetada)')).length,
+        });
+      }
+
       setResult({
         imported,
         duplicates: plan.duplicateItems.length,
