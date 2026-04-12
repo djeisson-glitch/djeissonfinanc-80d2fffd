@@ -17,8 +17,8 @@ interface FinancialHealthCardProps {
 }
 
 const NIVEL_LABELS: Record<FinancialHealthReport['nivel'], string> = {
-  critico: 'Cr\u00edtico',
-  atencao: 'Aten\u00e7\u00e3o',
+  critico: 'Crítico',
+  atencao: 'Atenção',
   bom: 'Bom',
   excelente: 'Excelente',
 };
@@ -100,7 +100,7 @@ export function FinancialHealthCard({
         <CardContent className="p-4 flex items-center gap-2">
           <Heart className="h-5 w-5 text-muted-foreground" />
           <span className="text-sm text-muted-foreground">
-            Adicione transa\u00e7\u00f5es para visualizar sua sa\u00fade financeira.
+            Adicione transações para visualizar sua saúde financeira.
           </span>
         </CardContent>
       </Card>
@@ -114,7 +114,7 @@ export function FinancialHealthCard({
       <CardHeader className="pb-2">
         <CardTitle className="text-lg flex items-center gap-2">
           <Heart className="h-5 w-5 text-primary" />
-          Sa\u00fade Financeira
+          Saúde Financeira
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-6">
@@ -127,7 +127,7 @@ export function FinancialHealthCard({
             >
               {NIVEL_LABELS[report.nivel]}
             </span>
-            <p className="text-xs text-muted-foreground">Pontua\u00e7\u00e3o geral de 0 a 100</p>
+            <p className="text-xs text-muted-foreground">Pontuação geral de 0 a 100</p>
           </div>
         </div>
 
@@ -148,7 +148,7 @@ export function FinancialHealthCard({
         {/* Recommendations */}
         {report.recomendacoes.length > 0 && (
           <div className="space-y-2">
-            <h4 className="text-sm font-semibold">Recomenda\u00e7\u00f5es</h4>
+            <h4 className="text-sm font-semibold">Recomendações</h4>
             <ul className="list-disc list-inside space-y-1 text-sm text-muted-foreground">
               {report.recomendacoes.map((rec, i) => (
                 <li key={i}>{rec}</li>
