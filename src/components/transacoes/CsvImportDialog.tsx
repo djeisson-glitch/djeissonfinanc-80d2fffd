@@ -390,7 +390,7 @@ export function CsvImportDialog({ open, onOpenChange }: Props) {
     while (true) {
       const { data } = await supabase
         .from("transacoes")
-        .select("descricao_normalizada, valor, parcela_atual, parcela_total")
+        .select("descricao_normalizada, valor, parcela_atual, parcela_total, mes_competencia")
         .eq("user_id", userId)
         .eq("conta_id", contaId)
         .range(from, from + batchSize - 1);
@@ -404,12 +404,14 @@ export function CsvImportDialog({ open, onOpenChange }: Props) {
     const duplicates: ClassifiedTransaction[] = [];
 
     for (const tx of ongoingTxs) {
+      const txCompetencia = (tx as any)._mes_competencia || null;
       const isDup = existingTxs.some(
         (e) =>
           e.descricao_normalizada === tx.descricao_normalizada &&
           Math.abs(Number(e.valor) - tx.valor) < 0.01 &&
           e.parcela_atual === tx.parcela_atual &&
-          e.parcela_total === tx.parcela_total,
+          e.parcela_total === tx.parcela_total &&
+          (e.mes_competencia === txCompetencia || (!e.mes_competencia && !txCompetencia)),
       );
       if (isDup) {
         duplicates.push(tx);

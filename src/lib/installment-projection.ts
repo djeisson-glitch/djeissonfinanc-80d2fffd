@@ -49,22 +49,44 @@ export function projectFutureInstallments(
 ): ProjectedInstallment[] {
   const projected: ProjectedInstallment[] = [];
 
+  // Collect existing parcela numbers per installment group to avoid projecting parcelas already in the batch
+  const existingParcelas = new Map<string, Set<number>>();
+  for (const t of transactions) {
+    if (!t.parcela_atual || !t.parcela_total) continue;
+    const key = t.descricao.replace(/\s*\(auto-projetada\)/, '').trim().substring(0, 25).toUpperCase() + '|' + t.parcela_total + '|' + t.pessoa;
+    if (!existingParcelas.has(key)) existingParcelas.set(key, new Set());
+    existingParcelas.get(key)!.add(t.parcela_atual);
+  }
+
+  // For each installment group, only project from the one with the LOWEST parcela_atual
+  const projected_from = new Set<string>();
+
   for (const t of transactions) {
     if (!t.parcela_atual || !t.parcela_total) continue;
     if (t.parcela_atual >= t.parcela_total) continue;
 
     const baseDesc = t.descricao.replace(/\s*\(auto-projetada\)/, '').trim();
+    const groupKey = baseDesc.substring(0, 25).toUpperCase() + '|' + t.parcela_total + '|' + t.pessoa;
+
+    // Only project from the lowest parcela_atual in each group
+    if (projected_from.has(groupKey)) continue;
+    projected_from.add(groupKey);
+
+    const existingSet = existingParcelas.get(groupKey) || new Set();
 
     // Use data_original (real purchase date) as base for incrementing, fallback to data
     const baseDate = t.data_original || t.data;
 
     for (let p = t.parcela_atual + 1; p <= t.parcela_total; p++) {
+      // Skip if this parcela already exists in the import batch (e.g. CSV has parcelas 01-12)
+      if (existingSet.has(p)) continue;
+
       const offset = p - t.parcela_atual;
 
       // Calculate future date from original purchase date (safe from month overflow)
       const isoDate = addMonthsSafe(baseDate, offset);
 
-      // Only project dates >= 2026-01-01
+      // Only project dates >= current year
       const currentYearStart = `${new Date().getFullYear()}-01-01`;
       if (isoDate < currentYearStart) continue;
 
