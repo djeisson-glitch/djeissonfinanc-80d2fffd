@@ -466,6 +466,7 @@ export function CsvImportDialog({ open, onOpenChange }: Props) {
       ongoingRaw,
     );
 
+    console.log("[Import] Ongoing dedup:", { total: ongoingRaw.length, unique: ongoingUnique.length, duplicates: ongoingDuplicates.length });
     setProgress(35);
 
     // Build PlannedTransactions for importable items (simple + refunds + new_installment first parcela + ongoing unique)
@@ -544,6 +545,8 @@ export function CsvImportDialog({ open, onOpenChange }: Props) {
 
     const allPlanned = [...allOriginals, ...projectedInstallments] as (ProjectableTransaction | ProjectedInstallment)[];
     const { clean, exactMatches, autoReplacements, conflicts } = detectConflicts(allPlanned, existingTxs);
+
+    console.log("[Import] detectConflicts:", { planned: allPlanned.length, clean: clean.length, exactMatches: exactMatches.length, autoReplacements: autoReplacements.length, conflicts: conflicts.length, existingInDB: existingTxs.length });
 
     if (conflicts.length > 0 && !resolvedConflicts) {
       throw { type: "CONFLICTS", conflicts, contaId, userId: currentUserId };

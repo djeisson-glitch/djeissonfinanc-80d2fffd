@@ -105,7 +105,17 @@ export default function DashboardPage() {
         const d = t.descricao.toLowerCase();
         return d.includes('devoluc') || d.includes('devolução') || d.includes('estorno');
       });
-      console.log("[Dashboard Fatura]", { billingPeriod, totalTxs: allTxs.length, byPeriodCount: byPeriod?.length, byDateCount: byDate?.length, receitas: receitas.length, devolucoes: devol.length, devolDetails: devol.map(d => ({ desc: d.descricao, valor: d.valor, tipo: d.tipo })) });
+      const despesasTxs = allTxs.filter(t => t.tipo === 'despesa');
+      const sumDespesas = despesasTxs.reduce((s, t) => s + Number(t.valor), 0);
+      const sumReceitas = receitas.reduce((s, t) => s + Number(t.valor), 0);
+      // Group by conta_id for debugging
+      const byConta: Record<string, { count: number; sum: number }> = {};
+      allTxs.forEach(t => {
+        if (!byConta[t.conta_id]) byConta[t.conta_id] = { count: 0, sum: 0 };
+        byConta[t.conta_id].count++;
+        if (t.tipo === 'despesa') byConta[t.conta_id].sum += Number(t.valor);
+      });
+      console.log("[Dashboard Fatura]", { billingPeriod, totalTxs: allTxs.length, byPeriodCount: byPeriod?.length, byDateCount: byDate?.length, receitas: receitas.length, devolucoes: devol.length, sumDespesas: sumDespesas.toFixed(2), sumReceitas: sumReceitas.toFixed(2), byConta });
 
       const faturas: Record<string, { despesas: number; pagamentos: number }> = {};
       allTxs.forEach(t => {
