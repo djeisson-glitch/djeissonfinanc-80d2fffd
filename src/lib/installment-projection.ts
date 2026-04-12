@@ -199,10 +199,13 @@ export function detectConflicts(
       continue;
     }
 
-    // Try to match against auto-projected transactions (any planned tx can replace auto-projected)
+    // Try to match against auto-projected transactions for the SAME billing period
+    const txCompetencia = (tx as any).mes_competencia || null;
     if (tx.parcela_atual && tx.parcela_total) {
       const autoProjectedMatch = existing.find(e => {
         if (!e.descricao.includes('(auto-projetada)')) return false;
+        // Must be same billing period — don't replace March projection with Feb ongoing
+        if (e.mes_competencia !== txCompetencia) return false;
         const ePrefix = normalize(e.descricao);
         if (ePrefix !== prefix) return false;
         if (Math.abs(Number(e.valor) - tx.valor) > 0.50) return false;
