@@ -232,7 +232,7 @@ export default function DashboardPage() {
   return (
     <div className="space-y-6 animate-fade-in">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">Página inicial</h1>
+        <h1 className="text-2xl font-bold">Dashboard</h1>
         <MonthSelector month={month} year={year} onChange={(m, y) => { setMonth(m); setYear(y); }} />
       </div>
 
