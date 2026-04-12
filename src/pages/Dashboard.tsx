@@ -125,7 +125,7 @@ export default function DashboardPage() {
         }
         const desc = t.descricao.toLowerCase();
         const isDevolution = desc.includes('devoluc') || desc.includes('devolução') || desc.includes('estorno');
-        if (!isDevolution && (desc.includes('pag fat') || desc.includes('pagamento fatura') || desc.includes('pag fat deb cc'))) {
+        if (!isDevolution && (desc.includes('pag fat') || /pagamento\s+(da\s+)?fatura/.test(desc) || desc.includes('crédito por parcelamento') || desc.includes('credito por parcelamento'))) {
           faturas[t.conta_id].pagamentos += Math.abs(Number(t.valor));
         }
         if (isDevolution && t.tipo === 'receita') {

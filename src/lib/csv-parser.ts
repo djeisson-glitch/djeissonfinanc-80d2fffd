@@ -132,8 +132,13 @@ function parseValue(valorStr: string): number | null {
 function classifyTransaction(parcela_atual: number | null, parcela_total: number | null, valor: number, descricao: string): TransactionClassification {
   if (valor < 0) {
     const desc = descricao.toLowerCase();
-    // "Pag Fat" = pagamento de fatura anterior → excluir
-    if (desc.includes('pag fat') || desc.includes('pagamento fatura')) {
+    // "Pag Fat" / "Pagamento da fatura" / "Crédito por parcelamento" = acerto de fatura anterior → excluir
+    if (
+      desc.includes('pag fat') ||
+      /pagamento\s+(da\s+)?fatura/.test(desc) ||
+      desc.includes('crédito por parcelamento') ||
+      desc.includes('credito por parcelamento')
+    ) {
       return 'payment';
     }
     // Devoluções, estornos e outros créditos → importar como receita

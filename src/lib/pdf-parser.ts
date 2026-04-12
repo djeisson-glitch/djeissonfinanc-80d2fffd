@@ -43,7 +43,7 @@ const MP_CHAR_MAP: Record<string, string> = {
   '+': '3', '%': '9', 'M': '4', ')': '7', '9': '8', '3': '5', 'J': '.',
   '$': 'R', '4': '$', 'z': 'M', 'í': 'C', 'ó': 'A', 'F': 'I', '5': 'F',
   'N': 'U', 'Y': 'B', 'G': 'Z', 'Z': 'Y', '8': 'J', 'U': '*', 'ê': 'b',
-  'ô': 'x', '*': 'õ', 'Q': '"', 'à': 'G',
+  'ô': 'x', '*': 'õ', 'Q': '"', 'à': 'G', 'b': 'z',
 };
 
 function decodeMpText(text: string): string {
@@ -212,7 +212,13 @@ function parseValue(valorStr: string): number | null {
 function classifyTransaction(parcela_atual: number | null, parcela_total: number | null, valor: number, descricao: string) {
   if (valor < 0) {
     const desc = descricao.toLowerCase();
-    if (desc.includes('pag fat') || desc.includes('pagamento fatura') || desc.includes('pagto fatura')) {
+    if (
+      desc.includes('pag fat') ||
+      /pagamento\s+(da\s+)?fatura/.test(desc) ||
+      desc.includes('pagto fatura') ||
+      desc.includes('crédito por parcelamento') ||
+      desc.includes('credito por parcelamento')
+    ) {
       return 'payment' as const;
     }
     return 'refund' as const;
@@ -240,21 +246,39 @@ function parseMercadoPago(
   let headerTotal: number | undefined;
   let detectedDueDate: { month: number; year: number } | undefined;
 
-  // First pass: find vencimento year and header total from page 1
-  if (pages.length > 0) {
-    const { rows, garbledFonts } = pages[0];
+  // First pass: find vencimento year and header total from first few pages
+  for (let pi = 0; pi < Math.min(pages.length, 3); pi++) {
+    if (detectedDueDate && headerTotal) break;
+    const { rows, garbledFonts } = pages[pi];
+    let prevRowHadTotalAPagar = false;
     for (const row of rows) {
       const text = getRowText(row, garbledFonts);
       const vencMatch = text.match(/Vencimento[:\s]*(\d{2})\/(\d{2})\/(\d{4})/i)
         || text.match(/Vence\s+em\s*(\d{2})\/(\d{2})\/(\d{4})/i);
-      if (vencMatch) {
+      if (vencMatch && !detectedDueDate) {
         dueYear = parseInt(vencMatch[3]);
         detectedDueDate = { month: parseInt(vencMatch[2]) - 1, year: dueYear };
+      }
+      // Also detect date from row that has dd/mm/yyyy next to "Vence" context
+      if (!detectedDueDate) {
+        const dateInRow = text.match(/(\d{2})\/(\d{2})\/(\d{4})/);
+        if (dateInRow && prevRowHadTotalAPagar) {
+          dueYear = parseInt(dateInRow[3]);
+          detectedDueDate = { month: parseInt(dateInRow[2]) - 1, year: dueYear };
+        }
       }
       const totalMatch = text.match(/Total\s+a\s+pagar.*?R\$\s*([\d.,]+)/i);
       if (totalMatch) {
         headerTotal = parseValue('R$ ' + totalMatch[1]) ?? undefined;
       }
+      // If "Total a pagar" and R$ are on separate rows, capture from next row
+      if (!headerTotal && prevRowHadTotalAPagar) {
+        const valMatch = text.match(/^R\$\s*([\d.,]+)/);
+        if (valMatch) {
+          headerTotal = parseValue('R$ ' + valMatch[1]) ?? undefined;
+        }
+      }
+      prevRowHadTotalAPagar = /Total\s+a\s+pagar/i.test(text);
     }
   }
 
@@ -370,6 +394,48 @@ function parseMercadoPago(
         status: 'importada',
         reason: `${section === 'mov' ? 'Movimentação' : 'Compra cartão'}: ${tipo}`,
         hash_transacao,
+      });
+    }
+  }
+
+  // Reconciliation: if header total > sum of parsed lines, inject "Saldo anterior" transaction
+  // This handles Mercado Pago's rolled-over unpaid balance from previous months
+  if (headerTotal && headerTotal > 0 && detectedDueDate) {
+    const payments = transactions.filter(t => t.classification === 'payment');
+    const importable = transactions.filter(t => t.classification !== 'payment');
+    const sumDespesas = importable.filter(t => t.tipo === 'despesa').reduce((s, t) => s + t.valor, 0);
+    const sumReceitas = importable.filter(t => t.tipo === 'receita').reduce((s, t) => s + t.valor, 0);
+    const linesFatura = sumDespesas - sumReceitas;
+    const missing = headerTotal - linesFatura;
+
+    if (missing > 0.50) {
+      const dueDate = `${detectedDueDate.year}-${String(detectedDueDate.month + 1).padStart(2, '0')}-01`;
+      const desc = 'Saldo anterior da fatura';
+      const hash = generateHash(dueDate, desc, parseFloat(missing.toFixed(2)), defaultPessoa);
+
+      transactions.push({
+        data: dueDate,
+        descricao: desc,
+        descricao_normalizada: normalizeDescription(desc),
+        valor: parseFloat(missing.toFixed(2)),
+        tipo: 'despesa',
+        parcela_atual: null,
+        parcela_total: null,
+        pessoa: defaultPessoa,
+        hash_transacao: hash,
+        codigo_cartao: null,
+        valor_dolar: null,
+        classification: 'simple',
+        source_line_number: 0,
+        source_line_content: `Saldo anterior: header R$ ${headerTotal.toFixed(2)} - linhas R$ ${linesFatura.toFixed(2)} = R$ ${missing.toFixed(2)}`,
+      });
+
+      lineLogs.push({
+        lineNumber: 0,
+        content: `Saldo anterior não listado: R$ ${missing.toFixed(2)}`,
+        status: 'importada',
+        reason: 'Saldo anterior da fatura (rollover de mês anterior sem pagamento total)',
+        hash_transacao: hash,
       });
     }
   }
