@@ -334,50 +334,35 @@ export function CsvImportDialog({ open, onOpenChange }: Props) {
   const cleanOrphanProjections = async (
     contaId: string,
     userId: string,
-    csvTransactions: ClassifiedTransaction[],
+    _csvTransactions: ClassifiedTransaction[],
     targetMonth: string,
   ): Promise<number> => {
-    console.log("🧹 Limpando projeções órfãs...");
+    console.log("🧹 Limpando projeções do período", targetMonth, "...");
+
+    // Simple approach: delete ALL auto-projected transactions for this account + billing period.
+    // When the real CSV is being imported, projections are no longer needed — the CSV has the real data.
     const { data: projections } = await supabase
       .from("transacoes")
-      .select("*")
+      .select("id")
       .eq("user_id", userId)
       .eq("conta_id", contaId)
+      .eq("mes_competencia", targetMonth)
       .ilike("descricao", "%(auto-projetada)%");
 
     if (!projections || projections.length === 0) return 0;
 
-    const orphanIds: string[] = [];
-    for (const proj of projections) {
-      const projMonth = proj.data.substring(0, 7);
-      if (projMonth !== targetMonth) continue;
-
-      const matched = csvTransactions.some((csv) => {
-        const desc1 = proj.descricao.replace(/\s*\(auto-projetada\)/, '').substring(0, 20).trim().toLowerCase();
-        const desc2 = csv.descricao.substring(0, 20).trim().toLowerCase();
-        if (desc1 !== desc2) return false;
-        const parcelaMatch = proj.parcela_atual === csv.parcela_atual && proj.parcela_total === csv.parcela_total;
-        if (!parcelaMatch) return false;
-        const valorMatch = Math.abs(proj.valor - csv.valor) <= 0.30;
-        if (!valorMatch) return false;
-        const pessoaMatch = proj.pessoa === csv.pessoa;
-        if (!pessoaMatch) return false;
-        // Don't require data_original match — dates shift between billing periods
-        return true;
-      });
-
-      if (!matched) orphanIds.push(proj.id);
-    }
-
-    if (orphanIds.length > 0) {
-      const { error } = await supabase.from("transacoes").delete().in("id", orphanIds);
+    const ids = projections.map((p) => p.id);
+    // Delete in chunks
+    for (let i = 0; i < ids.length; i += 100) {
+      const chunk = ids.slice(i, i + 100);
+      const { error } = await supabase.from("transacoes").delete().in("id", chunk);
       if (error) {
-        console.error("❌ Erro ao deletar órfãs:", error);
+        console.error("Erro ao deletar projeções:", error);
         return 0;
       }
-      console.log(`✅ Deletadas ${orphanIds.length} projeções órfãs`);
     }
-    return orphanIds.length;
+    console.log(`Deletadas ${ids.length} projeções do período ${targetMonth}`);
+    return ids.length;
   };
 
   const checkOngoingDuplicates = async (

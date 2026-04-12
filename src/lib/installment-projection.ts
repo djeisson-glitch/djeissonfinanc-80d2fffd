@@ -199,31 +199,28 @@ export function detectConflicts(
       continue;
     }
 
-    // For CSV (real) installment transactions, try relaxed match against auto-projected
-    // Tolerance: value ±R$5.00, data_original ±30 days
-    if (isFromCsv && tx.parcela_atual && tx.parcela_total) {
+    // Try to match against auto-projected transactions (any planned tx can replace auto-projected)
+    if (tx.parcela_atual && tx.parcela_total) {
       const autoProjectedMatch = existing.find(e => {
         if (!e.descricao.includes('(auto-projetada)')) return false;
         const ePrefix = normalize(e.descricao);
         if (ePrefix !== prefix) return false;
-        if (Math.abs(Number(e.valor) - tx.valor) > 0.30) return false;
+        if (Math.abs(Number(e.valor) - tx.valor) > 0.50) return false;
         if (e.parcela_atual !== tx.parcela_atual) return false;
         if (e.parcela_total !== tx.parcela_total) return false;
         if (e.pessoa.toLowerCase() !== tx.pessoa.toLowerCase()) return false;
-        // Don't compare data_original — auto-projected data_original is the purchase date,
-        // while CSV ongoing has the billing date. These naturally differ.
         return true;
       });
 
       if (autoProjectedMatch) {
-        // Auto-replace: delete projected, import real
         autoReplacements.push({ planned: tx, existingId: autoProjectedMatch.id });
         continue;
       }
     }
 
-    // Find partial match: same description prefix + value ± 0.10 + same parcela + same pessoa + same data_original (competência)
+    // Find partial match against NON-auto-projected existing transactions
     const partialMatch = existing.find(e => {
+      if (e.descricao.includes('(auto-projetada)')) return false; // already handled above
       const ePrefix = normalize(e.descricao);
       if (ePrefix !== prefix) return false;
       if (Math.abs(Number(e.valor) - tx.valor) > 0.10) return false;
@@ -237,12 +234,6 @@ export function detectConflicts(
     });
 
     if (partialMatch) {
-      // Check if the existing one is auto-projected — auto-replace those
-      if (partialMatch.descricao.includes('(auto-projetada)') && isFromCsv) {
-        autoReplacements.push({ planned: tx, existingId: partialMatch.id });
-        continue;
-      }
-
       conflicts.push({
         csvTransaction: tx,
         existingTransaction: partialMatch,
