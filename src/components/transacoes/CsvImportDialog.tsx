@@ -337,16 +337,18 @@ export function CsvImportDialog({ open, onOpenChange }: Props) {
     _csvTransactions: ClassifiedTransaction[],
     targetMonth: string,
   ): Promise<number> => {
-    console.log("🧹 Limpando projeções do período", targetMonth, "...");
+    console.log("🧹 Limpando projeções do período", targetMonth, "e posteriores...");
 
-    // Simple approach: delete ALL auto-projected transactions for this account + billing period.
-    // When the real CSV is being imported, projections are no longer needed — the CSV has the real data.
+    // Delete ALL auto-projected transactions for this account where mes_competencia >= targetMonth.
+    // This ensures a clean slate: the new import will re-project fresh parcelas for all future months.
+    // Without this, old projections with slightly different descriptions (e.g., garbled fonts from
+    // earlier faturas) would remain and create duplicates when the new import projects with clean text.
     const { data: projections } = await supabase
       .from("transacoes")
-      .select("id")
+      .select("id, mes_competencia")
       .eq("user_id", userId)
       .eq("conta_id", contaId)
-      .eq("mes_competencia", targetMonth)
+      .gte("mes_competencia", targetMonth)
       .ilike("descricao", "%(auto-projetada)%");
 
     if (!projections || projections.length === 0) return 0;
@@ -361,7 +363,7 @@ export function CsvImportDialog({ open, onOpenChange }: Props) {
         return 0;
       }
     }
-    console.log(`Deletadas ${ids.length} projeções do período ${targetMonth}`);
+    console.log(`Deletadas ${ids.length} projeções (${targetMonth}+)`);
     return ids.length;
   };
 

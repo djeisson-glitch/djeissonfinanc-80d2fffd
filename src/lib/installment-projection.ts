@@ -180,7 +180,16 @@ export function detectConflicts(
   const autoReplacements: { planned: ProjectableTransaction | ProjectedInstallment; existingId: string }[] = [];
   const conflicts: ConflictMatch[] = [];
 
-  const normalize = (s: string) => s.replace(/\s*\(auto-projetada\)/, '').trim().substring(0, 25).toLowerCase();
+  // Robust normalize: strip "(auto-projetada)", non-alphanumeric chars, then compare prefix.
+  // This handles garbled font differences (e.g., "TOALIBFO" vs "TOALINFO") by focusing
+  // on the alphanumeric skeleton of the description.
+  const normalize = (s: string) => s
+    .replace(/\s*\(auto-projetada\)/, '')
+    .trim()
+    .toUpperCase()
+    .replace(/[^A-Z0-9]/g, '')
+    .substring(0, 20)
+    .toLowerCase();
 
   const daysDiff = (a: string, b: string): number => {
     const da = new Date(a + 'T00:00:00');
