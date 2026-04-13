@@ -18,10 +18,11 @@ interface Props {
   contaNome: string;
   contaTipo: 'credito' | 'debito';
   defaultMesCompetencia?: string; // YYYY-MM for credit cards
+  defaultTipo?: 'despesa' | 'receita';
 }
 
 export function ManualTransactionModal({
-  open, onOpenChange, contaId, contaNome, contaTipo, defaultMesCompetencia,
+  open, onOpenChange, contaId, contaNome, contaTipo, defaultMesCompetencia, defaultTipo,
 }: Props) {
   const { user } = useAuth();
   const { toast } = useToast();
@@ -29,7 +30,7 @@ export function ManualTransactionModal({
 
   const [descricao, setDescricao] = useState('');
   const [valor, setValor] = useState('');
-  const [tipo, setTipo] = useState<'despesa' | 'receita'>('despesa');
+  const [tipo, setTipo] = useState<'despesa' | 'receita'>(defaultTipo || 'despesa');
   const [data, setData] = useState(new Date().toISOString().substring(0, 10));
   const [submitting, setSubmitting] = useState(false);
 

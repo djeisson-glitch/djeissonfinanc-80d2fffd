@@ -6,6 +6,7 @@ import { AppSidebar } from '@/components/layout/AppSidebar';
 import { AppHeader } from '@/components/layout/AppHeader';
 import { SidebarProvider } from '@/components/ui/sidebar';
 import { Skeleton } from '@/components/ui/skeleton';
+import { FloatingActionButton } from '@/components/layout/FloatingActionButton';
 
 export default function AppLayout() {
   const { user, loading: authLoading } = useAuth();
@@ -57,6 +58,7 @@ export default function AppLayout() {
             <Outlet />
           </main>
         </div>
+        <FloatingActionButton />
       </div>
     </SidebarProvider>
   );

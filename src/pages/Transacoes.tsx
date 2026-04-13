@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useSearchParams } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
@@ -12,12 +12,11 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { useToast } from '@/hooks/use-toast';
-import { Pencil, Trash2, Search, Download, Copy, ArrowUpDown, ArrowUp, ArrowDown, EyeOff } from 'lucide-react';
+import { Pencil, Trash2, Search, Download, Copy, EyeOff, Filter, ChevronDown, ChevronUp } from 'lucide-react';
 import { Checkbox } from '@/components/ui/checkbox';
 import { exportCSV, copyToClipboard } from '@/lib/export';
 import { MonthSelector } from '@/components/MonthSelector';
@@ -40,32 +39,10 @@ export default function TransacoesPage() {
   const [editingTx, setEditingTx] = useState<any>(null);
   const [learnPattern, setLearnPattern] = useState(false);
   const [showIgnoradas, setShowIgnoradas] = useState(false);
-  const [sortColumn, setSortColumn] = useState<string | null>(null);
-  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
+  const [showFilters, setShowFilters] = useState(false);
   const [recatTransactions, setRecatTransactions] = useState<any[]>([]);
   const [recatCategoria, setRecatCategoria] = useState<{ nome: string; id: string | null; essencial: boolean }>({ nome: '', id: null, essencial: false });
   const [recatOpen, setRecatOpen] = useState(false);
-
-  const toggleSort = (column: string) => {
-    if (sortColumn === column) {
-      if (sortDirection === 'asc') {
-        setSortDirection('desc');
-      } else {
-        setSortColumn(null);
-        setSortDirection('asc');
-      }
-    } else {
-      setSortColumn(column);
-      setSortDirection('asc');
-    }
-  };
-
-  const SortIcon = ({ column }: { column: string }) => {
-    if (sortColumn !== column) return <ArrowUpDown className="h-3 w-3 ml-1 opacity-40" />;
-    return sortDirection === 'asc'
-      ? <ArrowUp className="h-3 w-3 ml-1" />
-      : <ArrowDown className="h-3 w-3 ml-1" />;
-  };
 
   // Read URL params on mount
   useEffect(() => {
@@ -105,8 +82,8 @@ export default function TransacoesPage() {
 
   const updateMutation = useMutation({
     mutationFn: async (tx: { id: string; categoria: string; categoria_id: string | null; essencial: boolean; ignorar_dashboard: boolean }) => {
-      await supabase.from('transacoes').update({ 
-        categoria: tx.categoria, 
+      await supabase.from('transacoes').update({
+        categoria: tx.categoria,
         categoria_id: tx.categoria_id,
         essencial: tx.essencial,
         ignorar_dashboard: tx.ignorar_dashboard,
@@ -133,10 +110,8 @@ export default function TransacoesPage() {
       setEditingTx(null);
       toast({ title: 'Transação atualizada' });
 
-      // After learning a pattern, search for other "Outros" transactions matching it
       if (result?.savedPattern && user) {
         const pattern = result.savedPattern.toLowerCase();
-        // Find the "Outros" categoria_id for the user
         const { data: outrosCat } = await supabase
           .from('categorias')
           .select('id')
@@ -152,7 +127,6 @@ export default function TransacoesPage() {
           .neq('id', closedTxId)
           .ilike('descricao', `%${pattern}%`);
 
-        // Match transactions in "Outros" — either by categoria_id or by string
         if (outrosCat?.id) {
           query = query.or(`categoria.eq.Outros,categoria_id.eq.${outrosCat.id}`);
         } else {
@@ -221,31 +195,45 @@ export default function TransacoesPage() {
     if (filterPessoa !== 'all' && t.pessoa !== filterPessoa) return false;
     if (search && !t.descricao.toLowerCase().includes(search.toLowerCase())) return false;
     return true;
-  }) || []).sort((a, b) => {
-    if (!sortColumn) return 0;
-    const dir = sortDirection === 'asc' ? 1 : -1;
-    switch (sortColumn) {
-      case 'data': return dir * a.data.localeCompare(b.data);
-      case 'descricao': return dir * a.descricao.localeCompare(b.descricao, 'pt-BR');
-      case 'categoria': return dir * a.categoria.localeCompare(b.categoria, 'pt-BR');
-      case 'valor': {
-        const va = a.tipo === 'receita' ? Number(a.valor) : -Number(a.valor);
-        const vb = b.tipo === 'receita' ? Number(b.valor) : -Number(b.valor);
-        return dir * (va - vb);
-      }
-      case 'essencial': return dir * (Number(a.essencial) - Number(b.essencial));
-      case 'parcela': return dir * ((a.parcela_atual || 0) - (b.parcela_atual || 0));
-      case 'pessoa': return dir * a.pessoa.localeCompare(b.pessoa, 'pt-BR');
-      default: return 0;
+  }) || []);
+
+  // Group filtered transactions by day
+  const groupedByDay = useMemo(() => {
+    const groups: Record<string, typeof filtered> = {};
+    for (const t of filtered) {
+      if (!groups[t.data]) groups[t.data] = [];
+      groups[t.data].push(t);
     }
-  });
+    return Object.entries(groups).sort((a, b) => b[0].localeCompare(a[0]));
+  }, [filtered]);
+
+  // Summary totals
+  const totalReceitas = filtered.filter(t => t.tipo === 'receita').reduce((s, t) => s + Number(t.valor), 0);
+  const totalDespesas = filtered.filter(t => t.tipo === 'despesa').reduce((s, t) => s + Number(t.valor), 0);
 
   const pessoas = [...new Set(transacoes?.map(t => t.pessoa) || [])];
   const { getCategoriaById, getDisplayName, getColor } = useCategorias();
-  
+
+  const hasActiveFilters = filterCategoria !== 'all' || filterTipo !== 'all' || filterEssencial !== 'all' || filterConta !== 'all' || filterPessoa !== 'all';
+
+  const formatDayHeader = (dateStr: string) => {
+    const date = new Date(dateStr + 'T12:00:00');
+    const today = new Date();
+    const yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
+
+    const isToday = dateStr === today.toISOString().substring(0, 10);
+    const isYesterday = dateStr === yesterday.toISOString().substring(0, 10);
+
+    const dayName = isToday ? 'Hoje' : isYesterday ? 'Ontem' : date.toLocaleDateString('pt-BR', { weekday: 'long' });
+    const dayDate = date.toLocaleDateString('pt-BR', { day: '2-digit', month: 'long' });
+
+    return { dayName: dayName.charAt(0).toUpperCase() + dayName.slice(1), dayDate };
+  };
 
   return (
     <div className="space-y-4 animate-fade-in">
+      {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-2">
         <h1 className="text-2xl font-bold">Transações</h1>
         <div className="flex items-center gap-2">
@@ -253,205 +241,234 @@ export default function TransacoesPage() {
             <Copy className="h-4 w-4 mr-1" />Copiar
           </Button>
           <Button variant="outline" size="sm" onClick={() => exportCSV({ transactions: filtered, contas: contas || [], month, year })}>
-            <Download className="h-4 w-4 mr-1" />Exportar CSV
+            <Download className="h-4 w-4 mr-1" />CSV
           </Button>
           <MonthSelector month={month} year={year} onChange={(m, y) => { setMonth(m); setYear(y); }} />
         </div>
       </div>
-      <Card>
-        <CardContent className="p-4">
-          <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
-            <div className="relative col-span-2 md:col-span-1">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input placeholder="Buscar..." value={search} onChange={e => setSearch(e.target.value)} className="pl-9" />
-            </div>
-            <Select value={filterCategoria} onValueChange={handleFilterCategoria}>
-              <SelectTrigger><SelectValue placeholder="Categoria" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Todas categorias</SelectItem>
-                {filterTipo === 'receita'
-                  ? CATEGORIAS_RECEITA.map(c => (
+
+      {/* Summary cards */}
+      <div className="grid grid-cols-3 gap-3">
+        <Card>
+          <CardContent className="p-3 text-center">
+            <p className="text-xs text-muted-foreground">Receitas</p>
+            <p className="text-lg font-bold text-success">{formatCurrency(totalReceitas)}</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-3 text-center">
+            <p className="text-xs text-muted-foreground">Despesas</p>
+            <p className="text-lg font-bold text-destructive">{formatCurrency(totalDespesas)}</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-3 text-center">
+            <p className="text-xs text-muted-foreground">Saldo</p>
+            <p className={`text-lg font-bold ${totalReceitas - totalDespesas >= 0 ? 'text-success' : 'text-destructive'}`}>
+              {formatCurrency(totalReceitas - totalDespesas)}
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Search + filter toggle */}
+      <div className="flex gap-2">
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input placeholder="Buscar transação..." value={search} onChange={e => setSearch(e.target.value)} className="pl-9" />
+        </div>
+        <Button
+          variant={hasActiveFilters ? 'default' : 'outline'}
+          size="icon"
+          onClick={() => setShowFilters(!showFilters)}
+        >
+          <Filter className="h-4 w-4" />
+        </Button>
+      </div>
+
+      {/* Collapsible filters */}
+      {showFilters && (
+        <Card>
+          <CardContent className="p-3">
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+              <Select value={filterCategoria} onValueChange={handleFilterCategoria}>
+                <SelectTrigger className="h-9 text-xs"><SelectValue placeholder="Categoria" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todas categorias</SelectItem>
+                  {(filterTipo === 'receita' ? CATEGORIAS_RECEITA : filterTipo === 'despesa' ? CATEGORIAS_DESPESA : CATEGORIAS).map(c => (
                     <SelectItem key={c} value={c}>
                       <div className="flex items-center gap-2">
                         <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: getCategoriaColor(c) }} />
                         {c}
                       </div>
                     </SelectItem>
-                  ))
-                  : filterTipo === 'despesa'
-                    ? CATEGORIAS_DESPESA.map(c => (
-                      <SelectItem key={c} value={c}>
-                        <div className="flex items-center gap-2">
-                          <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: getCategoriaColor(c) }} />
-                          {c}
-                        </div>
-                      </SelectItem>
-                    ))
-                    : CATEGORIAS.map(c => (
-                      <SelectItem key={c} value={c}>
-                        <div className="flex items-center gap-2">
-                          <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: getCategoriaColor(c) }} />
-                          {c}
-                        </div>
-                      </SelectItem>
-                    ))
-                }
-              </SelectContent>
-            </Select>
-            <Select value={filterTipo} onValueChange={v => { setFilterTipo(v); if (v === 'all') { searchParams.delete('tipo'); } else { searchParams.set('tipo', v); } setSearchParams(searchParams, { replace: true }); }}>
-              <SelectTrigger><SelectValue placeholder="Receita/Despesa" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Receita/Despesa</SelectItem>
-                <SelectItem value="receita">Receitas</SelectItem>
-                <SelectItem value="despesa">Despesas</SelectItem>
-              </SelectContent>
-            </Select>
-            <Select value={filterEssencial} onValueChange={v => { setFilterEssencial(v); if (v === 'all') { searchParams.delete('essencial'); } else { searchParams.set('essencial', v); } setSearchParams(searchParams, { replace: true }); }}>
-              <SelectTrigger><SelectValue placeholder="Essencial" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Todos</SelectItem>
-                <SelectItem value="true">Essenciais</SelectItem>
-                <SelectItem value="false">Dispensáveis</SelectItem>
-              </SelectContent>
-            </Select>
-            <Select value={filterConta} onValueChange={setFilterConta}>
-              <SelectTrigger><SelectValue placeholder="Conta" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Todas contas</SelectItem>
-                {contas?.map(c => <SelectItem key={c.id} value={c.id}>{c.nome}</SelectItem>)}
-              </SelectContent>
-            </Select>
-            <Select value={filterPessoa} onValueChange={setFilterPessoa}>
-              <SelectTrigger><SelectValue placeholder="Pessoa" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Todas pessoas</SelectItem>
-                {pessoas.map(p => <SelectItem key={p} value={p}>{p}</SelectItem>)}
-              </SelectContent>
-            </Select>
-            <div className="flex items-center gap-2 col-span-2 md:col-span-1">
-              <Checkbox
-                id="show-ignoradas"
-                checked={showIgnoradas}
-                onCheckedChange={(v) => setShowIgnoradas(!!v)}
-              />
-              <Label htmlFor="show-ignoradas" className="text-sm cursor-pointer whitespace-nowrap">Mostrar ignoradas</Label>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Select value={filterTipo} onValueChange={v => { setFilterTipo(v); if (v === 'all') { searchParams.delete('tipo'); } else { searchParams.set('tipo', v); } setSearchParams(searchParams, { replace: true }); }}>
+                <SelectTrigger className="h-9 text-xs"><SelectValue placeholder="Tipo" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Receita/Despesa</SelectItem>
+                  <SelectItem value="receita">Receitas</SelectItem>
+                  <SelectItem value="despesa">Despesas</SelectItem>
+                </SelectContent>
+              </Select>
+              <Select value={filterEssencial} onValueChange={v => { setFilterEssencial(v); if (v === 'all') { searchParams.delete('essencial'); } else { searchParams.set('essencial', v); } setSearchParams(searchParams, { replace: true }); }}>
+                <SelectTrigger className="h-9 text-xs"><SelectValue placeholder="Essencial" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todos</SelectItem>
+                  <SelectItem value="true">Essenciais</SelectItem>
+                  <SelectItem value="false">Dispensáveis</SelectItem>
+                </SelectContent>
+              </Select>
+              <Select value={filterConta} onValueChange={setFilterConta}>
+                <SelectTrigger className="h-9 text-xs"><SelectValue placeholder="Conta" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todas contas</SelectItem>
+                  {contas?.map(c => <SelectItem key={c.id} value={c.id}>{c.nome}</SelectItem>)}
+                </SelectContent>
+              </Select>
+              <Select value={filterPessoa} onValueChange={setFilterPessoa}>
+                <SelectTrigger className="h-9 text-xs"><SelectValue placeholder="Pessoa" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todas pessoas</SelectItem>
+                  {pessoas.map(p => <SelectItem key={p} value={p}>{p}</SelectItem>)}
+                </SelectContent>
+              </Select>
+              <div className="flex items-center gap-2">
+                <Checkbox
+                  id="show-ignoradas"
+                  checked={showIgnoradas}
+                  onCheckedChange={(v) => setShowIgnoradas(!!v)}
+                />
+                <Label htmlFor="show-ignoradas" className="text-xs cursor-pointer">Ignoradas</Label>
+              </div>
             </div>
-          </div>
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
+      )}
 
-      {(filterCategoria !== 'all' || filterTipo !== 'all' || filterEssencial !== 'all') && (
+      {/* Active filter badges */}
+      {hasActiveFilters && (
         <div className="flex items-center gap-2 flex-wrap">
-          <span className="text-sm text-muted-foreground">Filtros ativos:</span>
+          <span className="text-xs text-muted-foreground">Filtros:</span>
           {filterTipo !== 'all' && (
-            <Badge variant="secondary" className="cursor-pointer" onClick={() => { setFilterTipo('all'); searchParams.delete('tipo'); setSearchParams(searchParams, { replace: true }); }}>
+            <Badge variant="secondary" className="cursor-pointer text-xs" onClick={() => { setFilterTipo('all'); searchParams.delete('tipo'); setSearchParams(searchParams, { replace: true }); }}>
               {filterTipo === 'receita' ? 'Receitas' : 'Despesas'} ✕
             </Badge>
           )}
           {filterCategoria !== 'all' && (
-            <Badge variant="secondary" className="cursor-pointer" onClick={() => handleFilterCategoria('all')}>
+            <Badge variant="secondary" className="cursor-pointer text-xs" onClick={() => handleFilterCategoria('all')}>
               {filterCategoria} ✕
             </Badge>
           )}
           {filterEssencial !== 'all' && (
-            <Badge variant="secondary" className="cursor-pointer" onClick={() => { setFilterEssencial('all'); searchParams.delete('essencial'); setSearchParams(searchParams, { replace: true }); }}>
+            <Badge variant="secondary" className="cursor-pointer text-xs" onClick={() => { setFilterEssencial('all'); searchParams.delete('essencial'); setSearchParams(searchParams, { replace: true }); }}>
               {filterEssencial === 'true' ? 'Essenciais' : 'Dispensáveis'} ✕
+            </Badge>
+          )}
+          {filterConta !== 'all' && (
+            <Badge variant="secondary" className="cursor-pointer text-xs" onClick={() => setFilterConta('all')}>
+              {contas?.find(c => c.id === filterConta)?.nome || 'Conta'} ✕
+            </Badge>
+          )}
+          {filterPessoa !== 'all' && (
+            <Badge variant="secondary" className="cursor-pointer text-xs" onClick={() => setFilterPessoa('all')}>
+              {filterPessoa} ✕
             </Badge>
           )}
         </div>
       )}
 
-      <Card>
-        <CardContent className="p-0">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="cursor-pointer select-none" onClick={() => toggleSort('data')}>
-                  <span className="flex items-center">Data<SortIcon column="data" /></span>
-                </TableHead>
-                <TableHead className="cursor-pointer select-none" onClick={() => toggleSort('descricao')}>
-                  <span className="flex items-center">Descrição<SortIcon column="descricao" /></span>
-                </TableHead>
-                <TableHead className="cursor-pointer select-none" onClick={() => toggleSort('categoria')}>
-                  <span className="flex items-center">Categoria<SortIcon column="categoria" /></span>
-                </TableHead>
-                <TableHead className="text-right cursor-pointer select-none" onClick={() => toggleSort('valor')}>
-                  <span className="flex items-center justify-end">Valor<SortIcon column="valor" /></span>
-                </TableHead>
-                <TableHead className="cursor-pointer select-none" onClick={() => toggleSort('essencial')}>
-                  <span className="flex items-center">Tipo<SortIcon column="essencial" /></span>
-                </TableHead>
-                <TableHead className="cursor-pointer select-none" onClick={() => toggleSort('parcela')}>
-                  <span className="flex items-center">Parcela<SortIcon column="parcela" /></span>
-                </TableHead>
-                <TableHead className="cursor-pointer select-none" onClick={() => toggleSort('pessoa')}>
-                  <span className="flex items-center">Pessoa<SortIcon column="pessoa" /></span>
-                </TableHead>
-                <TableHead className="w-20">Ações</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filtered.map((t) => (
-                <TableRow key={t.id} className={t.ignorar_dashboard ? 'opacity-50' : ''}>
-                  <TableCell className="text-sm" title={t.data_original ? `Original: ${formatDate(t.data_original)}` : undefined}>
-                    {formatDate(t.data)}
-                    {t.data_original && t.data_original !== t.data && (
-                      <span className="block text-[10px] text-muted-foreground">orig: {formatDate(t.data_original)}</span>
-                    )}
-                  </TableCell>
-                  <TableCell className="text-sm max-w-[200px] truncate">
-                    <span className="flex items-center gap-1">
-                      {t.ignorar_dashboard && <EyeOff className="h-3 w-3 text-muted-foreground shrink-0" />}
-                      {t.descricao}
-                    </span>
-                  </TableCell>
-                  <TableCell>
-                    <Badge
-                      variant="secondary"
-                      className="text-xs"
-                      style={{ borderLeft: `3px solid ${t.categoria_id ? getColor(t.categoria_id) : getCategoriaColor(t.categoria)}` }}
-                    >
-                      {t.categoria_id ? getDisplayName(t.categoria_id) : t.categoria}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className={`text-right text-sm font-medium ${t.tipo === 'receita' ? 'text-success' : 'text-destructive'}`}>
-                    {t.tipo === 'receita' ? '+' : '-'}{formatCurrency(Number(t.valor))}
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant="outline" className="text-xs">
-                      {t.essencial ? 'Essencial' : 'Dispensável'}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="text-sm text-muted-foreground">
-                    {t.parcela_atual && t.parcela_total ? `${t.parcela_atual}/${t.parcela_total}` : '-'}
-                  </TableCell>
-                  <TableCell className="text-sm">{t.pessoa}</TableCell>
-                  <TableCell>
-                    <div className="flex gap-1">
-                      <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => { setEditingTx({ ...t, subcategoria: null }); setLearnPattern(false); }}>
-                        <Pencil className="h-3 w-3" />
-                      </Button>
-                      <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => {
-                        if (window.confirm(`Excluir "${t.descricao}"?`)) deleteMutation.mutate(t.id);
-                      }}>
-                        <Trash2 className="h-3 w-3" />
-                      </Button>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))}
-              {filtered.length === 0 && (
-                <TableRow>
-                  <TableCell colSpan={8} className="text-center text-muted-foreground py-8">
-                    Nenhuma transação encontrada
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
+      {/* Transaction list grouped by day */}
+      <div className="space-y-4">
+        {groupedByDay.map(([dateStr, txs]) => {
+          const { dayName, dayDate } = formatDayHeader(dateStr);
+          const dayTotal = txs.reduce((s, t) => s + (t.tipo === 'receita' ? Number(t.valor) : -Number(t.valor)), 0);
 
+          return (
+            <div key={dateStr}>
+              {/* Day header */}
+              <div className="flex items-center justify-between px-1 mb-2">
+                <div>
+                  <span className="text-sm font-semibold">{dayName}</span>
+                  <span className="text-xs text-muted-foreground ml-2">{dayDate}</span>
+                </div>
+                <span className={`text-sm font-medium ${dayTotal >= 0 ? 'text-success' : 'text-destructive'}`}>
+                  {dayTotal >= 0 ? '+' : ''}{formatCurrency(dayTotal)}
+                </span>
+              </div>
+
+              {/* Transaction cards */}
+              <Card>
+                <CardContent className="p-0 divide-y divide-border">
+                  {txs.map((t) => {
+                    const catColor = t.categoria_id ? getColor(t.categoria_id) : getCategoriaColor(t.categoria);
+                    const catName = t.categoria_id ? getDisplayName(t.categoria_id) : t.categoria;
+                    const contaNome = contas?.find(c => c.id === t.conta_id)?.nome;
+
+                    return (
+                      <div
+                        key={t.id}
+                        className={`flex items-center gap-3 px-4 py-3 hover:bg-muted/30 transition-colors cursor-pointer ${t.ignorar_dashboard ? 'opacity-50' : ''}`}
+                        onClick={() => { setEditingTx({ ...t, subcategoria: null }); setLearnPattern(false); }}
+                      >
+                        {/* Category color indicator */}
+                        <div
+                          className="w-10 h-10 rounded-full shrink-0 flex items-center justify-center"
+                          style={{ backgroundColor: catColor + '20' }}
+                        >
+                          <div
+                            className="w-4 h-4 rounded-full"
+                            style={{ backgroundColor: catColor }}
+                          />
+                        </div>
+
+                        {/* Description and details */}
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-1.5">
+                            {t.ignorar_dashboard && <EyeOff className="h-3 w-3 text-muted-foreground shrink-0" />}
+                            <span className="text-sm font-medium truncate">{t.descricao}</span>
+                          </div>
+                          <div className="flex items-center gap-2 mt-0.5">
+                            <span className="text-xs text-muted-foreground">{catName}</span>
+                            {t.parcela_atual && t.parcela_total && (
+                              <Badge variant="outline" className="text-[10px] px-1 py-0 h-4">
+                                {t.parcela_atual}/{t.parcela_total}
+                              </Badge>
+                            )}
+                            {contaNome && (
+                              <span className="text-[10px] text-muted-foreground">{contaNome}</span>
+                            )}
+                            {t.pessoa && (
+                              <span className="text-[10px] text-muted-foreground">{t.pessoa}</span>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Value */}
+                        <div className="text-right shrink-0">
+                          <span className={`text-sm font-semibold ${t.tipo === 'receita' ? 'text-success' : 'text-destructive'}`}>
+                            {t.tipo === 'receita' ? '+' : '-'}{formatCurrency(Number(t.valor))}
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </CardContent>
+              </Card>
+            </div>
+          );
+        })}
+
+        {filtered.length === 0 && (
+          <div className="text-center py-12">
+            <p className="text-muted-foreground">Nenhuma transação encontrada</p>
+          </div>
+        )}
+      </div>
+
+      {/* Edit Dialog */}
       <Dialog open={!!editingTx} onOpenChange={() => setEditingTx(null)}>
         <DialogContent>
           <DialogHeader>
@@ -465,7 +482,22 @@ export default function TransacoesPage() {
               essencial: editingTx.essencial,
               ignorar_dashboard: editingTx.ignorar_dashboard || false,
             }); }} className="space-y-4">
-              <p className="text-sm text-muted-foreground">{editingTx.descricao}</p>
+              <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/50">
+                <div
+                  className="w-8 h-8 rounded-full shrink-0 flex items-center justify-center"
+                  style={{ backgroundColor: (editingTx.categoria_id ? getColor(editingTx.categoria_id) : getCategoriaColor(editingTx.categoria)) + '20' }}
+                >
+                  <div
+                    className="w-3 h-3 rounded-full"
+                    style={{ backgroundColor: editingTx.categoria_id ? getColor(editingTx.categoria_id) : getCategoriaColor(editingTx.categoria) }}
+                  />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium truncate">{editingTx.descricao}</p>
+                  <p className="text-xs text-muted-foreground">{formatDate(editingTx.data)} · {formatCurrency(Number(editingTx.valor))}</p>
+                </div>
+              </div>
+
               <div className="space-y-2">
                 <Label>Categoria</Label>
                 <CategoriaSelector
@@ -494,19 +526,34 @@ export default function TransacoesPage() {
                 />
                 <div>
                   <Label htmlFor="ignorar-dashboard" className="text-sm font-medium cursor-pointer">Ignorar no dashboard</Label>
-                  <p className="text-xs text-muted-foreground">Transação não será contabilizada nos totais e gráficos</p>
+                  <p className="text-xs text-muted-foreground">Não contabilizar nos totais</p>
                 </div>
               </div>
               <div className="flex items-center justify-between rounded-lg border p-3">
                 <div>
                   <p className="text-sm font-medium">Aprender padrão?</p>
-                  <p className="text-xs text-muted-foreground">"{editingTx.descricao}" sempre será "{editingTx.categoria}"</p>
+                  <p className="text-xs text-muted-foreground">"{editingTx.descricao}" = "{editingTx.categoria}"</p>
                 </div>
                 <Switch checked={learnPattern} onCheckedChange={setLearnPattern} />
               </div>
-              <Button className="w-full" type="submit">
-                Salvar
-              </Button>
+              <div className="flex gap-2">
+                <Button className="flex-1" type="submit">
+                  Salvar
+                </Button>
+                <Button
+                  type="button"
+                  variant="destructive"
+                  size="icon"
+                  onClick={() => {
+                    if (window.confirm(`Excluir "${editingTx.descricao}"?`)) {
+                      deleteMutation.mutate(editingTx.id);
+                      setEditingTx(null);
+                    }
+                  }}
+                >
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              </div>
             </form>
           )}
         </DialogContent>

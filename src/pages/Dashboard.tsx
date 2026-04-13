@@ -13,14 +13,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { AlertTriangle, BarChart3, CreditCard } from 'lucide-react';
 import { MonthSelector } from '@/components/MonthSelector';
 import { ParcelasTimeline } from '@/components/dashboard/ParcelasTimeline';
-import { AiInsightsCard } from '@/components/dashboard/AiInsightsCard';
-import { SmartInsightsCard } from '@/components/dashboard/SmartInsightsCard';
-import { FinancialHealthCard } from '@/components/dashboard/FinancialHealthCard';
 import { FaturaDrawer } from '@/components/dashboard/FaturaDrawer';
-import type { TransactionRecord } from '@/lib/projection-engine';
-import { detectSpendingTrends, detectAnomalies, detectRecurringCharges } from '@/lib/spending-patterns';
-import { calculateFinancialHealth } from '@/lib/financial-health';
-import { calculateIncomeCommitment } from '@/lib/income-commitment';
 import { useFontesReceita } from '@/hooks/useFontesReceita';
 
 export default function DashboardPage() {
@@ -178,23 +171,6 @@ export default function DashboardPage() {
         .lte('data', `${year}-12-31`);
 
       return [...(withCompetencia || []), ...(withoutCompetencia || [])];
-    },
-    enabled: !!user,
-  });
-
-  // All transactions for pattern analysis (last 12 months)
-  const { data: allTransactions } = useQuery({
-    queryKey: ['dashboard', 'all-transacoes', user?.id],
-    queryFn: async () => {
-      const oneYearAgo = new Date();
-      oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
-      const startDate = `${oneYearAgo.getFullYear()}-${String(oneYearAgo.getMonth() + 1).padStart(2, '0')}-01`;
-      const { data } = await supabase
-        .from('transacoes')
-        .select('data, mes_competencia, descricao, valor, tipo, categoria, categoria_id, parcela_atual, parcela_total, grupo_parcela, ignorar_dashboard, essencial, conta_id')
-        .eq('user_id', user!.id)
-        .gte('data', startDate);
-      return (data || []) as TransactionRecord[];
     },
     enabled: !!user,
   });
@@ -417,57 +393,6 @@ export default function DashboardPage() {
 
         <ParcelasTimeline parcelas={parcelasAno || []} />
 
-
-        <AiInsightsCard context={{
-          receita: receitaBase,
-          totalDespesas,
-          totalReceitas,
-          disponivel,
-          percentGasto,
-          reserva,
-          totalEssencial,
-          totalNaoEssencial,
-          pctEssencial,
-          topCategorias: categoryRanking.slice(0, 5),
-          parcelasAtivas: parcelasAno?.length,
-          faturasPendentes: creditCards.filter(c => {
-            const f = faturaData?.[c.id];
-            return f && f.despesas > 0 && f.pagamentos < f.despesas;
-          }).length,
-          // Pattern analysis data for enhanced AI
-          ...(allTransactions && allTransactions.length > 0 ? (() => {
-            const trends = detectSpendingTrends(allTransactions);
-            const anomalies = detectAnomalies(allTransactions);
-            const recurring = detectRecurringCharges(allTransactions);
-            const health = calculateFinancialHealth({ transactions: allTransactions, receitaBase, reservaMinima: reserva, saldoAtual: saldoAtual || 0 });
-            const commitment = calculateIncomeCommitment({ transactions: allTransactions, receitaBase });
-            return {
-              spendingTrends: trends.filter(t => t.tendencia !== 'estavel').slice(0, 5),
-              anomalies: anomalies.slice(0, 3),
-              recurringCharges: recurring.slice(0, 10),
-              healthScore: health.score,
-              healthNivel: health.nivel,
-              commitmentAvg: commitment.resumo.mediaComprometimento,
-              commitmentTrend: commitment.resumo.tendencia,
-            };
-          })() : {}),
-        }} />
-
-        {allTransactions && allTransactions.length > 0 && (
-          <SmartInsightsCard
-            transactions={allTransactions}
-            receitaBase={receitaBase}
-          />
-        )}
-
-        {allTransactions && allTransactions.length > 0 && (
-          <FinancialHealthCard
-            transactions={allTransactions}
-            receitaBase={receitaBase}
-            reservaMinima={reserva}
-            saldoAtual={saldoAtual || 0}
-          />
-        )}
 
         <Card className="md:col-span-2">
           <CardHeader>
