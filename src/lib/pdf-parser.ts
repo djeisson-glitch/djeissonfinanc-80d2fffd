@@ -247,10 +247,13 @@ function parseMercadoPago(
   let detectedDueDate: { month: number; year: number } | undefined;
 
   // First pass: find vencimento year and header total from first few pages
+  // MP PDF layout puts "Total a pagar" on one row, then the date/limit row, then "R$ X,XXX.XX"
+  // So we track a counter (up to 3 rows) instead of just the previous row.
   for (let pi = 0; pi < Math.min(pages.length, 3); pi++) {
     if (detectedDueDate && headerTotal) break;
     const { rows, garbledFonts } = pages[pi];
-    let prevRowHadTotalAPagar = false;
+    let rowsSinceTotalAPagar = -1; // -1 = not seen yet
+    let inSummarySection = false;
     for (const row of rows) {
       const text = getRowText(row, garbledFonts);
       const vencMatch = text.match(/Vencimento[:\s]*(\d{2})\/(\d{2})\/(\d{4})/i)
@@ -259,26 +262,42 @@ function parseMercadoPago(
         dueYear = parseInt(vencMatch[3]);
         detectedDueDate = { month: parseInt(vencMatch[2]) - 1, year: dueYear };
       }
-      // Also detect date from row that has dd/mm/yyyy next to "Vence" context
-      if (!detectedDueDate) {
+      // Also detect due date from the row right after "Total a pagar" header
+      if (!detectedDueDate && rowsSinceTotalAPagar >= 0 && rowsSinceTotalAPagar < 3) {
         const dateInRow = text.match(/(\d{2})\/(\d{2})\/(\d{4})/);
-        if (dateInRow && prevRowHadTotalAPagar) {
+        if (dateInRow) {
           dueYear = parseInt(dateInRow[3]);
           detectedDueDate = { month: parseInt(dateInRow[2]) - 1, year: dueYear };
         }
       }
+      // Detect "Total a pagar R$ X" on the same row
       const totalMatch = text.match(/Total\s+a\s+pagar.*?R\$\s*([\d.,]+)/i);
       if (totalMatch) {
         headerTotal = parseValue('R$ ' + totalMatch[1]) ?? undefined;
       }
-      // If "Total a pagar" and R$ are on separate rows, capture from next row
-      if (!headerTotal && prevRowHadTotalAPagar) {
+      // "Total a pagar" label found → start counting rows to find the value
+      if (/Total\s+a\s+pagar/i.test(text)) {
+        rowsSinceTotalAPagar = 0;
+      }
+      // Look for standalone "R$ X,XXX.XX" within 3 rows after "Total a pagar"
+      if (!headerTotal && rowsSinceTotalAPagar >= 0 && rowsSinceTotalAPagar < 3) {
         const valMatch = text.match(/^R\$\s*([\d.,]+)/);
         if (valMatch) {
           headerTotal = parseValue('R$ ' + valMatch[1]) ?? undefined;
         }
       }
-      prevRowHadTotalAPagar = /Total\s+a\s+pagar/i.test(text);
+      if (rowsSinceTotalAPagar >= 0) rowsSinceTotalAPagar++;
+
+      // Track summary section for fallback "Total R$ X" matching
+      if (/Resumo da fatura/i.test(text)) inSummarySection = true;
+      if (/Detalhes de consumo|Movimentações na fatura/i.test(text)) inSummarySection = false;
+      // Fallback: "Total R$ X" in summary section (last line before transaction details)
+      if (!headerTotal && inSummarySection) {
+        const summaryTotal = text.match(/^Total\s+R\$\s*([\d.,]+)/i);
+        if (summaryTotal) {
+          headerTotal = parseValue('R$ ' + summaryTotal[1]) ?? undefined;
+        }
+      }
     }
   }
 
