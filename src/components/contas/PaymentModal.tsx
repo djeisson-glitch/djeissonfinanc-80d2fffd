@@ -9,7 +9,7 @@ import { formatCurrency } from '@/lib/format';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { generateHash } from '@/lib/csv-parser';
 
 interface Props {
@@ -30,10 +30,28 @@ export function PaymentModal({ open, onOpenChange, contaId, contaNome, faturaTot
   const [valorPago, setValorPago] = useState(0);
   const [parcelas, setParcelas] = useState(2);
   const [submitting, setSubmitting] = useState(false);
+  const [contaOrigem, setContaOrigem] = useState<string>('');
 
   const pessoaNome = user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'Titular';
   const restante = useMemo(() => Math.max(0, faturaTotal - valorPago), [faturaTotal, valorPago]);
   const valorParcela = useMemo(() => parcelas > 0 ? restante / parcelas : 0, [restante, parcelas]);
+
+  // Fetch debit accounts for payment origin selection
+  const { data: contasDebito } = useQuery({
+    queryKey: ['contas-debito', user?.id],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('contas')
+        .select('id, nome')
+        .eq('user_id', user!.id)
+        .eq('tipo', 'debito');
+      return data || [];
+    },
+    enabled: !!user && open,
+  });
+
+  // Auto-select first debit account if only one exists
+  const effectiveContaOrigem = contaOrigem || (contasDebito?.length === 1 ? contasDebito[0].id : '');
 
   const handleConfirm = async () => {
     if (!user) return;
@@ -42,8 +60,9 @@ export function PaymentModal({ open, onOpenChange, contaId, contaNome, faturaTot
     try {
       const baseDate = `${year}-${String(month + 1).padStart(2, '0')}-01`;
       const valorPagamento = mode === 'total' ? faturaTotal : valorPago;
+      const billingPeriod = `${year}-${String(month + 1).padStart(2, '0')}`;
 
-      // Create payment transaction
+      // Create payment transaction on credit card account (receita = reduces card debt)
       const paymentHash = generateHash(baseDate, `Pagamento fatura ${contaNome}`, valorPagamento, pessoaNome);
       const { data: paymentData, error: paymentError } = await supabase.from('transacoes').insert({
         user_id: user.id,
@@ -56,9 +75,28 @@ export function PaymentModal({ open, onOpenChange, contaId, contaNome, faturaTot
         essencial: true,
         hash_transacao: paymentHash,
         pessoa: pessoaNome,
+        mes_competencia: billingPeriod,
       }).select('id').single();
 
       if (paymentError) throw paymentError;
+
+      // Create corresponding debit transaction on the origin debit account (despesa = money leaving)
+      if (effectiveContaOrigem) {
+        const debitHash = generateHash(baseDate, `Pag Fat Deb Cc - ${contaNome}`, valorPagamento, pessoaNome) + '_deb';
+        await supabase.from('transacoes').insert({
+          user_id: user.id,
+          conta_id: effectiveContaOrigem,
+          data: baseDate,
+          descricao: `Pag Fat Deb Cc - ${contaNome}`,
+          valor: valorPagamento,
+          categoria: 'Pagamento Fatura',
+          tipo: 'despesa',
+          essencial: true,
+          hash_transacao: debitHash,
+          pessoa: pessoaNome,
+          mes_competencia: billingPeriod,
+        });
+      }
 
       // If partial, create future installments for remaining
       if (mode === 'parcial' && restante > 0 && parcelas > 0) {
@@ -117,6 +155,26 @@ export function PaymentModal({ open, onOpenChange, contaId, contaNome, faturaTot
             <p className="text-xl font-bold text-destructive">{formatCurrency(faturaTotal)}</p>
           </div>
 
+          {/* Conta de origem */}
+          {contasDebito && contasDebito.length > 1 && (
+            <div className="space-y-2">
+              <Label>Pagar com qual conta?</Label>
+              <Select value={effectiveContaOrigem} onValueChange={setContaOrigem}>
+                <SelectTrigger><SelectValue placeholder="Selecione a conta" /></SelectTrigger>
+                <SelectContent>
+                  {contasDebito.map(c => (
+                    <SelectItem key={c.id} value={c.id}>{c.nome}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+          {contasDebito && contasDebito.length === 1 && (
+            <p className="text-xs text-muted-foreground">
+              Conta de origem: <span className="font-medium">{contasDebito[0].nome}</span>
+            </p>
+          )}
+
           <RadioGroup value={mode} onValueChange={(v) => setMode(v as 'total' | 'parcial')}>
             <div className="flex items-center space-x-2 p-3 rounded-lg border cursor-pointer hover:bg-muted/50" onClick={() => setMode('total')}>
               <RadioGroupItem value="total" id="total" />
@@ -169,7 +227,7 @@ export function PaymentModal({ open, onOpenChange, contaId, contaNome, faturaTot
           <Button
             className="w-full"
             type="submit"
-            disabled={submitting || (mode === 'parcial' && (valorPago <= 0 || valorPago >= faturaTotal))}
+            disabled={submitting || (mode === 'parcial' && (valorPago <= 0 || valorPago >= faturaTotal)) || (!effectiveContaOrigem && (contasDebito?.length || 0) > 0)}
           >
             {submitting ? 'Registrando...' : 'Confirmar Pagamento'}
           </Button>
