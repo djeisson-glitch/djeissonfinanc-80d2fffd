@@ -11,8 +11,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import { useState } from 'react';
-import { Plus, CreditCard, Banknote, DollarSign, CalendarDays } from 'lucide-react';
+import { Plus, CreditCard, Banknote, DollarSign, CalendarDays, PenLine } from 'lucide-react';
 import { PaymentModal } from '@/components/contas/PaymentModal';
+import { ManualTransactionModal } from '@/components/contas/ManualTransactionModal';
 import { MonthSelector } from '@/components/MonthSelector';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
@@ -42,6 +43,7 @@ export default function ContasPage() {
   const [agencia, setAgencia] = useState('');
   const [numeroConta, setNumeroConta] = useState('');
   const [paymentConta, setPaymentConta] = useState<{ id: string; nome: string; fatura: number } | null>(null);
+  const [manualTxConta, setManualTxConta] = useState<{ id: string; nome: string; tipo: 'credito' | 'debito'; mesCompetencia?: string } | null>(null);
 
   const now = new Date();
   const [month, setMonth] = useState(now.getMonth());
@@ -247,16 +249,30 @@ export default function ContasPage() {
                         Pago: {formatCurrency(pagamentoTotal)} de {formatCurrency(faturaTotal)}
                       </p>
                     )}
-                    {faturaTotal > 0 && pagamentoTotal < faturaTotal && (
+                    <div className="flex gap-2 mt-2">
+                      {faturaTotal > 0 && pagamentoTotal < faturaTotal && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="flex-1 text-xs"
+                          onClick={(e) => { e.stopPropagation(); setPaymentConta({ id: conta.id, nome: conta.nome, fatura: faturaTotal - pagamentoTotal }); }}
+                        >
+                          <DollarSign className="h-3 w-3 mr-1" /> Pagar
+                        </Button>
+                      )}
                       <Button
                         size="sm"
                         variant="outline"
-                        className="mt-2 w-full text-xs"
-                        onClick={(e) => { e.stopPropagation(); setPaymentConta({ id: conta.id, nome: conta.nome, fatura: faturaTotal - pagamentoTotal }); }}
+                        className="flex-1 text-xs"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          const bp = `${year}-${String(month + 1).padStart(2, '0')}`;
+                          setManualTxConta({ id: conta.id, nome: conta.nome, tipo: 'credito', mesCompetencia: bp });
+                        }}
                       >
-                        <DollarSign className="h-3 w-3 mr-1" /> Registrar Pagamento
+                        <PenLine className="h-3 w-3 mr-1" /> Lançamento
                       </Button>
-                    )}
+                    </div>
                   </>
                 ) : (
                   <>
@@ -269,6 +285,17 @@ export default function ContasPage() {
                     <p className="text-xs text-muted-foreground mt-1">
                       Saldo inicial: {formatCurrency(conta.saldo_inicial)}
                     </p>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="mt-2 w-full text-xs"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setManualTxConta({ id: conta.id, nome: conta.nome, tipo: 'debito' });
+                      }}
+                    >
+                      <PenLine className="h-3 w-3 mr-1" /> Adicionar Lançamento
+                    </Button>
                   </>
                 )}
               </CardContent>
@@ -368,6 +395,17 @@ export default function ContasPage() {
           faturaTotal={paymentConta.fatura}
           month={month}
           year={year}
+        />
+      )}
+
+      {manualTxConta && (
+        <ManualTransactionModal
+          open={!!manualTxConta}
+          onOpenChange={(open) => { if (!open) setManualTxConta(null); }}
+          contaId={manualTxConta.id}
+          contaNome={manualTxConta.nome}
+          contaTipo={manualTxConta.tipo}
+          defaultMesCompetencia={manualTxConta.mesCompetencia}
         />
       )}
     </div>

@@ -430,21 +430,12 @@ export function CsvImportDialog({ open, onOpenChange }: Props) {
 
     const finalTransactions = applyDueDate(parsedTransactions);
 
-    // For debit accounts, treat "payment" transactions (e.g. "Pag Fat Deb Cc")
-    // as regular simple transactions — they represent real money leaving the account.
-    // Only exclude payments when importing into credit card accounts.
-    const effectiveTransactions = isCredito
-      ? finalTransactions
-      : finalTransactions.map(t =>
-          t.classification === 'payment' ? { ...t, classification: 'simple' as const } : t
-        );
-
     // Classify transactions
-    const simpleRaw = effectiveTransactions.filter((t) => t.classification === "simple");
-    const newInstallmentRaw = effectiveTransactions.filter((t) => t.classification === "new_installment");
-    const ongoingRaw = effectiveTransactions.filter((t) => t.classification === "ongoing_installment");
-    const refundRaw = effectiveTransactions.filter((t) => t.classification === "refund");
-    const paymentRaw = effectiveTransactions.filter((t) => t.classification === "payment");
+    const simpleRaw = finalTransactions.filter((t) => t.classification === "simple");
+    const newInstallmentRaw = finalTransactions.filter((t) => t.classification === "new_installment");
+    const ongoingRaw = finalTransactions.filter((t) => t.classification === "ongoing_installment");
+    const refundRaw = finalTransactions.filter((t) => t.classification === "refund");
+    const paymentRaw = finalTransactions.filter((t) => t.classification === "payment");
 
     // Check ongoing installments for duplicates
     const { unique: ongoingUnique, duplicates: ongoingDuplicates } = await checkOngoingDuplicates(

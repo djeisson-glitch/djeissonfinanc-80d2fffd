@@ -1,9 +1,13 @@
+import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { formatCurrency, getMonthName } from '@/lib/format';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Separator } from '@/components/ui/separator';
+import { Button } from '@/components/ui/button';
+import { PenLine } from 'lucide-react';
+import { ManualTransactionModal } from '@/components/contas/ManualTransactionModal';
 
 interface Props {
   open: boolean;
@@ -19,6 +23,7 @@ interface Props {
 export function FaturaDrawer({ open, onOpenChange, cardId, cardName, start, end, month, year }: Props) {
   const { user } = useAuth();
   const billingPeriod = `${year}-${String(month + 1).padStart(2, '0')}`;
+  const [manualTxOpen, setManualTxOpen] = useState(false);
 
   const { data: transacoes } = useQuery({
     queryKey: ['fatura-detail', cardId, billingPeriod],
@@ -69,6 +74,15 @@ export function FaturaDrawer({ open, onOpenChange, cardId, cardName, start, end,
         </SheetHeader>
 
         <div className="mt-4 space-y-4">
+          <Button
+            size="sm"
+            variant="outline"
+            className="w-full text-xs"
+            onClick={() => setManualTxOpen(true)}
+          >
+            <PenLine className="h-3 w-3 mr-1" /> Adicionar Lançamento Manual
+          </Button>
+
           <div className="space-y-1">
             {despesas.map(t => (
               <div key={t.id} className="flex items-center justify-between py-1.5 text-sm border-b border-border/50">
@@ -109,6 +123,15 @@ export function FaturaDrawer({ open, onOpenChange, cardId, cardName, start, end,
             </>
           )}
         </div>
+
+        <ManualTransactionModal
+          open={manualTxOpen}
+          onOpenChange={setManualTxOpen}
+          contaId={cardId}
+          contaNome={cardName}
+          contaTipo="credito"
+          defaultMesCompetencia={billingPeriod}
+        />
       </SheetContent>
     </Sheet>
   );
