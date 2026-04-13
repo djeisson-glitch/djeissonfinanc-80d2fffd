@@ -337,7 +337,7 @@ export function CsvImportDialog({ open, onOpenChange }: Props) {
     _csvTransactions: ClassifiedTransaction[],
     targetMonth: string,
   ): Promise<number> => {
-    console.log("🧹 Limpando projeções do período", targetMonth, "e posteriores...");
+    // Clean all auto-projected transactions for target month and beyond
 
     // Delete ALL auto-projected transactions for this account where mes_competencia >= targetMonth.
     // This ensures a clean slate: the new import will re-project fresh parcelas for all future months.
@@ -363,7 +363,7 @@ export function CsvImportDialog({ open, onOpenChange }: Props) {
         return 0;
       }
     }
-    console.log(`Deletadas ${ids.length} projeções (${targetMonth}+)`);
+    // Projections cleaned successfully
     return ids.length;
   };
 
@@ -437,15 +437,6 @@ export function CsvImportDialog({ open, onOpenChange }: Props) {
     const refundRaw = finalTransactions.filter((t) => t.classification === "refund");
     const paymentRaw = finalTransactions.filter((t) => t.classification === "payment");
 
-    console.log("[Import] Classificação:", {
-      simple: simpleRaw.length,
-      newInstallment: newInstallmentRaw.length,
-      ongoing: ongoingRaw.length,
-      refund: refundRaw.length,
-      payment: paymentRaw.length,
-      refundDetails: refundRaw.map(r => ({ desc: r.descricao, valor: r.valor, tipo: r.tipo })),
-    });
-
     // Check ongoing installments for duplicates
     const { unique: ongoingUnique, duplicates: ongoingDuplicates } = await checkOngoingDuplicates(
       currentUserId,
@@ -453,7 +444,6 @@ export function CsvImportDialog({ open, onOpenChange }: Props) {
       ongoingRaw,
     );
 
-    console.log("[Import] Ongoing dedup:", { total: ongoingRaw.length, unique: ongoingUnique.length, duplicates: ongoingDuplicates.length });
     setProgress(35);
 
     // Build PlannedTransactions for importable items (simple + refunds + new_installment first parcela + ongoing unique)
@@ -532,8 +522,6 @@ export function CsvImportDialog({ open, onOpenChange }: Props) {
 
     const allPlanned = [...allOriginals, ...projectedInstallments] as (ProjectableTransaction | ProjectedInstallment)[];
     const { clean, exactMatches, autoReplacements, conflicts } = detectConflicts(allPlanned, existingTxs);
-
-    console.log("[Import] detectConflicts:", { planned: allPlanned.length, clean: clean.length, exactMatches: exactMatches.length, autoReplacements: autoReplacements.length, conflicts: conflicts.length, existingInDB: existingTxs.length });
 
     if (conflicts.length > 0 && !resolvedConflicts) {
       throw { type: "CONFLICTS", conflicts, contaId, userId: currentUserId };
@@ -878,9 +866,6 @@ export function CsvImportDialog({ open, onOpenChange }: Props) {
       let imported = 0;
       const batchSize = 50;
 
-      const refundsInPlan = plan.newTransactions.filter((t: any) => t.tipo === 'receita');
-      console.log("[Import] Transações a inserir:", plan.newTransactions.length, "| Receitas (devoluções):", refundsInPlan.length, refundsInPlan.map((r: any) => ({ desc: r.descricao, valor: r.valor, tipo: r.tipo, hash: r.hash_transacao })));
-
       for (let i = 0; i < plan.newTransactions.length; i += batchSize) {
         const batch = plan.newTransactions
           .slice(i, i + batchSize)
@@ -893,33 +878,6 @@ export function CsvImportDialog({ open, onOpenChange }: Props) {
         if (error) throw error;
         imported += data?.length || 0;
         setProgress(80 + (20 * (i + batch.length)) / Math.max(plan.newTransactions.length, 1));
-      }
-
-      // Post-import verification: check what's actually in the DB for this billing period
-      const billingPeriod = isCredito && dueConfirmed
-        ? `${dueYear}-${String(dueMonth + 1).padStart(2, "0")}`
-        : null;
-      if (billingPeriod) {
-        const { data: dbCheck } = await supabase
-          .from("transacoes")
-          .select("tipo, valor, descricao")
-          .eq("user_id", user!.id)
-          .eq("conta_id", plan.newTransactions[0]?.conta_id || selectedConta)
-          .eq("mes_competencia", billingPeriod);
-        const dbDespesas = (dbCheck || []).filter(t => t.tipo === 'despesa');
-        const dbReceitas = (dbCheck || []).filter(t => t.tipo === 'receita');
-        const sumDesp = dbDespesas.reduce((s, t) => s + Number(t.valor), 0);
-        const sumRec = dbReceitas.reduce((s, t) => s + Number(t.valor), 0);
-        console.log("[Import] VERIFICAÇÃO PÓS-IMPORT:", {
-          billingPeriod,
-          totalNoBanco: dbCheck?.length,
-          despesas: dbDespesas.length,
-          receitas: dbReceitas.length,
-          sumDespesas: sumDesp.toFixed(2),
-          sumReceitas: sumRec.toFixed(2),
-          fatura: (sumDesp - sumRec).toFixed(2),
-          autoProjetadas: (dbCheck || []).filter(t => t.descricao.includes('(auto-projetada)')).length,
-        });
       }
 
       setResult({

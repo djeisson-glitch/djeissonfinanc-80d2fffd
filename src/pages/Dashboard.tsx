@@ -44,17 +44,33 @@ export default function DashboardPage() {
     enabled: !!user,
   });
 
+  const billingMonth = `${year}-${String(month + 1).padStart(2, '0')}`;
+
   const { data: transacoesMes, isLoading } = useQuery({
-    queryKey: ['dashboard', 'transacoes-mes', user?.id, start, end],
+    queryKey: ['dashboard', 'transacoes-mes', user?.id, start, end, billingMonth],
     queryFn: async () => {
-      const { data } = await supabase
+      // Fetch transactions by mes_competencia (credit card billing period) AND by data range
+      // (for debit/cash transactions that don't have mes_competencia).
+      const { data: byCompetencia } = await supabase
         .from('transacoes')
         .select('*')
         .eq('user_id', user!.id)
         .eq('ignorar_dashboard', false)
+        .eq('mes_competencia', billingMonth);
+
+      const { data: byDate } = await supabase
+        .from('transacoes')
+        .select('*')
+        .eq('user_id', user!.id)
+        .eq('ignorar_dashboard', false)
+        .is('mes_competencia', null)
         .gte('data', start)
         .lte('data', end);
-      return data || [];
+
+      // Merge and deduplicate by id
+      const all = [...(byCompetencia || []), ...(byDate || [])];
+      const seen = new Set<string>();
+      return all.filter(t => { if (seen.has(t.id)) return false; seen.add(t.id); return true; });
     },
     enabled: !!user,
   });
@@ -115,8 +131,6 @@ export default function DashboardPage() {
         byConta[t.conta_id].count++;
         if (t.tipo === 'despesa') byConta[t.conta_id].sum += Number(t.valor);
       });
-      console.log("[Dashboard Fatura]", { billingPeriod, totalTxs: allTxs.length, byPeriodCount: byPeriod?.length, byDateCount: byDate?.length, receitas: receitas.length, devolucoes: devol.length, sumDespesas: sumDespesas.toFixed(2), sumReceitas: sumReceitas.toFixed(2), byConta });
-
       const faturas: Record<string, { despesas: number; pagamentos: number }> = {};
       allTxs.forEach(t => {
         if (!faturas[t.conta_id]) faturas[t.conta_id] = { despesas: 0, pagamentos: 0 };

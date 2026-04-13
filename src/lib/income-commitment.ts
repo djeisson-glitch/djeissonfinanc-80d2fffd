@@ -61,10 +61,10 @@ function estimateVariableExpenses(
       ),
   );
 
-  // Group by month
+  // Group by month (use mes_competencia for credit card transactions)
   const byMonth: Record<string, number> = {};
   for (const t of despesas) {
-    const month = t.data.substring(0, 7);
+    const month = (t as any).mes_competencia || t.data.substring(0, 7);
     if (!byMonth[month]) byMonth[month] = 0;
     byMonth[month] += t.valor;
   }

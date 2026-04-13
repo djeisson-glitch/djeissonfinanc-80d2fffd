@@ -135,6 +135,7 @@ function classifyTransaction(parcela_atual: number | null, parcela_total: number
     // "Pag Fat" / "Pagamento da fatura" / "Crédito por parcelamento" = acerto de fatura anterior → excluir
     if (
       desc.includes('pag fat') ||
+      desc.includes('pagto fatura') ||
       /pagamento\s+(da\s+)?fatura/.test(desc) ||
       desc.includes('crédito por parcelamento') ||
       desc.includes('credito por parcelamento')

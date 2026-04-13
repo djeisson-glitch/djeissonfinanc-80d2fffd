@@ -75,8 +75,8 @@ export function detectFixedExpenses(transactions: TransactionRecord[]): FixedExp
       .substring(0, 30)
       .toUpperCase();
     const key = `${normDesc}|${t.valor.toFixed(2)}`;
-    const month = t.data.substring(0, 7);
-    
+    const month = t.mes_competencia || t.data.substring(0, 7);
+
     if (!groups[key]) {
       groups[key] = { months: new Set(), t };
     }
@@ -166,8 +166,8 @@ export function calculateCategoryAverages(
   
   for (const t of despesas) {
     const cat = t.categoria;
-    const month = t.data.substring(0, 7);
-    
+    const month = t.mes_competencia || t.data.substring(0, 7);
+
     if (!catMonths[cat]) catMonths[cat] = { months: {}, categoria_id: t.categoria_id };
     if (!catMonths[cat].months[month]) catMonths[cat].months[month] = 0;
     catMonths[cat].months[month] += t.valor;
