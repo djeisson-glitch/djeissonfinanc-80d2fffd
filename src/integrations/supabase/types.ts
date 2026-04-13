@@ -52,6 +52,60 @@ export type Database = {
           },
         ]
       }
+      fontes_receita: {
+        Row: {
+          id: string
+          user_id: string
+          descricao: string
+          valor: number
+          ativo: boolean
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          descricao: string
+          valor: number
+          ativo?: boolean
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          descricao?: string
+          valor?: number
+          ativo?: boolean
+          created_at?: string
+        }
+        Relationships: []
+      }
+      planejamento_categorias: {
+        Row: {
+          id: string
+          user_id: string
+          categoria: string
+          valor_planejado: number
+          mes: string
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          categoria: string
+          valor_planejado: number
+          mes: string
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          categoria?: string
+          valor_planejado?: number
+          mes?: string
+          created_at?: string
+        }
+        Relationships: []
+      }
       configuracoes: {
         Row: {
           created_at: string

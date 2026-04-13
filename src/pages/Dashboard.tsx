@@ -21,6 +21,7 @@ import type { TransactionRecord } from '@/lib/projection-engine';
 import { detectSpendingTrends, detectAnomalies, detectRecurringCharges } from '@/lib/spending-patterns';
 import { calculateFinancialHealth } from '@/lib/financial-health';
 import { calculateIncomeCommitment } from '@/lib/income-commitment';
+import { useFontesReceita } from '@/hooks/useFontesReceita';
 
 export default function DashboardPage() {
   const { user } = useAuth();
@@ -219,7 +220,8 @@ export default function DashboardPage() {
     enabled: !!user,
   });
 
-  const receita = config?.receita_mensal_fixa || 13000;
+  const { receitaBase: receitaFontes } = useFontesReceita();
+  const receita = receitaFontes;
   const reserva = config?.reserva_minima || 2000;
 
   const totalDespesas = transacoesMes?.filter(t => t.tipo === 'despesa').reduce((s, t) => s + Number(t.valor), 0) || 0;

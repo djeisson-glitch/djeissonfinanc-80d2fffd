@@ -13,6 +13,7 @@ import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import { TrendingUp, Lock, Activity, Pencil, X, Check, ChevronDown, ChevronRight } from 'lucide-react';
 import { IncomeCommitmentChart } from '@/components/dashboard/IncomeCommitmentChart';
 import { toast } from 'sonner';
+import { useFontesReceita } from '@/hooks/useFontesReceita';
 import {
   LineChart,
   Line,
@@ -55,16 +56,6 @@ export default function ProjecoesPage() {
         .eq('user_id', user!.id)
         .gte('data', `${new Date().getFullYear() - 1}-01-01`);
       return data || [];
-    },
-    enabled: !!user,
-  });
-
-  // Fetch config
-  const { data: config } = useQuery({
-    queryKey: ['config', user?.id],
-    queryFn: async () => {
-      const { data } = await supabase.from('configuracoes').select('*').eq('user_id', user!.id).single();
-      return data;
     },
     enabled: !!user,
   });
@@ -122,7 +113,7 @@ export default function ProjecoesPage() {
     },
   });
 
-  const receitaBase = config?.receita_mensal_fixa || 13000;
+  const { receitaBase } = useFontesReceita();
 
   const projections = useMemo(() => {
     if (!transactions) return [];

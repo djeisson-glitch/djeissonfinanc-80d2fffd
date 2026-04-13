@@ -7,6 +7,7 @@ import {
   DollarSign,
   FolderOpen,
   TrendingUp,
+  ClipboardList,
 } from 'lucide-react';
 import { NavLink } from '@/components/NavLink';
 import { useLocation } from 'react-router-dom';
@@ -29,6 +30,7 @@ const items = [
   { title: 'Calculadora', url: '/calculadora', icon: Calculator },
   { title: 'Contas', url: '/contas', icon: Wallet },
   { title: 'Projeções', url: '/projecoes', icon: TrendingUp },
+  { title: 'Planejamento', url: '/planejamento', icon: ClipboardList },
   { title: 'Categorias', url: '/categorias', icon: FolderOpen },
   { title: 'Configurações', url: '/configuracoes', icon: Settings },
 ];

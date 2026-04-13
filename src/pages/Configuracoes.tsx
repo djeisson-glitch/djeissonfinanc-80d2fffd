@@ -48,7 +48,6 @@ export default function ConfiguracoesPage() {
     enabled: !!user,
   });
 
-  const [receita, setReceita] = useState<number | null>(null);
   const [reserva, setReserva] = useState<number | null>(null);
   const [resetDialogOpen, setResetDialogOpen] = useState(false);
   const [resetConfirm, setResetConfirm] = useState('');
@@ -65,14 +64,12 @@ export default function ConfiguracoesPage() {
   const { categorias } = useCategorias();
   const resetKeyDown = useEnterSubmit(() => { if (resetConfirm === 'RESETAR') handleReset(); }, resetting || resetConfirm !== 'RESETAR');
 
-  const displayReceita = receita ?? config?.receita_mensal_fixa ?? 13000;
   const displayReserva = reserva ?? config?.reserva_minima ?? 2000;
 
   const saveConfigMutation = useMutation({
     mutationFn: async () => {
       await supabase.from('configuracoes').upsert({
         user_id: user!.id,
-        receita_mensal_fixa: displayReceita,
         reserva_minima: displayReserva,
       });
     },
@@ -141,12 +138,21 @@ export default function ConfiguracoesPage() {
         <CardContent className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label>Receita Mensal Fixa (R$)</Label>
-              <Input type="number" value={displayReceita} onChange={e => setReceita(Number(e.target.value))} />
-            </div>
-            <div className="space-y-2">
               <Label>Reserva Mínima Desejada (R$)</Label>
               <Input type="number" value={displayReserva} onChange={e => setReserva(Number(e.target.value))} />
+            </div>
+            <div className="space-y-2">
+              <Label className="text-muted-foreground">Fontes de Receita</Label>
+              <p className="text-sm text-muted-foreground">
+                Configure suas fontes de receita na página de{' '}
+                <button
+                  type="button"
+                  className="text-primary underline hover:no-underline"
+                  onClick={() => navigate('/planejamento')}
+                >
+                  Planejamento
+                </button>.
+              </p>
             </div>
           </div>
           <Button onClick={() => saveConfigMutation.mutate()}>
