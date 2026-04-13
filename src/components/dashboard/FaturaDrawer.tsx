@@ -6,8 +6,10 @@ import { formatCurrency, getMonthName } from '@/lib/format';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Separator } from '@/components/ui/separator';
 import { Button } from '@/components/ui/button';
-import { PenLine } from 'lucide-react';
+import { Card, CardContent } from '@/components/ui/card';
+import { PenLine, AlertTriangle } from 'lucide-react';
 import { ManualTransactionModal } from '@/components/contas/ManualTransactionModal';
+import { useFaturaAcumulada } from '@/hooks/useFaturaAcumulada';
 
 interface Props {
   open: boolean;
@@ -24,6 +26,12 @@ export function FaturaDrawer({ open, onOpenChange, cardId, cardName, start, end,
   const { user } = useAuth();
   const billingPeriod = `${year}-${String(month + 1).padStart(2, '0')}`;
   const [manualTxOpen, setManualTxOpen] = useState(false);
+
+  const { data: faturaAcumulada } = useFaturaAcumulada(
+    open ? [cardId] : [],
+    billingPeriod
+  );
+  const acumulado = faturaAcumulada?.[cardId];
 
   const { data: transacoes } = useQuery({
     queryKey: ['fatura-detail', cardId, billingPeriod],
@@ -83,6 +91,69 @@ export function FaturaDrawer({ open, onOpenChange, cardId, cardName, start, end,
             <PenLine className="h-3 w-3 mr-1" /> Adicionar Lançamento Manual
           </Button>
 
+          {/* Resumo acumulado */}
+          {acumulado && (
+            <Card className="border-border/50">
+              <CardContent className="p-3 space-y-1.5">
+                {acumulado.saldoAnterior > 0 && (
+                  <div className="flex justify-between text-sm">
+                    <span className="flex items-center gap-1.5 text-warning">
+                      <AlertTriangle className="h-3.5 w-3.5" />
+                      Saldo anterior (acumulado)
+                    </span>
+                    <span className="font-semibold text-warning">{formatCurrency(acumulado.saldoAnterior)}</span>
+                  </div>
+                )}
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">Despesas do mês</span>
+                  <span className="font-medium">{formatCurrency(acumulado.despesasMes)}</span>
+                </div>
+                {acumulado.pagamentosMes > 0 && (
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">Pagamentos</span>
+                    <span className="font-medium text-success">-{formatCurrency(acumulado.pagamentosMes)}</span>
+                  </div>
+                )}
+                <Separator />
+                <div className="flex justify-between text-sm font-bold">
+                  <span>Total a pagar</span>
+                  <span className={acumulado.totalAPagar > 0 ? 'text-destructive' : 'text-success'}>
+                    {formatCurrency(Math.max(0, acumulado.totalAPagar))}
+                  </span>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Histórico de meses anteriores com saldo */}
+          {acumulado && acumulado.saldoAnterior > 0 && (
+            <>
+              <Separator />
+              <div>
+                <p className="text-xs font-medium text-muted-foreground mb-2">Meses anteriores com saldo pendente</p>
+                {acumulado.historico
+                  .filter(h => h.periodo < billingPeriod && h.saldo > 0)
+                  .map(h => {
+                    const [y, m] = h.periodo.split('-').map(Number);
+                    return (
+                      <div key={h.periodo} className="flex justify-between text-xs py-1 border-b border-border/30">
+                        <span className="text-muted-foreground">{getMonthName(m - 1)}/{y}</span>
+                        <span>
+                          <span className="text-muted-foreground mr-2">
+                            {formatCurrency(h.despesas)} - {formatCurrency(h.pagamentos)}
+                          </span>
+                          <span className="font-medium text-warning">= {formatCurrency(h.saldo)}</span>
+                        </span>
+                      </div>
+                    );
+                  })}
+              </div>
+            </>
+          )}
+
+          <Separator />
+
+          <p className="text-xs font-medium text-muted-foreground">Transações do mês</p>
           <div className="space-y-1">
             {despesas.map(t => (
               <div key={t.id} className="flex items-center justify-between py-1.5 text-sm border-b border-border/50">

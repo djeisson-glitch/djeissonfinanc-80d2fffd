@@ -15,6 +15,7 @@ import { MonthSelector } from '@/components/MonthSelector';
 import { ParcelasTimeline } from '@/components/dashboard/ParcelasTimeline';
 import { FaturaDrawer } from '@/components/dashboard/FaturaDrawer';
 import { useFontesReceita } from '@/hooks/useFontesReceita';
+import { useFaturaAcumulada } from '@/hooks/useFaturaAcumulada';
 
 export default function DashboardPage() {
   const { user } = useAuth();
@@ -80,70 +81,9 @@ export default function DashboardPage() {
   });
 
   const creditCards = contas?.filter(c => c.tipo === 'credito') || [];
+  const cardIds = creditCards.map(c => c.id);
 
-  const { data: faturaData } = useQuery({
-    queryKey: ['dashboard', 'faturas', user?.id, month, year],
-    queryFn: async () => {
-      if (creditCards.length === 0) return {};
-      const cardIds = creditCards.map(c => c.id);
-      const billingPeriod = `${year}-${String(month + 1).padStart(2, '0')}`;
-      
-      // First try to find transactions by mes_competencia (billing period)
-      const { data: byPeriod } = await supabase
-        .from('transacoes')
-        .select('conta_id, tipo, valor, descricao, mes_competencia')
-        .eq('user_id', user!.id)
-        .eq('ignorar_dashboard', false)
-        .in('conta_id', cardIds)
-        .eq('mes_competencia', billingPeriod);
-      
-      // Fallback: also get by date range for older imports without mes_competencia
-      const { data: byDate } = await supabase
-        .from('transacoes')
-        .select('conta_id, tipo, valor, descricao, mes_competencia')
-        .eq('user_id', user!.id)
-        .eq('ignorar_dashboard', false)
-        .in('conta_id', cardIds)
-        .is('mes_competencia', null)
-        .gte('data', start)
-        .lte('data', end);
-
-      const allTxs = [...(byPeriod || []), ...(byDate || [])];
-
-      const receitas = allTxs.filter(t => t.tipo === 'receita');
-      const devol = allTxs.filter(t => {
-        const d = t.descricao.toLowerCase();
-        return d.includes('devoluc') || d.includes('devolução') || d.includes('estorno');
-      });
-      const despesasTxs = allTxs.filter(t => t.tipo === 'despesa');
-      const sumDespesas = despesasTxs.reduce((s, t) => s + Number(t.valor), 0);
-      const sumReceitas = receitas.reduce((s, t) => s + Number(t.valor), 0);
-      // Group by conta_id for debugging
-      const byConta: Record<string, { count: number; sum: number }> = {};
-      allTxs.forEach(t => {
-        if (!byConta[t.conta_id]) byConta[t.conta_id] = { count: 0, sum: 0 };
-        byConta[t.conta_id].count++;
-        if (t.tipo === 'despesa') byConta[t.conta_id].sum += Number(t.valor);
-      });
-      const faturas: Record<string, { despesas: number; pagamentos: number }> = {};
-      allTxs.forEach(t => {
-        if (!faturas[t.conta_id]) faturas[t.conta_id] = { despesas: 0, pagamentos: 0 };
-        if (t.tipo === 'despesa') {
-          faturas[t.conta_id].despesas += Number(t.valor);
-        }
-        const desc = t.descricao.toLowerCase();
-        const isDevolution = desc.includes('devoluc') || desc.includes('devolução') || desc.includes('estorno');
-        if (!isDevolution && (desc.includes('pag fat') || /pagamento\s+(da\s+)?fatura/.test(desc) || desc.includes('crédito por parcelamento') || desc.includes('credito por parcelamento'))) {
-          faturas[t.conta_id].pagamentos += Math.abs(Number(t.valor));
-        }
-        if (isDevolution && t.tipo === 'receita') {
-          faturas[t.conta_id].despesas -= Number(t.valor);
-        }
-      });
-      return faturas;
-    },
-    enabled: !!user && creditCards.length > 0,
-  });
+  const { data: faturaAcumulada } = useFaturaAcumulada(cardIds, billingMonth);
 
   const { data: parcelasAno } = useQuery({
     queryKey: ['dashboard', 'parcelas-ano', user?.id, year],
@@ -315,15 +255,18 @@ export default function DashboardPage() {
       {creditCards.length > 0 && (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           {creditCards.map(card => {
-            const fatura = faturaData?.[card.id];
-            const faturaTotal = fatura?.despesas || 0;
-            const pagTotal = fatura?.pagamentos || 0;
-            const status = faturaTotal <= 0
-              ? { label: 'Sem fatura', emoji: '', color: '#9ca3af' }
-              : pagTotal >= faturaTotal
-                ? { label: 'Paga', emoji: '🟢', color: '#10b981' }
-                : pagTotal > 0
-                  ? { label: 'Parcialmente paga', emoji: '🟡', color: '#f59e0b' }
+            const fatura = faturaAcumulada?.[card.id];
+            const saldoAnt = fatura?.saldoAnterior || 0;
+            const despesasMes = fatura?.despesasMes || 0;
+            const pagMes = fatura?.pagamentosMes || 0;
+            const totalAPagarCard = fatura?.totalAPagar || 0;
+
+            const status = totalAPagarCard <= 0
+              ? { label: 'Paga', emoji: '🟢', color: '#10b981' }
+              : pagMes > 0
+                ? { label: 'Parcialmente paga', emoji: '🟡', color: '#f59e0b' }
+                : despesasMes <= 0 && saldoAnt <= 0
+                  ? { label: 'Sem fatura', emoji: '', color: '#9ca3af' }
                   : { label: 'Em aberto', emoji: '🔴', color: '#ef4444' };
 
             return (
@@ -340,13 +283,31 @@ export default function DashboardPage() {
                       {status.emoji} {status.label}
                     </Badge>
                   </div>
-                  <p className="text-xs text-muted-foreground">Fatura atual</p>
-                  <p className="text-lg font-bold text-destructive">{formatCurrency(faturaTotal)}</p>
-                  {pagTotal > 0 && pagTotal < faturaTotal && (
-                    <p className="text-xs text-muted-foreground mt-1">
-                      Pago: {formatCurrency(pagTotal)} de {formatCurrency(faturaTotal)}
-                    </p>
+                  {saldoAnt > 0 && (
+                    <div className="flex justify-between text-xs mb-1">
+                      <span className="text-muted-foreground">Saldo anterior</span>
+                      <span className="text-warning font-medium">{formatCurrency(saldoAnt)}</span>
+                    </div>
                   )}
+                  <div className="flex justify-between text-xs mb-1">
+                    <span className="text-muted-foreground">Fatura do mês</span>
+                    <span className="font-medium">{formatCurrency(despesasMes)}</span>
+                  </div>
+                  {pagMes > 0 && (
+                    <div className="flex justify-between text-xs mb-1">
+                      <span className="text-muted-foreground">Pagamentos</span>
+                      <span className="text-success font-medium">-{formatCurrency(pagMes)}</span>
+                    </div>
+                  )}
+                  {(saldoAnt > 0 || pagMes > 0) && (
+                    <div className="border-t border-border/50 mt-1 pt-1" />
+                  )}
+                  <div className="flex justify-between items-baseline">
+                    <span className="text-xs text-muted-foreground">Total a pagar</span>
+                    <span className={`text-lg font-bold ${totalAPagarCard > 0 ? 'text-destructive' : 'text-success'}`}>
+                      {formatCurrency(Math.max(0, totalAPagarCard))}
+                    </span>
+                  </div>
                 </CardContent>
               </Card>
             );
