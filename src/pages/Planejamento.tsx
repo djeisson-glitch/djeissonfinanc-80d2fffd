@@ -10,9 +10,11 @@ import { Progress } from '@/components/ui/progress';
 import { MonthSelector } from '@/components/MonthSelector';
 import { formatCurrency, getMonthName } from '@/lib/format';
 import { useToast } from '@/hooks/use-toast';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
   Target, TrendingUp, TrendingDown, Minus, Save, Lightbulb,
   DollarSign, Plus, Trash2, CheckCircle2, AlertCircle, Wallet,
+  CalendarDays, Check, CircleDashed,
 } from 'lucide-react';
 
 export default function PlanejamentoPage() {
@@ -81,6 +83,117 @@ export default function PlanejamentoPage() {
   const receitaTotal = useMemo(() => {
     return (fontesReceita || []).filter((f: any) => f.ativo).reduce((s: number, f: any) => s + Number(f.valor), 0);
   }, [fontesReceita]);
+
+  // ── Contas a pagar e receber ──
+  const [newContaDesc, setNewContaDesc] = useState('');
+  const [newContaValor, setNewContaValor] = useState('');
+  const [newContaTipo, setNewContaTipo] = useState<'pagar' | 'receber'>('pagar');
+  const [newContaVenc, setNewContaVenc] = useState('');
+
+  const { data: contasPR } = useQuery({
+    queryKey: ['contas-pr', user?.id, billingMonth],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('contas_pagar_receber')
+        .select('*')
+        .eq('user_id', user!.id)
+        .eq('mes', billingMonth)
+        .order('vencimento');
+      return (data || []) as any[];
+    },
+    enabled: !!user,
+  });
+
+  const addContaPRMutation = useMutation({
+    mutationFn: async (params: { descricao: string; valor: number; tipo: 'pagar' | 'receber'; vencimento: string }) => {
+      const { error } = await supabase.from('contas_pagar_receber').insert({
+        user_id: user!.id,
+        ...params,
+        mes: billingMonth,
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['contas-pr'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] });
+      setNewContaDesc('');
+      setNewContaValor('');
+      setNewContaVenc('');
+      toast({ title: 'Conta adicionada' });
+    },
+  });
+
+  const toggleContaPRMutation = useMutation({
+    mutationFn: async ({ id, pago }: { id: string; pago: boolean }) => {
+      await supabase.from('contas_pagar_receber').update({ pago }).eq('id', id);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['contas-pr'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] });
+    },
+  });
+
+  const deleteContaPRMutation = useMutation({
+    mutationFn: async (id: string) => {
+      await supabase.from('contas_pagar_receber').delete().eq('id', id);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['contas-pr'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] });
+      toast({ title: 'Conta removida' });
+    },
+  });
+
+  const totalAPagar = (contasPR || []).filter((c: any) => c.tipo === 'pagar' && !c.pago).reduce((s: number, c: any) => s + Number(c.valor), 0);
+  const totalAReceber = (contasPR || []).filter((c: any) => c.tipo === 'receber' && !c.pago).reduce((s: number, c: any) => s + Number(c.valor), 0);
+
+  // ── Saldo anterior (de todas as contas débito) ──
+  const { data: saldoAtual } = useQuery({
+    queryKey: ['planejamento', 'saldo-total', user?.id],
+    queryFn: async () => {
+      const { data: contasList } = await supabase.from('contas').select('id, saldo_inicial, tipo').eq('user_id', user!.id);
+      if (!contasList?.length) return 0;
+      const debitAccounts = contasList.filter(c => c.tipo === 'debito');
+      let total = debitAccounts.reduce((s: number, c: any) => s + (c.saldo_inicial || 0), 0);
+      for (const conta of debitAccounts) {
+        const { data: txs } = await supabase.from('transacoes').select('valor, tipo').eq('conta_id', conta.id).eq('user_id', user!.id).eq('ignorar_dashboard', false);
+        if (txs) {
+          for (const t of txs) {
+            total += t.tipo === 'receita' ? Number(t.valor) : -Number(t.valor);
+          }
+        }
+      }
+      return total;
+    },
+    enabled: !!user,
+  });
+
+  // ── Transações do mês (receitas p/ saldo anterior) ──
+  const { data: transacoesMes } = useQuery({
+    queryKey: ['planejamento', 'transacoes-mes', user?.id, billingMonth],
+    queryFn: async () => {
+      const startDate = `${year}-${String(month + 1).padStart(2, '0')}-01`;
+      const endDate = new Date(year, month + 1, 0).toISOString().substring(0, 10);
+      const { data: byComp } = await supabase
+        .from('transacoes')
+        .select('valor, tipo')
+        .eq('user_id', user!.id)
+        .eq('ignorar_dashboard', false)
+        .eq('mes_competencia', billingMonth);
+      const { data: byDate } = await supabase
+        .from('transacoes')
+        .select('valor, tipo')
+        .eq('user_id', user!.id)
+        .eq('ignorar_dashboard', false)
+        .is('mes_competencia', null)
+        .gte('data', startDate)
+        .lte('data', endDate);
+      return [...(byComp || []), ...(byDate || [])];
+    },
+    enabled: !!user,
+  });
+
+  const totalReceitas = (transacoesMes || []).filter((t: any) => t.tipo === 'receita').reduce((s: number, t: any) => s + Number(t.valor), 0);
 
   // ── Transações do ano para médias ──
   const { data: transacoesAno } = useQuery({
@@ -232,7 +345,7 @@ export default function PlanejamentoPage() {
     <div className="space-y-6 animate-fade-in">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">Planejamento</h1>
-        <MonthSelector month={month} year={year} onMonthChange={setMonth} onYearChange={setYear} />
+        <MonthSelector month={month} year={year} onChange={(m, y) => { setMonth(m); setYear(y); }} />
       </div>
 
       {/* ── Fontes de Receita ── */}
@@ -303,8 +416,117 @@ export default function PlanejamentoPage() {
         </CardContent>
       </Card>
 
+      {/* ── Contas a Pagar e Receber ── */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-lg flex items-center gap-2">
+            <CalendarDays className="h-5 w-5" />
+            Contas a Pagar e Receber — {getMonthName(month)}/{year}
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {/* Lista */}
+          <div className="space-y-2">
+            {(contasPR || []).map((c: any) => (
+              <div key={c.id} className={`flex items-center justify-between p-3 rounded-lg border ${c.pago ? 'bg-muted/50 opacity-60' : 'bg-background'}`}>
+                <div className="flex items-center gap-3">
+                  <button
+                    onClick={() => toggleContaPRMutation.mutate({ id: c.id, pago: !c.pago })}
+                    className={`h-5 w-5 rounded-full border-2 flex items-center justify-center transition-colors ${c.pago ? 'border-emerald-500 bg-emerald-500' : 'border-muted-foreground'}`}
+                  >
+                    {c.pago && <Check className="h-3 w-3 text-white" />}
+                  </button>
+                  <div>
+                    <span className={`font-medium ${c.pago ? 'line-through' : ''}`}>{c.descricao}</span>
+                    <p className="text-xs text-muted-foreground">
+                      Vence: {c.vencimento.split('-').reverse().join('/')}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Badge variant="outline" className={c.tipo === 'pagar' ? 'text-destructive border-destructive' : 'text-emerald-600 border-emerald-600'}>
+                    {c.tipo === 'pagar' ? 'Pagar' : 'Receber'}
+                  </Badge>
+                  <span className={`font-semibold ${c.tipo === 'pagar' ? 'text-destructive' : 'text-emerald-600'}`}>
+                    {formatCurrency(c.valor)}
+                  </span>
+                  <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => deleteContaPRMutation.mutate(c.id)}>
+                    <Trash2 className="h-3 w-3" />
+                  </Button>
+                </div>
+              </div>
+            ))}
+            {(!contasPR || contasPR.length === 0) && (
+              <p className="text-sm text-muted-foreground text-center py-3">Nenhuma conta cadastrada para este mês</p>
+            )}
+          </div>
+
+          {/* Adicionar nova conta */}
+          <div className="flex gap-2 flex-wrap">
+            <Input
+              placeholder="Descrição"
+              value={newContaDesc}
+              onChange={e => setNewContaDesc(e.target.value)}
+              className="flex-1 min-w-[150px]"
+            />
+            <Input
+              type="number"
+              placeholder="Valor"
+              value={newContaValor}
+              onChange={e => setNewContaValor(e.target.value)}
+              className="w-28"
+            />
+            <Input
+              type="date"
+              value={newContaVenc}
+              onChange={e => setNewContaVenc(e.target.value)}
+              className="w-36"
+            />
+            <Select value={newContaTipo} onValueChange={(v: 'pagar' | 'receber') => setNewContaTipo(v)}>
+              <SelectTrigger className="w-28">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="pagar">Pagar</SelectItem>
+                <SelectItem value="receber">Receber</SelectItem>
+              </SelectContent>
+            </Select>
+            <Button
+              size="sm"
+              disabled={!newContaDesc || !newContaValor || !newContaVenc}
+              onClick={() => addContaPRMutation.mutate({
+                descricao: newContaDesc,
+                valor: Number(newContaValor),
+                tipo: newContaTipo,
+                vencimento: newContaVenc,
+              })}
+            >
+              <Plus className="h-4 w-4" />
+            </Button>
+          </div>
+
+          {/* Totais */}
+          {(contasPR || []).length > 0 && (
+            <div className="flex justify-between items-center pt-3 border-t text-sm">
+              <div className="flex gap-4">
+                <span>A pagar: <span className="font-semibold text-destructive">{formatCurrency(totalAPagar)}</span></span>
+                <span>A receber: <span className="font-semibold text-emerald-600">{formatCurrency(totalAReceber)}</span></span>
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
       {/* ── Resumo do Mês ── */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+        <Card>
+          <CardContent className="pt-4 pb-4">
+            <p className="text-xs text-muted-foreground">Saldo Anterior</p>
+            <p className={`text-lg font-bold ${(saldoAtual || 0) - totalReceitas + totalGasto >= 0 ? 'text-foreground' : 'text-destructive'}`}>
+              {formatCurrency((saldoAtual || 0) - totalReceitas + totalGasto)}
+            </p>
+          </CardContent>
+        </Card>
         <Card>
           <CardContent className="pt-4 pb-4">
             <p className="text-xs text-muted-foreground">Receita</p>
@@ -323,12 +545,13 @@ export default function PlanejamentoPage() {
             <p className="text-lg font-bold">{totalPlanejado > 0 ? formatCurrency(totalPlanejado) : '—'}</p>
           </CardContent>
         </Card>
-        <Card>
+        <Card className="border-2 border-primary/30">
           <CardContent className="pt-4 pb-4">
-            <p className="text-xs text-muted-foreground">Sobra estimada</p>
-            <p className={`text-lg font-bold ${receitaTotal - totalGasto >= 0 ? 'text-emerald-600' : 'text-destructive'}`}>
-              {formatCurrency(receitaTotal - totalGasto)}
+            <p className="text-xs text-muted-foreground">Disponível p/ Zerar</p>
+            <p className={`text-lg font-bold ${((saldoAtual || 0) + totalAReceber - totalAPagar) >= 0 ? 'text-emerald-600' : 'text-destructive'}`}>
+              {formatCurrency((saldoAtual || 0) + totalAReceber - totalAPagar)}
             </p>
+            <p className="text-xs text-muted-foreground">Saldo + a receber - a pagar</p>
           </CardContent>
         </Card>
       </div>

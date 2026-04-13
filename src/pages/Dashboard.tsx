@@ -220,16 +220,35 @@ export default function DashboardPage() {
     enabled: !!user,
   });
 
-  const { receitaBase: receitaFontes } = useFontesReceita();
-  const receita = receitaFontes;
+  const { receitaBase } = useFontesReceita();
   const reserva = config?.reserva_minima || 2000;
 
   const totalDespesas = transacoesMes?.filter(t => t.tipo === 'despesa').reduce((s, t) => s + Number(t.valor), 0) || 0;
   const totalReceitas = transacoesMes?.filter(t => t.tipo === 'receita').reduce((s, t) => s + Number(t.valor), 0) || 0;
-  // Use the greater of configured income or actual income to avoid double-counting
-  const receitaEfetiva = Math.max(receita, totalReceitas);
-  const saldoProjetado = receitaEfetiva - totalDespesas;
-  const percentGasto = receitaEfetiva > 0 ? (totalDespesas / receitaEfetiva) * 100 : 0;
+
+  // Contas a pagar/receber pendentes do mês
+  const { data: contasPR } = useQuery({
+    queryKey: ['dashboard', 'contas-pr', user?.id, billingMonth],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('contas_pagar_receber')
+        .select('*')
+        .eq('user_id', user!.id)
+        .eq('mes', billingMonth)
+        .eq('pago', false);
+      return data || [];
+    },
+    enabled: !!user,
+  });
+
+  const totalAPagar = (contasPR || []).filter((c: any) => c.tipo === 'pagar').reduce((s: number, c: any) => s + Number(c.valor), 0);
+  const totalAReceber = (contasPR || []).filter((c: any) => c.tipo === 'receber').reduce((s: number, c: any) => s + Number(c.valor), 0);
+
+  // Saldo anterior = saldo atual - receitas do mês + despesas do mês (o que sobrou antes deste mês)
+  const saldoAnterior = (saldoAtual || 0) - totalReceitas + totalDespesas;
+  // Disponível = saldo anterior + receitas + a receber - despesas - a pagar
+  const disponivel = saldoAnterior + totalReceitas + totalAReceber - totalDespesas - totalAPagar;
+  const percentGasto = totalReceitas > 0 ? (totalDespesas / totalReceitas) * 100 : (totalDespesas > 0 ? 100 : 0);
 
   const categorias = transacoesMes
     ?.filter(t => t.tipo === 'despesa')
@@ -277,36 +296,41 @@ export default function DashboardPage() {
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <Card>
+        <Card className="cursor-pointer hover:bg-muted/50 transition-colors" onClick={() => navigate('/transacoes?tipo=receita')}>
           <CardContent className="p-4">
-            <p className="text-sm text-muted-foreground">Receita Base</p>
-            <p className="text-2xl font-bold text-success">{formatCurrency(receita)}</p>
-            <p className="text-xs text-muted-foreground">Configurada</p>
+            <p className="text-sm text-muted-foreground">Receitas do Mês</p>
+            <p className="text-2xl font-bold text-success">{formatCurrency(totalReceitas)}</p>
+            <p className="text-xs text-muted-foreground">{transacoesMes?.filter(t => t.tipo === 'receita').length || 0} transações</p>
           </CardContent>
         </Card>
-        {totalReceitas > 0 && (
-          <Card className="cursor-pointer hover:bg-muted/50 transition-colors" onClick={() => navigate('/transacoes?tipo=receita')}>
-            <CardContent className="p-4">
-              <p className="text-sm text-muted-foreground">Receitas do Mês</p>
-              <p className="text-2xl font-bold text-success">{formatCurrency(totalReceitas)}</p>
-              <p className="text-xs text-muted-foreground">{transacoesMes?.filter(t => t.tipo === 'receita').length} transações</p>
-            </CardContent>
-          </Card>
-        )}
         <Card className="cursor-pointer hover:bg-muted/50 transition-colors" onClick={() => navigate('/transacoes?tipo=despesa')}>
           <CardContent className="p-4">
             <p className="text-sm text-muted-foreground">Despesas</p>
             <p className="text-2xl font-bold text-destructive">{formatCurrency(totalDespesas)}</p>
+            <p className="text-xs text-muted-foreground">{percentGasto.toFixed(1)}% da receita</p>
+            <Progress value={Math.min(percentGasto, 100)} className="mt-2" />
           </CardContent>
         </Card>
         <Card>
           <CardContent className="p-4">
-            <p className="text-sm text-muted-foreground">Saldo Projetado</p>
-            <p className={`text-2xl font-bold ${saldoProjetado >= reserva ? 'text-success' : 'text-destructive'}`}>
-              {formatCurrency(saldoProjetado)}
+            <p className="text-sm text-muted-foreground">Saldo Atual</p>
+            <p className={`text-2xl font-bold ${(saldoAtual || 0) >= 0 ? 'text-success' : 'text-destructive'}`}>
+              {formatCurrency(saldoAtual || 0)}
             </p>
-            <p className="text-xs text-muted-foreground">{percentGasto.toFixed(1)}% da receita</p>
-            <Progress value={Math.min(percentGasto, 100)} className="mt-2" />
+            <p className="text-xs text-muted-foreground">Todas as contas</p>
+          </CardContent>
+        </Card>
+        <Card className="cursor-pointer hover:bg-muted/50 transition-colors" onClick={() => navigate('/planejamento')}>
+          <CardContent className="p-4">
+            <p className="text-sm text-muted-foreground">Disponível no Mês</p>
+            <p className={`text-2xl font-bold ${disponivel >= 0 ? 'text-success' : 'text-destructive'}`}>
+              {formatCurrency(disponivel)}
+            </p>
+            <p className="text-xs text-muted-foreground">
+              {saldoAnterior >= 0 ? '+' : ''}{formatCurrency(saldoAnterior)} anterior
+              {totalAPagar > 0 && ` · ${formatCurrency(totalAPagar)} a pagar`}
+              {totalAReceber > 0 && ` · ${formatCurrency(totalAReceber)} a receber`}
+            </p>
           </CardContent>
         </Card>
       </div>
@@ -395,10 +419,10 @@ export default function DashboardPage() {
 
 
         <AiInsightsCard context={{
-          receita,
+          receita: receitaBase,
           totalDespesas,
           totalReceitas,
-          saldoProjetado,
+          disponivel,
           percentGasto,
           reserva,
           totalEssencial,
@@ -415,8 +439,8 @@ export default function DashboardPage() {
             const trends = detectSpendingTrends(allTransactions);
             const anomalies = detectAnomalies(allTransactions);
             const recurring = detectRecurringCharges(allTransactions);
-            const health = calculateFinancialHealth({ transactions: allTransactions, receitaBase: receita, reservaMinima: reserva, saldoAtual: saldoAtual || 0 });
-            const commitment = calculateIncomeCommitment({ transactions: allTransactions, receitaBase: receita });
+            const health = calculateFinancialHealth({ transactions: allTransactions, receitaBase, reservaMinima: reserva, saldoAtual: saldoAtual || 0 });
+            const commitment = calculateIncomeCommitment({ transactions: allTransactions, receitaBase });
             return {
               spendingTrends: trends.filter(t => t.tendencia !== 'estavel').slice(0, 5),
               anomalies: anomalies.slice(0, 3),
@@ -432,14 +456,14 @@ export default function DashboardPage() {
         {allTransactions && allTransactions.length > 0 && (
           <SmartInsightsCard
             transactions={allTransactions}
-            receitaBase={receita}
+            receitaBase={receitaBase}
           />
         )}
 
         {allTransactions && allTransactions.length > 0 && (
           <FinancialHealthCard
             transactions={allTransactions}
-            receitaBase={receita}
+            receitaBase={receitaBase}
             reservaMinima={reserva}
             saldoAtual={saldoAtual || 0}
           />

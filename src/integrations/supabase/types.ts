@@ -106,6 +106,42 @@ export type Database = {
         }
         Relationships: []
       }
+      contas_pagar_receber: {
+        Row: {
+          id: string
+          user_id: string
+          descricao: string
+          valor: number
+          tipo: 'pagar' | 'receber'
+          vencimento: string
+          pago: boolean
+          mes: string
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          descricao: string
+          valor: number
+          tipo: 'pagar' | 'receber'
+          vencimento: string
+          pago?: boolean
+          mes: string
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          descricao?: string
+          valor?: number
+          tipo?: 'pagar' | 'receber'
+          vencimento?: string
+          pago?: boolean
+          mes?: string
+          created_at?: string
+        }
+        Relationships: []
+      }
       configuracoes: {
         Row: {
           created_at: string

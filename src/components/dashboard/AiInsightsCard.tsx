@@ -12,7 +12,7 @@ interface AiInsightsCardProps {
     receita: number;
     totalDespesas: number;
     totalReceitas: number;
-    saldoProjetado: number;
+    disponivel: number;
     percentGasto: number;
     reserva: number;
     totalEssencial: number;
