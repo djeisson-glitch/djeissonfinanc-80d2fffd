@@ -181,14 +181,34 @@ const MP_PARCELA_REGEX = /^Parcela\s+(\d+)\s+de\s+(\d+)$/;
 const DATE_DD_MM = /^(\d{2})\/(\d{2})$/;
 const DATE_DD_MM_YYYY = /(\d{2})\/(\d{2})\/(\d{4})/;
 
-function parseDate(dateStr: string, defaultYear?: number): string {
+/**
+ * Parse date string to ISO format.
+ * For DD/MM (no year), uses defaultYear but adjusts to previous year
+ * if the resulting date falls AFTER the fatura due date (dueMonth, 0-indexed).
+ * This is critical for MP PDFs where only DD/MM is provided.
+ */
+function parseDate(dateStr: string, defaultYear?: number, dueMonth?: number): string {
   const full = dateStr.match(DATE_DD_MM_YYYY);
   if (full) {
     return `${full[3]}-${full[2].padStart(2, '0')}-${full[1].padStart(2, '0')}`;
   }
   const short = dateStr.match(DATE_DD_MM);
   if (short && defaultYear) {
-    return `${defaultYear}-${short[2].padStart(2, '0')}-${short[1].padStart(2, '0')}`;
+    const mm = short[2].padStart(2, '0');
+    const dd = short[1].padStart(2, '0');
+    let year = defaultYear;
+    // If we know the fatura due month, check if this date would be in the future
+    // relative to the billing period. Credit card transactions can't be after the due date.
+    if (dueMonth !== undefined) {
+      const txMonth = parseInt(short[2]) - 1; // 0-indexed
+      // Last day of the due month = end of billing period
+      const dueEndOfMonth = new Date(defaultYear, dueMonth + 1, 0);
+      const candidateDate = new Date(defaultYear, txMonth, parseInt(short[1]));
+      if (candidateDate > dueEndOfMonth) {
+        year = defaultYear - 1;
+      }
+    }
+    return `${year}-${mm}-${dd}`;
   }
   return dateStr;
 }
@@ -382,7 +402,7 @@ function parseMercadoPago(
       const tipo = isCredit ? 'receita' as const : 'despesa' as const;
       const absValor = Math.abs(valor);
 
-      const isoDate = parseDate(dateStr, dueYear);
+      const isoDate = parseDate(dateStr, dueYear, detectedDueDate?.month);
       const baseHash = generateHash(isoDate, descricao, absValor, defaultPessoa, parcela_atual, parcela_total);
       const count = hashCounts.get(baseHash) || 0;
       hashCounts.set(baseHash, count + 1);
