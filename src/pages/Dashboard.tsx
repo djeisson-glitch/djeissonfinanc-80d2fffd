@@ -140,15 +140,29 @@ export default function DashboardPage() {
   const { data: parcelasAno } = useQuery({
     queryKey: ['dashboard', 'parcelas-ano', user?.id, year],
     queryFn: async () => {
-      const { data } = await supabase
+      // Use mes_competencia (billing period) when available, falling back to data (purchase date).
+      // For credit card transactions, mes_competencia is the correct field — data is the original
+      // purchase date which can be months/years before the billing period.
+      const { data: withCompetencia } = await supabase
         .from('transacoes')
         .select('*')
         .eq('user_id', user!.id)
         .eq('ignorar_dashboard', false)
         .not('parcela_total', 'is', null)
+        .gte('mes_competencia', `${year}-01`)
+        .lte('mes_competencia', `${year}-12`);
+
+      const { data: withoutCompetencia } = await supabase
+        .from('transacoes')
+        .select('*')
+        .eq('user_id', user!.id)
+        .eq('ignorar_dashboard', false)
+        .not('parcela_total', 'is', null)
+        .is('mes_competencia', null)
         .gte('data', `${year}-01-01`)
         .lte('data', `${year}-12-31`);
-      return data || [];
+
+      return [...(withCompetencia || []), ...(withoutCompetencia || [])];
     },
     enabled: !!user,
   });
@@ -162,7 +176,7 @@ export default function DashboardPage() {
       const startDate = `${oneYearAgo.getFullYear()}-${String(oneYearAgo.getMonth() + 1).padStart(2, '0')}-01`;
       const { data } = await supabase
         .from('transacoes')
-        .select('data, descricao, valor, tipo, categoria, categoria_id, parcela_atual, parcela_total, grupo_parcela, ignorar_dashboard, essencial, conta_id')
+        .select('data, mes_competencia, descricao, valor, tipo, categoria, categoria_id, parcela_atual, parcela_total, grupo_parcela, ignorar_dashboard, essencial, conta_id')
         .eq('user_id', user!.id)
         .gte('data', startDate);
       return (data || []) as TransactionRecord[];

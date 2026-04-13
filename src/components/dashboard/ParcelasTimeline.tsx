@@ -7,6 +7,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 
 interface Parcela {
   data: string;
+  mes_competencia: string | null;
   valor: number;
   descricao: string;
   parcela_atual: number | null;
@@ -37,16 +38,25 @@ export function ParcelasTimeline({ parcelas }: ParcelasTimelineProps) {
     const currentYear = now.getFullYear();
     const currentMonth = now.getMonth(); // 0-based
 
-    // Build map from parcelas data
+    // Build map from parcelas data, using mes_competencia (billing period) when available.
+    // For credit card transactions, mes_competencia correctly reflects when the charge
+    // appears on the fatura. The data field is the original purchase date, which may be
+    // months/years earlier for installment purchases.
     const porMes: Record<string, { total: number; items: Parcela[] }> = {};
     let maxYear = currentYear;
     (parcelas || []).forEach(p => {
-      const d = new Date(p.data + 'T00:00:00');
-      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+      let key: string;
+      if (p.mes_competencia) {
+        key = p.mes_competencia; // e.g. "2026-01"
+      } else {
+        const d = new Date(p.data + 'T00:00:00');
+        key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+      }
       if (!porMes[key]) porMes[key] = { total: 0, items: [] };
       porMes[key].total += Number(p.valor);
       porMes[key].items.push(p);
-      if (d.getFullYear() > maxYear) maxYear = d.getFullYear();
+      const keyYear = parseInt(key.split('-')[0]);
+      if (keyYear > maxYear) maxYear = keyYear;
     });
 
     // Generate months from Jan of current year through Dec of last year with parcelas

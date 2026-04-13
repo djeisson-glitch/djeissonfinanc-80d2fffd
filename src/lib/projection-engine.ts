@@ -11,6 +11,7 @@
 
 export interface TransactionRecord {
   data: string;
+  mes_competencia?: string | null;
   descricao: string;
   valor: number;
   tipo: string;
@@ -120,22 +121,25 @@ export function detectActiveInstallments(transactions: TransactionRecord[]): Ins
     const sorted = txs.sort((a, b) => (b.parcela_atual || 0) - (a.parcela_atual || 0));
     const latest = sorted[0];
     if (!latest.parcela_atual || !latest.parcela_total) continue;
-    
+
     const remaining = latest.parcela_total - latest.parcela_atual;
     if (remaining <= 0) continue;
-    
-    // Calculate end month
-    const latestDate = new Date(latest.data + 'T00:00:00');
-    const endDate = new Date(latestDate);
-    endDate.setMonth(endDate.getMonth() + remaining);
-    
+
+    // Use mes_competencia (billing period) when available, NOT the purchase date.
+    // For credit card installments, the purchase date (data) can be months/years before
+    // the billing period, causing endMonth calculations to be wildly off.
+    const baseMonth = latest.mes_competencia || latest.data.substring(0, 7);
+    const [baseY, baseM] = baseMonth.split('-').map(Number);
+    const startDate = new Date(baseY, baseM - 1, 1);
+    const endDate = new Date(baseY, baseM - 1 + remaining, 1);
+
     projections.push({
       descricao: latest.descricao.replace(/\s*\(auto-projetada\)/, '').trim(),
       valor: latest.valor,
       categoria: latest.categoria,
       categoria_id: latest.categoria_id,
-      startMonth: latest.data.substring(0, 7),
-      endMonth: endDate.toISOString().split('T')[0].substring(0, 7),
+      startMonth: baseMonth,
+      endMonth: `${endDate.getFullYear()}-${String(endDate.getMonth() + 1).padStart(2, '0')}`,
       remaining,
     });
   }
