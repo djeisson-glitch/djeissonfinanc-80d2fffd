@@ -312,7 +312,7 @@ export default function DividasPage() {
       if (
         descLower.includes('crédito por parcelamento') ||
         descLower.includes('credito por parcelamento') ||
-        descLower.includes('pagamento da fatura')
+        /pagamento\s+(d[ae]\s+)?fatura/.test(descLower)
       ) {
         continue;
       }

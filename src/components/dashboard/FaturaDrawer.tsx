@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
@@ -6,8 +6,10 @@ import { formatCurrency, getMonthName } from '@/lib/format';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Separator } from '@/components/ui/separator';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
-import { PenLine, AlertTriangle } from 'lucide-react';
+import { PenLine, AlertTriangle, Calendar, Tag, Layers, ChevronDown, ChevronUp } from 'lucide-react';
+import { getCategoriaColor } from '@/types/database.types';
 import { ManualTransactionModal } from '@/components/contas/ManualTransactionModal';
 import { useFaturaAcumulada } from '@/hooks/useFaturaAcumulada';
 
@@ -26,6 +28,17 @@ export function FaturaDrawer({ open, onOpenChange, cardId, cardName, start, end,
   const { user } = useAuth();
   const billingPeriod = `${year}-${String(month + 1).padStart(2, '0')}`;
   const [manualTxOpen, setManualTxOpen] = useState(false);
+  const [groupBy, setGroupBy] = useState<'data' | 'categoria' | 'parcelamento'>('data');
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
+
+  const toggleGroup = (key: string) => {
+    setExpandedGroups(prev => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  };
 
   const { data: faturaAcumulada } = useFaturaAcumulada(
     open ? [cardId] : [],
@@ -72,6 +85,61 @@ export function FaturaDrawer({ open, onOpenChange, cardId, cardName, start, end,
   }, {} as Record<string, number>);
 
   const catRanking = Object.entries(porCategoria).sort((a, b) => b[1] - a[1]);
+
+  // Group expenses by category
+  const despesasPorCategoria = useMemo(() => {
+    const groups: Record<string, { categoria: string; total: number; count: number; items: typeof despesas }> = {};
+    for (const t of despesas) {
+      const cat = t.categoria || 'Outros';
+      if (!groups[cat]) groups[cat] = { categoria: cat, total: 0, count: 0, items: [] };
+      groups[cat].total += Number(t.valor);
+      groups[cat].count += 1;
+      groups[cat].items.push(t);
+    }
+    return Object.values(groups).sort((a, b) => b.total - a.total);
+  }, [despesas]);
+
+  // Group expenses by parcelamento (grupo_parcela)
+  const despesasPorParcelamento = useMemo(() => {
+    const groups: Record<string, { key: string; descricao: string; total: number; count: number; items: typeof despesas; first: any }> = {};
+    const standalone: typeof despesas = [];
+    for (const t of despesas) {
+      if (t.grupo_parcela) {
+        if (!groups[t.grupo_parcela]) {
+          groups[t.grupo_parcela] = {
+            key: t.grupo_parcela,
+            descricao: t.descricao,
+            total: 0,
+            count: 0,
+            items: [],
+            first: t,
+          };
+        }
+        groups[t.grupo_parcela].total += Number(t.valor);
+        groups[t.grupo_parcela].count += 1;
+        groups[t.grupo_parcela].items.push(t);
+      } else {
+        standalone.push(t);
+      }
+    }
+    const groupArray = Object.values(groups).sort((a, b) => b.total - a.total);
+    return { groups: groupArray, standalone };
+  }, [despesas]);
+
+  const renderTxRow = (t: any) => (
+    <div key={t.id} className="flex items-center justify-between py-1.5 text-sm border-b border-border/50">
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2">
+          <span className="text-muted-foreground text-xs shrink-0">
+            {new Date(t.data + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}
+          </span>
+          <span className="truncate">{t.descricao}</span>
+        </div>
+        <span className="text-xs text-muted-foreground">{t.categoria}</span>
+      </div>
+      <span className="font-medium text-destructive shrink-0 ml-2">{formatCurrency(Number(t.valor))}</span>
+    </div>
+  );
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -152,24 +220,115 @@ export function FaturaDrawer({ open, onOpenChange, cardId, cardName, start, end,
 
           <Separator />
 
-          <p className="text-xs font-medium text-muted-foreground">Transações do mês</p>
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-xs font-medium text-muted-foreground">Transações do mês</p>
+            <div className="flex items-center gap-1">
+              <Button
+                size="sm"
+                variant={groupBy === 'data' ? 'default' : 'outline'}
+                className="h-6 px-1.5 text-[10px] gap-1"
+                onClick={() => { setGroupBy('data'); setExpandedGroups(new Set()); }}
+              >
+                <Calendar className="h-3 w-3" /> Data
+              </Button>
+              <Button
+                size="sm"
+                variant={groupBy === 'categoria' ? 'default' : 'outline'}
+                className="h-6 px-1.5 text-[10px] gap-1"
+                onClick={() => { setGroupBy('categoria'); setExpandedGroups(new Set()); }}
+              >
+                <Tag className="h-3 w-3" /> Categoria
+              </Button>
+              <Button
+                size="sm"
+                variant={groupBy === 'parcelamento' ? 'default' : 'outline'}
+                className="h-6 px-1.5 text-[10px] gap-1"
+                onClick={() => { setGroupBy('parcelamento'); setExpandedGroups(new Set()); }}
+              >
+                <Layers className="h-3 w-3" /> Parcelas
+              </Button>
+            </div>
+          </div>
+
           <div className="space-y-1">
-            {despesas.map(t => (
-              <div key={t.id} className="flex items-center justify-between py-1.5 text-sm border-b border-border/50">
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <span className="text-muted-foreground text-xs shrink-0">
-                      {new Date(t.data + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}
-                    </span>
-                    <span className="truncate">{t.descricao}</span>
-                  </div>
-                  <span className="text-xs text-muted-foreground">{t.categoria}</span>
-                </div>
-                <span className="font-medium text-destructive shrink-0 ml-2">{formatCurrency(Number(t.valor))}</span>
-              </div>
-            ))}
             {despesas.length === 0 && (
               <p className="text-sm text-muted-foreground py-4 text-center">Nenhuma transação nesta fatura</p>
+            )}
+
+            {groupBy === 'data' && despesas.map(t => renderTxRow(t))}
+
+            {groupBy === 'categoria' && despesasPorCategoria.map(g => {
+              const isOpen = expandedGroups.has(`cat-${g.categoria}`);
+              const catColor = getCategoriaColor(g.categoria);
+              return (
+                <div key={g.categoria} className="border-b border-border/50">
+                  <button
+                    type="button"
+                    onClick={() => toggleGroup(`cat-${g.categoria}`)}
+                    className="w-full flex items-center gap-2 py-2 hover:bg-muted/30 transition-colors text-left"
+                  >
+                    <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: catColor }} />
+                    <span className="text-sm font-medium flex-1 truncate">{g.categoria}</span>
+                    <Badge variant="outline" className="text-[10px] px-1 py-0 h-4">{g.count}</Badge>
+                    <span className="text-sm font-semibold text-destructive">{formatCurrency(g.total)}</span>
+                    {isOpen ? <ChevronUp className="h-3.5 w-3.5 text-muted-foreground" /> : <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />}
+                  </button>
+                  {isOpen && (
+                    <div className="pl-4 pb-1 bg-muted/10">
+                      {g.items.map(t => renderTxRow(t))}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+
+            {groupBy === 'parcelamento' && (
+              <>
+                {despesasPorParcelamento.groups.length > 0 && (
+                  <>
+                    <p className="text-[10px] font-medium text-muted-foreground uppercase mt-1">
+                      Parcelamentos
+                    </p>
+                    {despesasPorParcelamento.groups.map(g => {
+                      const isOpen = expandedGroups.has(`parc-${g.key}`);
+                      const t = g.first;
+                      const baseDescricao = t.descricao.replace(/\s*\d{1,2}\/\d{1,2}\s*$/, '');
+                      return (
+                        <div key={g.key} className="border-b border-border/50">
+                          <button
+                            type="button"
+                            onClick={() => toggleGroup(`parc-${g.key}`)}
+                            className="w-full flex items-center gap-2 py-2 hover:bg-muted/30 transition-colors text-left"
+                          >
+                            <Layers className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                            <div className="flex-1 min-w-0">
+                              <span className="text-sm font-medium truncate block">{baseDescricao}</span>
+                              <span className="text-[10px] text-muted-foreground">
+                                {g.count}× nesta fatura · {t.categoria}
+                              </span>
+                            </div>
+                            <span className="text-sm font-semibold text-destructive">{formatCurrency(g.total)}</span>
+                            {isOpen ? <ChevronUp className="h-3.5 w-3.5 text-muted-foreground" /> : <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />}
+                          </button>
+                          {isOpen && (
+                            <div className="pl-4 pb-1 bg-muted/10">
+                              {g.items.map(it => renderTxRow(it))}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </>
+                )}
+                {despesasPorParcelamento.standalone.length > 0 && (
+                  <>
+                    <p className="text-[10px] font-medium text-muted-foreground uppercase mt-2">
+                      Compras avulsas
+                    </p>
+                    {despesasPorParcelamento.standalone.map(t => renderTxRow(t))}
+                  </>
+                )}
+              </>
             )}
           </div>
 

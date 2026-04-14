@@ -23,9 +23,10 @@ function isPaymentDescription(desc: string): boolean {
   if (isDevolution) return false;
   return (
     d.includes('pag fat') ||
-    /pagamento\s+(da\s+)?fatura/.test(d) ||
+    /pagamento\s+(d[ae]\s+)?fatura/.test(d) ||
     d.includes('crédito por parcelamento') ||
-    d.includes('credito por parcelamento')
+    d.includes('credito por parcelamento') ||
+    d.includes('pagamento recebido')
   );
 }
 

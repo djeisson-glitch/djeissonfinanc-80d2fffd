@@ -16,7 +16,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { useToast } from '@/hooks/use-toast';
-import { Pencil, Trash2, Search, Download, Copy, EyeOff, Filter, ChevronDown, ChevronUp } from 'lucide-react';
+import { Pencil, Trash2, Search, Download, Copy, EyeOff, Filter, ChevronDown, ChevronUp, Layers, CreditCard, Tag, Calendar } from 'lucide-react';
 import { Checkbox } from '@/components/ui/checkbox';
 import { exportCSV, copyToClipboard } from '@/lib/export';
 import { MonthSelector } from '@/components/MonthSelector';
@@ -43,6 +43,17 @@ export default function TransacoesPage() {
   const [recatTransactions, setRecatTransactions] = useState<any[]>([]);
   const [recatCategoria, setRecatCategoria] = useState<{ nome: string; id: string | null; essencial: boolean }>({ nome: '', id: null, essencial: false });
   const [recatOpen, setRecatOpen] = useState(false);
+  const [groupBy, setGroupBy] = useState<'dia' | 'categoria' | 'parcelamento' | 'cartao'>('dia');
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
+
+  const toggleGroup = (key: string) => {
+    setExpandedGroups(prev => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  };
 
   // Read URL params on mount
   useEffect(() => {
@@ -207,6 +218,84 @@ export default function TransacoesPage() {
     return Object.entries(groups).sort((a, b) => b[0].localeCompare(a[0]));
   }, [filtered]);
 
+  // Group filtered transactions by category
+  const groupedByCategoria = useMemo(() => {
+    const groups: Record<string, { categoria: string; total: number; count: number; transactions: typeof filtered }> = {};
+    for (const t of filtered) {
+      const cat = t.categoria || 'Outros';
+      if (!groups[cat]) groups[cat] = { categoria: cat, total: 0, count: 0, transactions: [] };
+      const valor = Number(t.valor);
+      groups[cat].total += t.tipo === 'receita' ? valor : -valor;
+      groups[cat].count += 1;
+      groups[cat].transactions.push(t);
+    }
+    return Object.values(groups).sort((a, b) => Math.abs(b.total) - Math.abs(a.total));
+  }, [filtered]);
+
+  // Group filtered transactions by parcelamento (grupo_parcela)
+  const groupedByParcelamento = useMemo(() => {
+    const groups: Record<string, { key: string; descricao: string; total: number; count: number; transactions: typeof filtered; first: any; isParcela: boolean }> = {};
+    const standalone: typeof filtered = [];
+
+    for (const t of filtered) {
+      if (t.grupo_parcela) {
+        if (!groups[t.grupo_parcela]) {
+          groups[t.grupo_parcela] = {
+            key: t.grupo_parcela,
+            descricao: t.descricao,
+            total: 0,
+            count: 0,
+            transactions: [],
+            first: t,
+            isParcela: !!(t.parcela_atual && t.parcela_total),
+          };
+        }
+        const valor = Number(t.valor);
+        groups[t.grupo_parcela].total += t.tipo === 'receita' ? valor : -valor;
+        groups[t.grupo_parcela].count += 1;
+        groups[t.grupo_parcela].transactions.push(t);
+      } else {
+        standalone.push(t);
+      }
+    }
+
+    // Sort each group's transactions by date asc (parcela 1 first)
+    for (const g of Object.values(groups)) {
+      g.transactions.sort((a, b) => a.data.localeCompare(b.data));
+    }
+
+    const groupArray = Object.values(groups).sort((a, b) => Math.abs(b.total) - Math.abs(a.total));
+    return { groups: groupArray, standalone };
+  }, [filtered]);
+
+  // Group filtered transactions by account/card
+  const groupedByCartao = useMemo(() => {
+    const groups: Record<string, { contaId: string; nome: string; tipo: string; total: number; count: number; transactions: typeof filtered }> = {};
+    for (const t of filtered) {
+      const key = t.conta_id || 'sem-conta';
+      if (!groups[key]) {
+        const conta = contas?.find(c => c.id === t.conta_id);
+        groups[key] = {
+          contaId: key,
+          nome: conta?.nome || 'Sem conta',
+          tipo: conta?.tipo || '',
+          total: 0,
+          count: 0,
+          transactions: [],
+        };
+      }
+      const valor = Number(t.valor);
+      groups[key].total += t.tipo === 'receita' ? valor : -valor;
+      groups[key].count += 1;
+      groups[key].transactions.push(t);
+    }
+    // Sort each group's transactions by date desc
+    for (const g of Object.values(groups)) {
+      g.transactions.sort((a, b) => b.data.localeCompare(a.data));
+    }
+    return Object.values(groups).sort((a, b) => Math.abs(b.total) - Math.abs(a.total));
+  }, [filtered, contas]);
+
   // Summary totals
   const totalReceitas = filtered.filter(t => t.tipo === 'receita').reduce((s, t) => s + Number(t.valor), 0);
   const totalDespesas = filtered.filter(t => t.tipo === 'despesa').reduce((s, t) => s + Number(t.valor), 0);
@@ -229,6 +318,58 @@ export default function TransacoesPage() {
     const dayDate = date.toLocaleDateString('pt-BR', { day: '2-digit', month: 'long' });
 
     return { dayName: dayName.charAt(0).toUpperCase() + dayName.slice(1), dayDate };
+  };
+
+  const renderTransactionRow = (t: any) => {
+    const catColor = t.categoria_id ? getColor(t.categoria_id) : getCategoriaColor(t.categoria);
+    const catName = t.categoria_id ? getDisplayName(t.categoria_id) : t.categoria;
+    const contaNome = contas?.find(c => c.id === t.conta_id)?.nome;
+    const txDate = new Date(t.data + 'T12:00:00');
+
+    return (
+      <div
+        key={t.id}
+        className={`flex items-center gap-3 px-4 py-3 hover:bg-muted/30 transition-colors cursor-pointer ${t.ignorar_dashboard ? 'opacity-50' : ''}`}
+        onClick={() => { setEditingTx({ ...t, subcategoria: null }); setLearnPattern(false); }}
+      >
+        <div
+          className="w-10 h-10 rounded-full shrink-0 flex items-center justify-center"
+          style={{ backgroundColor: catColor + '20' }}
+        >
+          <div className="w-4 h-4 rounded-full" style={{ backgroundColor: catColor }} />
+        </div>
+
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-1.5">
+            {t.ignorar_dashboard && <EyeOff className="h-3 w-3 text-muted-foreground shrink-0" />}
+            <span className="text-sm font-medium truncate">{t.descricao}</span>
+          </div>
+          <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+            <span className="text-[10px] text-muted-foreground">
+              {txDate.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}
+            </span>
+            <span className="text-xs text-muted-foreground">{catName}</span>
+            {t.parcela_atual && t.parcela_total && (
+              <Badge variant="outline" className="text-[10px] px-1 py-0 h-4">
+                {t.parcela_atual}/{t.parcela_total}
+              </Badge>
+            )}
+            {contaNome && (
+              <span className="text-[10px] text-muted-foreground">{contaNome}</span>
+            )}
+            {t.pessoa && (
+              <span className="text-[10px] text-muted-foreground">{t.pessoa}</span>
+            )}
+          </div>
+        </div>
+
+        <div className="text-right shrink-0">
+          <span className={`text-sm font-semibold ${t.tipo === 'receita' ? 'text-success' : 'text-destructive'}`}>
+            {t.tipo === 'receita' ? '+' : '-'}{formatCurrency(Number(t.valor))}
+          </span>
+        </div>
+      </div>
+    );
   };
 
   return (
@@ -283,6 +424,43 @@ export default function TransacoesPage() {
           onClick={() => setShowFilters(!showFilters)}
         >
           <Filter className="h-4 w-4" />
+        </Button>
+      </div>
+
+      {/* Group by selector */}
+      <div className="flex items-center gap-1 overflow-x-auto -mx-1 px-1 pb-1">
+        <span className="text-xs text-muted-foreground shrink-0 mr-1">Agrupar:</span>
+        <Button
+          size="sm"
+          variant={groupBy === 'dia' ? 'default' : 'outline'}
+          className="h-7 px-2 text-xs gap-1 shrink-0"
+          onClick={() => { setGroupBy('dia'); setExpandedGroups(new Set()); }}
+        >
+          <Calendar className="h-3 w-3" /> Dia
+        </Button>
+        <Button
+          size="sm"
+          variant={groupBy === 'categoria' ? 'default' : 'outline'}
+          className="h-7 px-2 text-xs gap-1 shrink-0"
+          onClick={() => { setGroupBy('categoria'); setExpandedGroups(new Set()); }}
+        >
+          <Tag className="h-3 w-3" /> Categoria
+        </Button>
+        <Button
+          size="sm"
+          variant={groupBy === 'parcelamento' ? 'default' : 'outline'}
+          className="h-7 px-2 text-xs gap-1 shrink-0"
+          onClick={() => { setGroupBy('parcelamento'); setExpandedGroups(new Set()); }}
+        >
+          <Layers className="h-3 w-3" /> Parcelamento
+        </Button>
+        <Button
+          size="sm"
+          variant={groupBy === 'cartao' ? 'default' : 'outline'}
+          className="h-7 px-2 text-xs gap-1 shrink-0"
+          onClick={() => { setGroupBy('cartao'); setExpandedGroups(new Set()); }}
+        >
+          <CreditCard className="h-3 w-3" /> Cartão/Conta
         </Button>
       </div>
 
@@ -380,9 +558,9 @@ export default function TransacoesPage() {
         </div>
       )}
 
-      {/* Transaction list grouped by day */}
+      {/* Transaction list */}
       <div className="space-y-4">
-        {groupedByDay.map(([dateStr, txs]) => {
+        {groupBy === 'dia' && groupedByDay.map(([dateStr, txs]) => {
           const { dayName, dayDate } = formatDayHeader(dateStr);
           const dayTotal = txs.reduce((s, t) => s + (t.tipo === 'receita' ? Number(t.valor) : -Number(t.valor)), 0);
 
@@ -399,65 +577,184 @@ export default function TransacoesPage() {
                 </span>
               </div>
 
-              {/* Transaction cards */}
               <Card>
                 <CardContent className="p-0 divide-y divide-border">
-                  {txs.map((t) => {
-                    const catColor = t.categoria_id ? getColor(t.categoria_id) : getCategoriaColor(t.categoria);
-                    const catName = t.categoria_id ? getDisplayName(t.categoria_id) : t.categoria;
-                    const contaNome = contas?.find(c => c.id === t.conta_id)?.nome;
-
-                    return (
-                      <div
-                        key={t.id}
-                        className={`flex items-center gap-3 px-4 py-3 hover:bg-muted/30 transition-colors cursor-pointer ${t.ignorar_dashboard ? 'opacity-50' : ''}`}
-                        onClick={() => { setEditingTx({ ...t, subcategoria: null }); setLearnPattern(false); }}
-                      >
-                        {/* Category color indicator */}
-                        <div
-                          className="w-10 h-10 rounded-full shrink-0 flex items-center justify-center"
-                          style={{ backgroundColor: catColor + '20' }}
-                        >
-                          <div
-                            className="w-4 h-4 rounded-full"
-                            style={{ backgroundColor: catColor }}
-                          />
-                        </div>
-
-                        {/* Description and details */}
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-1.5">
-                            {t.ignorar_dashboard && <EyeOff className="h-3 w-3 text-muted-foreground shrink-0" />}
-                            <span className="text-sm font-medium truncate">{t.descricao}</span>
-                          </div>
-                          <div className="flex items-center gap-2 mt-0.5">
-                            <span className="text-xs text-muted-foreground">{catName}</span>
-                            {t.parcela_atual && t.parcela_total && (
-                              <Badge variant="outline" className="text-[10px] px-1 py-0 h-4">
-                                {t.parcela_atual}/{t.parcela_total}
-                              </Badge>
-                            )}
-                            {contaNome && (
-                              <span className="text-[10px] text-muted-foreground">{contaNome}</span>
-                            )}
-                            {t.pessoa && (
-                              <span className="text-[10px] text-muted-foreground">{t.pessoa}</span>
-                            )}
-                          </div>
-                        </div>
-
-                        {/* Value */}
-                        <div className="text-right shrink-0">
-                          <span className={`text-sm font-semibold ${t.tipo === 'receita' ? 'text-success' : 'text-destructive'}`}>
-                            {t.tipo === 'receita' ? '+' : '-'}{formatCurrency(Number(t.valor))}
-                          </span>
-                        </div>
-                      </div>
-                    );
-                  })}
+                  {txs.map(t => renderTransactionRow(t))}
                 </CardContent>
               </Card>
             </div>
+          );
+        })}
+
+        {groupBy === 'categoria' && groupedByCategoria.map(g => {
+          const isOpen = expandedGroups.has(`cat-${g.categoria}`);
+          const catColor = getCategoriaColor(g.categoria);
+          return (
+            <Card key={g.categoria}>
+              <button
+                type="button"
+                onClick={() => toggleGroup(`cat-${g.categoria}`)}
+                className="w-full flex items-center gap-3 px-4 py-3 hover:bg-muted/30 transition-colors text-left"
+              >
+                <div
+                  className="w-10 h-10 rounded-full shrink-0 flex items-center justify-center"
+                  style={{ backgroundColor: catColor + '20' }}
+                >
+                  <div className="w-4 h-4 rounded-full" style={{ backgroundColor: catColor }} />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-semibold truncate">{g.categoria}</span>
+                    <Badge variant="outline" className="text-[10px] px-1 py-0 h-4">{g.count}</Badge>
+                  </div>
+                  <span className="text-xs text-muted-foreground">
+                    {isOpen ? 'Toque para recolher' : 'Toque para ver transações'}
+                  </span>
+                </div>
+                <div className="text-right shrink-0 flex items-center gap-2">
+                  <span className={`text-sm font-semibold ${g.total >= 0 ? 'text-success' : 'text-destructive'}`}>
+                    {g.total >= 0 ? '+' : ''}{formatCurrency(g.total)}
+                  </span>
+                  {isOpen ? <ChevronUp className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
+                </div>
+              </button>
+              {isOpen && (
+                <CardContent className="p-0 border-t divide-y divide-border">
+                  {g.transactions.map(t => renderTransactionRow(t))}
+                </CardContent>
+              )}
+            </Card>
+          );
+        })}
+
+        {groupBy === 'parcelamento' && (
+          <>
+            {groupedByParcelamento.groups.length > 0 && (
+              <div>
+                <p className="text-xs font-medium text-muted-foreground mb-2 px-1">
+                  Parcelamentos / Recorrências ({groupedByParcelamento.groups.length})
+                </p>
+                <Card>
+                  <CardContent className="p-0 divide-y divide-border">
+                    {groupedByParcelamento.groups.map(g => {
+                      const key = `parc-${g.key}`;
+                      const isOpen = expandedGroups.has(key);
+                      const t = g.first;
+                      const catColor = t.categoria_id ? getColor(t.categoria_id) : getCategoriaColor(t.categoria);
+                      const contaNome = contas?.find(c => c.id === t.conta_id)?.nome;
+                      const lastT = g.transactions[g.transactions.length - 1];
+                      const firstDate = new Date(g.transactions[0].data + 'T12:00:00');
+                      const lastDate = new Date(lastT.data + 'T12:00:00');
+                      const baseDescricao = t.descricao.replace(/\s*\d{1,2}\/\d{1,2}\s*$/, '');
+
+                      return (
+                        <div key={g.key}>
+                          <button
+                            type="button"
+                            onClick={() => toggleGroup(key)}
+                            className="w-full flex items-center gap-3 px-4 py-3 hover:bg-muted/30 transition-colors text-left"
+                          >
+                            <div
+                              className="w-10 h-10 rounded-full shrink-0 flex items-center justify-center"
+                              style={{ backgroundColor: catColor + '20' }}
+                            >
+                              <Layers className="h-4 w-4" style={{ color: catColor }} />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-1.5">
+                                <span className="text-sm font-medium truncate">{baseDescricao}</span>
+                              </div>
+                              <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                                <Badge variant="outline" className="text-[10px] px-1 py-0 h-4">
+                                  {g.count}x
+                                </Badge>
+                                <span className="text-[10px] text-muted-foreground">
+                                  {firstDate.toLocaleDateString('pt-BR', { month: '2-digit', year: '2-digit' })}
+                                  {' → '}
+                                  {lastDate.toLocaleDateString('pt-BR', { month: '2-digit', year: '2-digit' })}
+                                </span>
+                                {contaNome && (
+                                  <span className="text-[10px] text-muted-foreground">{contaNome}</span>
+                                )}
+                              </div>
+                            </div>
+                            <div className="text-right shrink-0 flex items-center gap-2">
+                              <div>
+                                <span className={`text-sm font-semibold ${g.total >= 0 ? 'text-success' : 'text-destructive'}`}>
+                                  {g.total >= 0 ? '+' : '-'}{formatCurrency(Math.abs(g.total))}
+                                </span>
+                                <p className="text-[10px] text-muted-foreground">
+                                  {g.count}× {formatCurrency(Number(t.valor))}
+                                </p>
+                              </div>
+                              {isOpen ? <ChevronUp className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
+                            </div>
+                          </button>
+                          {isOpen && (
+                            <div className="border-t divide-y divide-border bg-muted/20">
+                              {g.transactions.map(tx => renderTransactionRow(tx))}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </CardContent>
+                </Card>
+              </div>
+            )}
+            {groupedByParcelamento.standalone.length > 0 && (
+              <div>
+                <p className="text-xs font-medium text-muted-foreground mb-2 px-1">
+                  Avulsas ({groupedByParcelamento.standalone.length})
+                </p>
+                <Card>
+                  <CardContent className="p-0 divide-y divide-border">
+                    {groupedByParcelamento.standalone.map(t => renderTransactionRow(t))}
+                  </CardContent>
+                </Card>
+              </div>
+            )}
+          </>
+        )}
+
+        {groupBy === 'cartao' && groupedByCartao.map(g => {
+          const isOpen = expandedGroups.has(`conta-${g.contaId}`);
+          const isCredito = g.tipo === 'credito';
+          return (
+            <Card key={g.contaId}>
+              <button
+                type="button"
+                onClick={() => toggleGroup(`conta-${g.contaId}`)}
+                className="w-full flex items-center gap-3 px-4 py-3 hover:bg-muted/30 transition-colors text-left"
+              >
+                <div className="w-10 h-10 rounded-full shrink-0 flex items-center justify-center bg-muted">
+                  <CreditCard className="h-4 w-4 text-muted-foreground" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-semibold truncate">{g.nome}</span>
+                    <Badge variant="outline" className="text-[10px] px-1 py-0 h-4">
+                      {isCredito ? 'Cartão' : 'Conta'}
+                    </Badge>
+                    <Badge variant="outline" className="text-[10px] px-1 py-0 h-4">{g.count}</Badge>
+                  </div>
+                  <span className="text-xs text-muted-foreground">
+                    {isOpen ? 'Toque para recolher' : 'Toque para ver transações'}
+                  </span>
+                </div>
+                <div className="text-right shrink-0 flex items-center gap-2">
+                  <span className={`text-sm font-semibold ${g.total >= 0 ? 'text-success' : 'text-destructive'}`}>
+                    {g.total >= 0 ? '+' : ''}{formatCurrency(g.total)}
+                  </span>
+                  {isOpen ? <ChevronUp className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
+                </div>
+              </button>
+              {isOpen && (
+                <CardContent className="p-0 border-t divide-y divide-border">
+                  {g.transactions.map(t => renderTransactionRow(t))}
+                </CardContent>
+              )}
+            </Card>
           );
         })}
 

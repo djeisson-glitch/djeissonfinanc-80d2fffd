@@ -8,6 +8,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import {
   parseSicrediCSV,
+  parseNubankCSV,
   normalizeDescription,
   type SkippedLine,
   type ClassifiedTransaction,
@@ -241,13 +242,20 @@ export function CsvImportDialog({ open, onOpenChange }: Props) {
     } else {
       const text = await f.text();
       const pessoaNomeCsv = user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'Titular';
-      const parsed = parseSicrediCSV(text, pessoaNomeCsv);
+
+      // Detect Nubank credit card CSV (header: "date,title,amount") vs Sicredi/MP CSV
+      const firstNonEmptyLine = text.replace(/^\uFEFF/, '').split(/\r?\n/).find(l => l.trim()) || '';
+      const isNubankCsv = /^\s*date\s*,\s*title\s*,\s*amount\s*$/i.test(firstNonEmptyLine);
+
+      const parsed = isNubankCsv
+        ? parseNubankCSV(text, pessoaNomeCsv)
+        : parseSicrediCSV(text, pessoaNomeCsv);
       contaDetectada = parsed.contaDetectada;
       transactions = parsed.transactions;
       skippedLines = parsed.skippedLines;
       totalLines = parsed.totalLines;
       lineLogs = parsed.lineLogs;
-      if (contaDetectada && ["black", "mercado pago"].some((n) => contaDetectada!.toLowerCase().includes(n))) {
+      if (contaDetectada && ["black", "mercado pago", "nubank"].some((n) => contaDetectada!.toLowerCase().includes(n))) {
         accountType = "credito";
       }
       // Use auto-detected due date from CSV header

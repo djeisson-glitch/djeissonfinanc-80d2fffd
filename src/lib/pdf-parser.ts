@@ -149,12 +149,14 @@ export async function extractPdfText(file: File): Promise<string[]> {
 export async function extractPdfStructured(file: File): Promise<{
   pages: Array<{ rows: PdfTextBlock[]; garbledFonts: Set<string> }>;
   isMercadoPago: boolean;
+  isNubankConta: boolean;
 }> {
   const pdfjsLib = await loadPdfJs();
   const arrayBuffer = await file.arrayBuffer();
   const doc = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
 
   let isMercadoPago = false;
+  let isNubankConta = false;
   const pages: Array<{ rows: PdfTextBlock[]; garbledFonts: Set<string> }> = [];
 
   for (let i = 1; i <= doc.numPages; i++) {
@@ -167,11 +169,19 @@ export async function extractPdfStructured(file: File): Promise<{
     if (fullText.includes('mercado pago') || fullText.includes('mercadopago') || garbledFonts.size > 0) {
       isMercadoPago = true;
     }
+    // Nu Conta (checking account) statements have these footer markers and the
+    // characteristic "Total de entradas/saídas" daily grouping.
+    if (
+      (fullText.includes('nu financeira') || fullText.includes('nu pagamentos')) &&
+      (fullText.includes('total de entradas') || fullText.includes('total de saídas') || fullText.includes('total de saidas') || fullText.includes('movimentações'))
+    ) {
+      isNubankConta = true;
+    }
 
     pages.push({ rows, garbledFonts });
   }
 
-  return { pages, isMercadoPago };
+  return { pages, isMercadoPago, isNubankConta };
 }
 
 // ── Value/date parsing ─────────────────────────────────────────
@@ -234,10 +244,11 @@ function classifyTransaction(parcela_atual: number | null, parcela_total: number
     const desc = descricao.toLowerCase();
     if (
       desc.includes('pag fat') ||
-      /pagamento\s+(da\s+)?fatura/.test(desc) ||
+      /pagamento\s+(d[ae]\s+)?fatura/.test(desc) ||
       desc.includes('pagto fatura') ||
       desc.includes('crédito por parcelamento') ||
-      desc.includes('credito por parcelamento')
+      desc.includes('credito por parcelamento') ||
+      desc.includes('pagamento recebido')
     ) {
       return 'payment' as const;
     }
@@ -490,6 +501,152 @@ function parseMercadoPago(
   };
 }
 
+// ── Nu Conta (Nubank checking account) parser ──────────────────
+
+const NU_MONTHS: Record<string, number> = {
+  JAN: 1, FEV: 2, MAR: 3, ABR: 4, MAI: 5, JUN: 6,
+  JUL: 7, AGO: 8, SET: 9, OUT: 10, NOV: 11, DEZ: 12,
+};
+const NU_DATE_HEADER = /(\d{1,2})\s+(JAN|FEV|MAR|ABR|MAI|JUN|JUL|AGO|SET|OUT|NOV|DEZ)\s+(\d{4})/i;
+const NU_VALUE_AT_END = /(\d{1,3}(?:\.\d{3})*,\d{2})\s*$/;
+const NU_TX_PREFIX = /(Transferência\s+(?:recebida|enviada)\s+pelo\s+Pix|Transferência\s+(?:Recebida|Enviada)|Pagamento\s+de\s+fatura|Pagamento\s+de\s+conta|Compra\s+no\s+(?:débito|debito|crédito|credito)|Estorno|Reembolso|Cashback|Rendimentos?(?:\s+líquidos?| de poupança)?|Saque|Depósito|Tarifa|Boleto)/i;
+
+function parseNubankConta(
+  pages: Array<{ rows: PdfTextBlock[]; garbledFonts: Set<string> }>,
+  defaultPessoa: string = 'Titular'
+): PdfParseResult {
+  const transactions: ClassifiedTransaction[] = [];
+  const skippedLines: SkippedLine[] = [];
+  const lineLogs: CsvLineLogEntry[] = [];
+  const hashCounts = new Map<string, number>();
+
+  let currentDate: string | null = null;
+  let currentSection: 'entrada' | 'saida' | null = null;
+  let lineNumber = 0;
+
+  for (const { rows, garbledFonts } of pages) {
+    for (const row of rows) {
+      lineNumber++;
+      const text = getRowText(row, garbledFonts);
+      if (!text) continue;
+
+      // Update current date when we see a date marker (may share row with section header)
+      const dateMatch = text.match(NU_DATE_HEADER);
+      if (dateMatch) {
+        const day = dateMatch[1].padStart(2, '0');
+        const monthNum = NU_MONTHS[dateMatch[2].toUpperCase()];
+        if (monthNum) {
+          const month = String(monthNum).padStart(2, '0');
+          const year = dateMatch[3];
+          currentDate = `${year}-${month}-${day}`;
+        }
+      }
+
+      // Update current section (entradas/saídas) when seeing the day-total header
+      if (/Total\s+de\s+entradas/i.test(text)) {
+        currentSection = 'entrada';
+        lineLogs.push({ lineNumber, content: text, status: 'ignorada', reason: 'Total do dia (entradas)' });
+        continue;
+      }
+      if (/Total\s+de\s+sa[íi]das/i.test(text)) {
+        currentSection = 'saida';
+        lineLogs.push({ lineNumber, content: text, status: 'ignorada', reason: 'Total do dia (saídas)' });
+        continue;
+      }
+
+      // Skip header/footer/metadata
+      if (
+        /^(Saldo|Rendimento|VALORES EM R\$|Movimentações|Tem alguma dúvida|Nu Financeira|Nu Pagamentos|CNPJ|Extrato gerado|O saldo líquido|Não nos responsabilizamos|Asseguramos|Caso a solução|CPF\s)/i.test(text)
+      ) {
+        lineLogs.push({ lineNumber, content: text, status: 'ignorada', reason: 'Cabeçalho/rodapé' });
+        continue;
+      }
+
+      if (!currentDate || !currentSection) {
+        continue;
+      }
+
+      // Match transaction row: must contain a known prefix AND a value at end
+      const prefixMatch = text.match(NU_TX_PREFIX);
+      if (!prefixMatch) continue;
+
+      const valueMatch = text.match(NU_VALUE_AT_END);
+      if (!valueMatch) {
+        // Likely a wrapped continuation row — skip
+        continue;
+      }
+
+      const valor = parseValue(valueMatch[1]);
+      if (valor === null || valor === 0) continue;
+
+      // Build description: prefix + a short slice of counterpart text (if any)
+      const prefixIdx = text.indexOf(prefixMatch[0]);
+      const prefixEnd = prefixIdx + prefixMatch[0].length;
+      const valueStart = text.lastIndexOf(valueMatch[1]);
+      let counterpart = text.substring(prefixEnd, valueStart).trim();
+      // Strip CPF/CNPJ noise and trailing technical info (Agência/Conta numbers)
+      counterpart = counterpart
+        .replace(/-?\s*•+\.\d+\.\d+-•+/g, '')
+        .replace(/-?\s*\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2}/g, '')
+        .replace(/\s{2,}/g, ' ')
+        .trim();
+      // Truncate counterpart at first " - " or after ~50 chars
+      const dashSplit = counterpart.split(/\s+-\s+/);
+      if (dashSplit.length > 0 && dashSplit[0].length >= 3) {
+        counterpart = dashSplit[0].trim();
+      }
+      if (counterpart.length > 60) counterpart = counterpart.substring(0, 60).trim();
+
+      const descricao = counterpart
+        ? `${prefixMatch[0]} - ${counterpart}`
+        : prefixMatch[0];
+
+      const tipo: 'receita' | 'despesa' = currentSection === 'entrada' ? 'receita' : 'despesa';
+      const rawValor = currentSection === 'entrada' ? -valor : valor;
+
+      const baseHash = generateHash(currentDate, descricao, valor, defaultPessoa);
+      const count = hashCounts.get(baseHash) || 0;
+      hashCounts.set(baseHash, count + 1);
+      const hash_transacao = count > 0 ? `${baseHash}_seq${count}` : baseHash;
+
+      const classification = classifyTransaction(null, null, rawValor, descricao);
+
+      transactions.push({
+        data: currentDate,
+        descricao,
+        descricao_normalizada: normalizeDescription(descricao),
+        valor,
+        tipo,
+        parcela_atual: null,
+        parcela_total: null,
+        pessoa: defaultPessoa,
+        hash_transacao,
+        codigo_cartao: null,
+        valor_dolar: null,
+        classification,
+        source_line_number: lineNumber,
+        source_line_content: text,
+      });
+
+      lineLogs.push({
+        lineNumber,
+        content: text,
+        status: 'importada',
+        reason: `Nu Conta: ${tipo}`,
+        hash_transacao,
+      });
+    }
+  }
+
+  return {
+    transactions,
+    skippedLines,
+    totalLines: lineNumber,
+    lineLogs,
+    institution: 'Nu Conta',
+  };
+}
+
 // ── Generic PDF parser (existing logic, improved) ──────────────
 
 const GENERIC_DATE_REGEX = /(\d{2}\/\d{2}\/\d{4}|\d{2}\/\d{2}\/\d{2})/;
@@ -617,6 +774,9 @@ export async function parsePdfFile(file: File, defaultPessoa: string = 'Titular'
     if (structured.isMercadoPago) {
       return parseMercadoPago(structured.pages, defaultPessoa);
     }
+    if (structured.isNubankConta) {
+      return parseNubankConta(structured.pages, defaultPessoa);
+    }
   } catch (err) {
     console.error('[pdf-parser] extractPdfStructured failed, falling back to generic:', err);
   }
@@ -634,6 +794,18 @@ export async function parsePdfFile(file: File, defaultPessoa: string = 'Titular'
       }
     } catch (err2) {
       console.error('[pdf-parser] Second structured extraction attempt also failed:', err2);
+    }
+  }
+  // Safety: same retry for Nu Conta
+  if ((combined.includes('nu financeira') || combined.includes('nu pagamentos')) && combined.includes('total de')) {
+    console.warn('[pdf-parser] Nu Conta detected in text but structured extraction failed. Retrying...');
+    try {
+      const structured3 = await extractPdfStructured(file);
+      if (structured3.isNubankConta) {
+        return parseNubankConta(structured3.pages, defaultPessoa);
+      }
+    } catch (err3) {
+      console.error('[pdf-parser] Second structured extraction attempt for Nu Conta failed:', err3);
     }
   }
 

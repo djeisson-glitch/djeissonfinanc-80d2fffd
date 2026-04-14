@@ -116,9 +116,10 @@ export default function ContasPage() {
         const isDevolution = desc.includes('devoluc') || desc.includes('devolução') || desc.includes('estorno');
         const isPayment =
           desc.includes('pag fat') ||
-          /pagamento\s+(da\s+)?fatura/.test(desc) ||
+          /pagamento\s+(d[ae]\s+)?fatura/.test(desc) ||
           desc.includes('crédito por parcelamento') ||
-          desc.includes('credito por parcelamento');
+          desc.includes('credito por parcelamento') ||
+          desc.includes('pagamento recebido');
         if (!isDevolution && isPayment && t.tipo === 'receita') {
           faturas[t.conta_id].pagamentos += Math.abs(Number(t.valor));
         }

@@ -132,13 +132,14 @@ function parseValue(valorStr: string): number | null {
 function classifyTransaction(parcela_atual: number | null, parcela_total: number | null, valor: number, descricao: string): TransactionClassification {
   if (valor < 0) {
     const desc = descricao.toLowerCase();
-    // "Pag Fat" / "Pagamento da fatura" / "Crédito por parcelamento" = acerto de fatura anterior → excluir
+    // "Pag Fat" / "Pagamento da fatura" / "Crédito por parcelamento" / "Pagamento recebido" (Nubank) = acerto de fatura → excluir
     if (
       desc.includes('pag fat') ||
       desc.includes('pagto fatura') ||
-      /pagamento\s+(da\s+)?fatura/.test(desc) ||
+      /pagamento\s+(d[ae]\s+)?fatura/.test(desc) ||
       desc.includes('crédito por parcelamento') ||
-      desc.includes('credito por parcelamento')
+      desc.includes('credito por parcelamento') ||
+      desc.includes('pagamento recebido')
     ) {
       return 'payment';
     }
@@ -378,6 +379,163 @@ export function parseSicrediCSV(csvText: string, defaultPessoa: string = 'Titula
         hash_transacao: hash,
       });
     }
+  }
+
+  return {
+    contaDetectada,
+    detectedDueDate,
+    transactions,
+    skippedLines,
+    totalLines: lines.length,
+    lineLogs,
+  };
+}
+
+/**
+ * Parses Nubank credit card CSV exports.
+ * Format: `date,title,amount` header followed by rows like:
+ *   2026-04-04,Pg *Braip Intermediaca - Parcela 12/12,15.12
+ *   2026-04-14,Pagamento recebido,-334.31
+ *
+ * - Date is already ISO YYYY-MM-DD
+ * - Amount is decimal with `.` separator
+ * - Positive = despesa, negative = pagamento/estorno
+ * - Parcelas come at the end of `title` as " - Parcela N/X"
+ */
+export function parseNubankCSV(csvText: string, defaultPessoa: string = 'Titular'): ParseResult {
+  const normalizedText = csvText.replace(/^\uFEFF/, '');
+  const lines = normalizedText.split(/\r?\n/);
+
+  const skippedLines: SkippedLine[] = [];
+  const transactions: ClassifiedTransaction[] = [];
+  const lineLogs: CsvLineLogEntry[] = [];
+  const hashCounts = new Map<string, number>();
+
+  // Find header line
+  const headerIndex = lines.findIndex(l =>
+    /^\s*date\s*,\s*title\s*,\s*amount\s*$/i.test(l)
+  );
+
+  if (headerIndex === -1) {
+    return {
+      contaDetectada: null,
+      detectedDueDate: null,
+      transactions: [],
+      skippedLines: [{ lineNumber: 0, content: '', reason: 'Cabeçalho Nubank não encontrado (esperado: date,title,amount)' }],
+      totalLines: lines.length,
+      lineLogs: [{ lineNumber: 0, content: '', status: 'rejeitada', reason: 'Cabeçalho Nubank não encontrado' }],
+    };
+  }
+
+  const contaDetectada = 'Nubank';
+  // Track latest transaction date to derive a default due-month
+  let latestTxDate: string | null = null;
+
+  lines.forEach((line, idx) => {
+    const lineNumber = idx + 1;
+    const content = line.replace(/\r$/, '');
+    const trimmed = content.trim();
+
+    if (!trimmed) {
+      lineLogs.push({ lineNumber, content, status: 'ignorada', reason: 'Linha vazia' });
+      return;
+    }
+
+    if (idx <= headerIndex) {
+      lineLogs.push({ lineNumber, content, status: 'ignorada', reason: idx === headerIndex ? 'Cabeçalho do CSV' : 'Metadados do arquivo' });
+      return;
+    }
+
+    // Split on first/last comma so descriptions with commas stay intact.
+    const firstComma = trimmed.indexOf(',');
+    const lastComma = trimmed.lastIndexOf(',');
+    if (firstComma === -1 || lastComma === firstComma) {
+      const reason = `Formato Nubank inválido (esperado date,title,amount)`;
+      skippedLines.push({ lineNumber, content: trimmed, reason });
+      lineLogs.push({ lineNumber, content, status: 'rejeitada', reason });
+      return;
+    }
+
+    const dateStr = trimmed.substring(0, firstComma).trim();
+    const descricao = trimmed.substring(firstComma + 1, lastComma).trim();
+    const valorStr = trimmed.substring(lastComma + 1).trim();
+
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+      const reason = `Data inválida: ${dateStr}`;
+      skippedLines.push({ lineNumber, content: trimmed, reason });
+      lineLogs.push({ lineNumber, content, status: 'rejeitada', reason });
+      return;
+    }
+
+    if (!descricao) {
+      const reason = 'Descrição vazia';
+      skippedLines.push({ lineNumber, content: trimmed, reason });
+      lineLogs.push({ lineNumber, content, status: 'rejeitada', reason });
+      return;
+    }
+
+    const valor = parseFloat(valorStr);
+    if (isNaN(valor) || valor === 0) {
+      const reason = `Valor inválido: ${valorStr}`;
+      skippedLines.push({ lineNumber, content: trimmed, reason });
+      lineLogs.push({ lineNumber, content, status: 'rejeitada', reason });
+      return;
+    }
+
+    // Parcela parsing: " - Parcela N/X" at end of description
+    const parcelaMatch = descricao.match(/\s*[-–]\s*Parcela\s+(\d+)\/(\d+)\s*$/i);
+    const parcela_atual = parcelaMatch ? parseInt(parcelaMatch[1]) : null;
+    const parcela_total = parcelaMatch ? parseInt(parcelaMatch[2]) : null;
+
+    // Sign convention: positive = despesa, negative = receita (payment/refund)
+    const tipo: 'receita' | 'despesa' = valor < 0 ? 'receita' : 'despesa';
+    const absValor = Math.abs(valor);
+    const rawValor = valor; // for classifyTransaction (negative => payment/refund branch)
+
+    if (!latestTxDate || dateStr > latestTxDate) {
+      latestTxDate = dateStr;
+    }
+
+    const baseHash = generateHash(dateStr, descricao, absValor, defaultPessoa, parcela_atual, parcela_total);
+    const count = hashCounts.get(baseHash) || 0;
+    hashCounts.set(baseHash, count + 1);
+    const hash_transacao = count > 0 ? `${baseHash}_seq${count}` : baseHash;
+
+    const classification = classifyTransaction(parcela_atual, parcela_total, rawValor, descricao);
+
+    transactions.push({
+      data: dateStr,
+      descricao,
+      descricao_normalizada: normalizeDescription(descricao),
+      valor: absValor,
+      tipo,
+      parcela_atual,
+      parcela_total,
+      pessoa: defaultPessoa,
+      hash_transacao,
+      codigo_cartao: null,
+      valor_dolar: null,
+      classification,
+      source_line_number: lineNumber,
+      source_line_content: content,
+    });
+
+    lineLogs.push({
+      lineNumber,
+      content,
+      status: 'importada',
+      reason: 'Transação Nubank',
+      hash_transacao,
+    });
+  });
+
+  // Derive a default due date from the latest transaction date so the import
+  // dialog pre-fills the billing period correctly (Nubank's filename uses the
+  // statement-close date, which we don't parse here).
+  let detectedDueDate: { month: number; year: number } | null = null;
+  if (latestTxDate) {
+    const [y, m] = latestTxDate.split('-').map(Number);
+    detectedDueDate = { month: m - 1, year: y };
   }
 
   return {
