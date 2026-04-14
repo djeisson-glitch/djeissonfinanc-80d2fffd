@@ -76,6 +76,7 @@ export function PaymentModal({ open, onOpenChange, contaId, contaNome, faturaTot
         hash_transacao: paymentHash,
         pessoa: pessoaNome,
         mes_competencia: billingPeriod,
+        ignorar_dashboard: true,
       }).select('id').single();
 
       if (paymentError) throw paymentError;
@@ -95,6 +96,7 @@ export function PaymentModal({ open, onOpenChange, contaId, contaNome, faturaTot
           hash_transacao: debitHash,
           pessoa: pessoaNome,
           mes_competencia: billingPeriod,
+          ignorar_dashboard: true,
         });
       }
 

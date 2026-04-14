@@ -64,12 +64,13 @@ export default function ContasPage() {
     queryFn: async () => {
       const { data } = await supabase
         .from('transacoes')
-        .select('conta_id, tipo, valor, ignorar_dashboard')
+        .select('conta_id, tipo, valor')
         .eq('user_id', user!.id);
 
+      // Include ALL transactions (even ignorar_dashboard) for accurate
+      // account balances — fatura payments affect card/bank balances
       const saldoPorConta: Record<string, number> = {};
       data?.forEach(t => {
-        if (t.ignorar_dashboard) return;
         if (!saldoPorConta[t.conta_id]) saldoPorConta[t.conta_id] = 0;
         if (t.tipo === 'receita') saldoPorConta[t.conta_id] += Number(t.valor);
         else saldoPorConta[t.conta_id] -= Number(t.valor);
@@ -85,12 +86,13 @@ export default function ContasPage() {
     queryFn: async () => {
       const billingPeriod = `${year}-${String(month + 1).padStart(2, '0')}`;
 
-      // By mes_competencia (primary)
+      // By mes_competencia (primary) — no ignorar_dashboard filter since
+      // fatura payments are marked as internal transfers but must be
+      // counted for accurate card balance display
       const { data: byPeriod } = await supabase
         .from('transacoes')
         .select('conta_id, tipo, valor, descricao, mes_competencia')
         .eq('user_id', user!.id)
-        .eq('ignorar_dashboard', false)
         .eq('mes_competencia', billingPeriod);
 
       // Fallback for older imports without mes_competencia
@@ -98,7 +100,6 @@ export default function ContasPage() {
         .from('transacoes')
         .select('conta_id, tipo, valor, descricao, mes_competencia')
         .eq('user_id', user!.id)
-        .eq('ignorar_dashboard', false)
         .is('mes_competencia', null)
         .gte('data', start)
         .lte('data', end);

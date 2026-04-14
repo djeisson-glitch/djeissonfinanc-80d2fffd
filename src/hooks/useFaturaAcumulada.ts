@@ -46,12 +46,13 @@ export function useFaturaAcumulada(cardIds: string[], billingMonth: string) {
     queryFn: async () => {
       if (cardIds.length === 0) return {} as Record<string, FaturaAcumulada>;
 
-      // Fetch ALL transactions for these cards
+      // Fetch ALL transactions for these cards (including ignorar_dashboard
+      // since fatura payments are marked as internal transfers but still
+      // need to be counted for card balance calculation)
       const { data: allTxs } = await supabase
         .from('transacoes')
         .select('conta_id, tipo, valor, descricao, data, mes_competencia')
         .eq('user_id', user!.id)
-        .eq('ignorar_dashboard', false)
         .in('conta_id', cardIds);
 
       const result: Record<string, FaturaAcumulada> = {};

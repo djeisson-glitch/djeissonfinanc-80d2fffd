@@ -124,7 +124,9 @@ export default function DashboardPage() {
       const debitAccounts = contasList.filter(c => c.tipo === 'debito');
       let total = debitAccounts.reduce((s, c) => s + (c.saldo_inicial || 0), 0);
       for (const conta of debitAccounts) {
-        const { data: txs } = await supabase.from('transacoes').select('valor, tipo').eq('conta_id', conta.id).eq('user_id', user!.id).eq('ignorar_dashboard', false);
+        // Include ALL transactions for accurate balance (fatura payments
+        // are internal transfers but still affect bank balance)
+        const { data: txs } = await supabase.from('transacoes').select('valor, tipo').eq('conta_id', conta.id).eq('user_id', user!.id);
         if (txs) {
           for (const t of txs) {
             total += t.tipo === 'receita' ? Number(t.valor) : -Number(t.valor);

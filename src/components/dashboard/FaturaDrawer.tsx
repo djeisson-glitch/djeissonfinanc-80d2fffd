@@ -36,23 +36,22 @@ export function FaturaDrawer({ open, onOpenChange, cardId, cardName, start, end,
   const { data: transacoes } = useQuery({
     queryKey: ['fatura-detail', cardId, billingPeriod],
     queryFn: async () => {
-      // Get by billing period first
+      // Get by billing period first (no ignorar_dashboard filter — fatura
+      // view needs to show payment entries for accurate balance tracking)
       const { data: byPeriod } = await supabase
         .from('transacoes')
         .select('*')
         .eq('user_id', user!.id)
         .eq('conta_id', cardId)
-        .eq('ignorar_dashboard', false)
         .eq('mes_competencia', billingPeriod)
         .order('data', { ascending: false });
-      
+
       // Fallback for old imports without mes_competencia
       const { data: byDate } = await supabase
         .from('transacoes')
         .select('*')
         .eq('user_id', user!.id)
         .eq('conta_id', cardId)
-        .eq('ignorar_dashboard', false)
         .is('mes_competencia', null)
         .gte('data', start)
         .lte('data', end)
