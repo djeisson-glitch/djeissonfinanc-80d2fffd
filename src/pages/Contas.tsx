@@ -23,7 +23,8 @@ import { ptBR } from 'date-fns/locale';
 
 function getInvoiceStatus(fatura: number, pagamento: number): { label: string; color: string; variant: 'default' | 'destructive' | 'outline' | 'secondary' } {
   if (fatura <= 0) return { label: 'Sem fatura', color: '#9ca3af', variant: 'secondary' };
-  if (pagamento >= fatura) return { label: 'Paga', color: '#10b981', variant: 'default' };
+  // Use 1 cent tolerance for float rounding
+  if (pagamento >= fatura - 0.01) return { label: 'Paga', color: '#10b981', variant: 'default' };
   if (pagamento > 0) return { label: 'Parcialmente paga', color: '#f59e0b', variant: 'outline' };
   return { label: 'Em aberto', color: '#ef4444', variant: 'destructive' };
 }
@@ -113,7 +114,12 @@ export default function ContasPage() {
         }
         const desc = t.descricao.toLowerCase();
         const isDevolution = desc.includes('devoluc') || desc.includes('devolução') || desc.includes('estorno');
-        if (!isDevolution && (desc.includes('pag fat') || desc.includes('pagamento fatura') || desc.includes('pag fat deb cc'))) {
+        const isPayment =
+          desc.includes('pag fat') ||
+          /pagamento\s+(da\s+)?fatura/.test(desc) ||
+          desc.includes('crédito por parcelamento') ||
+          desc.includes('credito por parcelamento');
+        if (!isDevolution && isPayment && t.tipo === 'receita') {
           faturas[t.conta_id].pagamentos += Math.abs(Number(t.valor));
         }
         if (isDevolution && t.tipo === 'receita') {
