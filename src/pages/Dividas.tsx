@@ -16,6 +16,10 @@ import {
   TrendingDown,
   Receipt,
   ArrowDownRight,
+  Building2,
+  AlertTriangle,
+  Wallet,
+  PiggyBank,
 } from 'lucide-react';
 
 interface Transacao {
@@ -50,6 +54,22 @@ interface DebtGroup {
   categoria: string | null;
 }
 
+interface LoanGroup {
+  contrato: string;
+  valorMedio: number;
+  pagamentos: { data: string; valor: number; tipo: string }[];
+  contaId: string;
+  ultimoPagamento: string;
+  mesesConsecutivos: number;
+}
+
+interface RecurringDebt {
+  descricao: string;
+  valorMedio: number;
+  pagamentos: { data: string; valor: number }[];
+  contaId: string;
+}
+
 function addMonths(yyyyMM: string, months: number): string {
   const [y, m] = yyyyMM.split('-').map(Number);
   const date = new Date(y, m - 1 + months, 1);
@@ -78,29 +98,39 @@ function extractFaturaMonth(desc: string): string | undefined {
   return undefined;
 }
 
-/**
- * Build a grouping key that distinguishes different purchases even with similar descriptions.
- * Priority: grupo_parcela > (descricao_normalizada + parcela_total + conta_id)
- * This prevents merging two different "MERCADOPAGO*4PRODUTOS" purchases (e.g., 7/12 vs 7/13).
- */
 function getGroupKey(tx: Transacao): string {
   if (tx.grupo_parcela) return tx.grupo_parcela;
-
-  // For "Parcela da fatura", group by the fatura origin month extracted from description
   const isFatura = /parcela da fatura/i.test(tx.descricao);
   if (isFatura) {
     const fatMonth = extractFaturaMonth(tx.descricao);
     return `fatura_parcelada_${fatMonth || tx.descricao}_${tx.conta_id}`;
   }
-
-  // For regular purchases, use description + parcela_total + conta_id to disambiguate
   const desc = tx.descricao_normalizada || tx.descricao;
   return `${desc}_${tx.parcela_total}_${tx.conta_id}`;
+}
+
+/**
+ * Extract loan contract number from descriptions like:
+ * "LIQUIDACAO DE PARCELA-C5A930481"
+ * "AMORTIZACAO CONTRATO-C5A920011"
+ * "LIQUIDACAO BOLETO SICREDI-261011855 89468565000101 SICREDI REG DA PROD RS SC MG"
+ */
+function extractContrato(desc: string): string | null {
+  // LIQUIDACAO DE PARCELA-C5Axxxxxx or AMORTIZACAO CONTRATO-C5Axxxxxx
+  const loanMatch = desc.match(/(?:LIQUIDACAO DE PARCELA|AMORTIZACAO CONTRATO|LIQUIDACAO DE PARCELA|IOF S\/ OPER\. CREDITO PF)-?(C\w+)/i);
+  if (loanMatch) return loanMatch[1];
+
+  // C61020355 pattern
+  const cMatch = desc.match(/(C\d{8,})/);
+  if (cMatch) return cMatch[1];
+
+  return null;
 }
 
 export default function DividasPage() {
   const { user } = useAuth();
 
+  // Parcelamentos (credit card installments)
   const { data: transactions, isLoading } = useQuery({
     queryKey: ['dividas-transacoes', user?.id],
     queryFn: async () => {
@@ -110,11 +140,27 @@ export default function DividasPage() {
           'id, descricao, descricao_normalizada, valor, tipo, parcela_atual, parcela_total, grupo_parcela, mes_competencia, data, categoria, conta_id'
         )
         .eq('user_id', user!.id)
-        .eq('tipo', 'despesa') // Only expenses — exclude credits/devolutions
+        .eq('tipo', 'despesa')
         .not('parcela_total', 'is', null)
         .gt('parcela_total', 1);
       if (error) throw error;
       return (data || []) as Transacao[];
+    },
+    enabled: !!user,
+  });
+
+  // All transactions for loan/recurring detection
+  const { data: allTransactions } = useQuery({
+    queryKey: ['dividas-all-transacoes', user?.id],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('transacoes')
+        .select('id, descricao, valor, tipo, data, conta_id')
+        .eq('user_id', user!.id)
+        .eq('tipo', 'despesa')
+        .order('data', { ascending: true });
+      if (error) throw error;
+      return data || [];
     },
     enabled: !!user,
   });
@@ -128,14 +174,140 @@ export default function DividasPage() {
     enabled: !!user,
   });
 
+  // Detect bank loans from transaction patterns
+  const loanGroups = useMemo(() => {
+    if (!allTransactions) return [];
+
+    const loans = new Map<string, LoanGroup>();
+
+    for (const tx of allTransactions) {
+      const desc = tx.descricao.toUpperCase();
+      const contrato = extractContrato(desc);
+      if (!contrato) continue;
+
+      // Skip IOF entries (they're charges, not actual loan payments)
+      if (desc.includes('IOF')) continue;
+
+      const valor = Math.abs(Number(tx.valor));
+      if (!valor || isNaN(valor)) continue;
+
+      const tipo = desc.includes('AMORTIZACAO') ? 'amortizacao' : 'parcela';
+
+      if (!loans.has(contrato)) {
+        loans.set(contrato, {
+          contrato,
+          valorMedio: 0,
+          pagamentos: [],
+          contaId: tx.conta_id,
+          ultimoPagamento: tx.data,
+          mesesConsecutivos: 0,
+        });
+      }
+
+      const loan = loans.get(contrato)!;
+      loan.pagamentos.push({ data: tx.data, valor, tipo });
+      if (tx.data > loan.ultimoPagamento) {
+        loan.ultimoPagamento = tx.data;
+      }
+    }
+
+    // Calculate average monthly payment per contract
+    const result: LoanGroup[] = [];
+    for (const [, loan] of loans) {
+      if (loan.pagamentos.length === 0) continue;
+
+      // Group payments by month and sum them (amortizacao + parcela in same month = one payment)
+      const byMonth = new Map<string, number>();
+      for (const p of loan.pagamentos) {
+        const month = p.data.substring(0, 7);
+        byMonth.set(month, (byMonth.get(month) || 0) + p.valor);
+      }
+
+      const monthlyValues = Array.from(byMonth.values());
+      loan.valorMedio = monthlyValues.reduce((s, v) => s + v, 0) / monthlyValues.length;
+      loan.mesesConsecutivos = byMonth.size;
+
+      result.push(loan);
+    }
+
+    result.sort((a, b) => b.valorMedio - a.valorMedio);
+    return result;
+  }, [allTransactions]);
+
+  // Detect recurring debts (Mercado Crédito, etc.)
+  const recurringDebts = useMemo(() => {
+    if (!allTransactions) return [];
+
+    const mercadoCreditoPayments: { data: string; valor: number }[] = [];
+    const contaIds = new Set<string>();
+
+    for (const tx of allTransactions) {
+      const desc = tx.descricao.toUpperCase();
+      const valor = Math.abs(Number(tx.valor));
+
+      // Detect Mercado Crédito: PIX to Mercado Pago with exact R$ 563.41
+      if (
+        desc.includes('MERCADO PAGO') &&
+        desc.includes('PIX') &&
+        valor >= 560 && valor <= 570
+      ) {
+        mercadoCreditoPayments.push({ data: tx.data, valor });
+        contaIds.add(tx.conta_id);
+      }
+    }
+
+    const result: RecurringDebt[] = [];
+    if (mercadoCreditoPayments.length > 0) {
+      result.push({
+        descricao: 'Mercado Crédito (empréstimo pessoal)',
+        valorMedio: mercadoCreditoPayments.reduce((s, p) => s + p.valor, 0) / mercadoCreditoPayments.length,
+        pagamentos: mercadoCreditoPayments,
+        contaId: Array.from(contaIds)[0],
+      });
+    }
+
+    return result;
+  }, [allTransactions]);
+
+  // Detect cheque especial (negative balance accounts)
+  const chequeEspecialAccounts = useMemo(() => {
+    if (!allTransactions || !contas) return [];
+
+    const result: { contaId: string; contaNome: string; jurosTotal: number; jurosCount: number }[] = [];
+    const jurosMap = new Map<string, { total: number; count: number }>();
+
+    for (const tx of allTransactions) {
+      if (tx.descricao.toUpperCase().includes('JUROS UTILIZ.CH.ESPECIAL')) {
+        const valor = Math.abs(Number(tx.valor));
+        if (!jurosMap.has(tx.conta_id)) {
+          jurosMap.set(tx.conta_id, { total: 0, count: 0 });
+        }
+        const entry = jurosMap.get(tx.conta_id)!;
+        entry.total += valor;
+        entry.count++;
+      }
+    }
+
+    for (const [contaId, { total, count }] of jurosMap) {
+      const conta = contas.find(c => c.id === contaId);
+      result.push({
+        contaId,
+        contaNome: conta?.nome || 'Conta desconhecida',
+        jurosTotal: total,
+        jurosCount: count,
+      });
+    }
+
+    return result;
+  }, [allTransactions, contas]);
+
+  // Parcelamentos processing (existing logic)
   const debtGroups = useMemo(() => {
     if (!transactions || transactions.length === 0) return [];
 
-    // Group using smart key that distinguishes different purchases
     const grouped = new Map<string, Transacao[]>();
 
     for (const tx of transactions) {
-      // Skip payment/credit transactions that shouldn't count as debt
       const descLower = tx.descricao.toLowerCase();
       if (
         descLower.includes('crédito por parcelamento') ||
@@ -155,7 +327,6 @@ export default function DividasPage() {
     const result: DebtGroup[] = [];
 
     for (const [key, txs] of grouped) {
-      // Take the transaction with the highest parcela_atual (latest state)
       const latest = txs.reduce((a, b) =>
         (a.parcela_atual || 0) >= (b.parcela_atual || 0) ? a : b
       );
@@ -165,9 +336,7 @@ export default function DividasPage() {
       const remaining = Math.max(0, parcelaTotal - parcelaAtual);
       const valorNum = Math.abs(Number(latest.valor));
 
-      // If remaining is 0, the debt is paid off - skip it
       if (remaining === 0) continue;
-      // Skip if valor is invalid
       if (!valorNum || isNaN(valorNum)) continue;
 
       const mesComp = latest.mes_competencia || latest.data.substring(0, 7);
@@ -194,7 +363,6 @@ export default function DividasPage() {
       });
     }
 
-    // Sort by remaining value descending
     result.sort((a, b) => b.valorRestante - a.valorRestante);
     return result;
   }, [transactions]);
@@ -211,68 +379,75 @@ export default function DividasPage() {
 
   // Summary calculations
   const summary = useMemo(() => {
-    if (debtGroups.length === 0) {
-      return {
-        totalRestante: 0,
-        totalMensal: 0,
-        mesesAteQuitar: 0,
-      };
-    }
+    const totalRestanteParcelamentos = debtGroups.reduce((s, d) => s + d.valorRestante, 0);
+    const totalMensalParcelamentos = debtGroups.reduce((s, d) => s + d.valorMensal, 0);
+    const totalMensalEmprestimos = loanGroups.reduce((s, l) => s + l.valorMedio, 0);
+    const totalMensalRecorrentes = recurringDebts.reduce((s, r) => s + r.valorMedio, 0);
+    const totalMensal = totalMensalParcelamentos + totalMensalEmprestimos + totalMensalRecorrentes;
+    const mesesAteQuitar = debtGroups.length > 0
+      ? Math.max(...debtGroups.map((d) => d.parcelasRestantes))
+      : 0;
 
-    const totalRestante = debtGroups.reduce((s, d) => s + d.valorRestante, 0);
-    const totalMensal = debtGroups.reduce((s, d) => s + d.valorMensal, 0);
-    const mesesAteQuitar = Math.max(...debtGroups.map((d) => d.parcelasRestantes));
-
-    return { totalRestante, totalMensal, mesesAteQuitar };
-  }, [debtGroups]);
+    return {
+      totalRestanteParcelamentos,
+      totalMensalParcelamentos,
+      totalMensalEmprestimos,
+      totalMensalRecorrentes,
+      totalMensal,
+      mesesAteQuitar,
+    };
+  }, [debtGroups, loanGroups, recurringDebts]);
 
   // Monthly projection (next 12 months)
   const projection = useMemo(() => {
-    if (debtGroups.length === 0) return [];
+    if (debtGroups.length === 0 && loanGroups.length === 0 && recurringDebts.length === 0) return [];
 
     const now = new Date();
     const currentYYYYMM = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
     const months: {
       mes: string;
       label: string;
-      valorMensal: number;
+      parcelamentos: number;
+      emprestimos: number;
+      recorrentes: number;
+      total: number;
       parcelasEncerram: number;
-      saldoRestante: number;
     }[] = [];
 
-    let runningTotal = summary.totalRestante;
+    const emprestimoMensal = loanGroups.reduce((s, l) => s + l.valorMedio, 0);
+    const recorrenteMensal = recurringDebts.reduce((s, r) => s + r.valorMedio, 0);
 
-    for (let i = 1; i <= 12; i++) {
+    for (let i = 0; i <= 12; i++) {
       const mes = addMonths(currentYYYYMM, i);
-      let valorMensal = 0;
+      let parcelamentos = 0;
       let parcelasEncerram = 0;
 
       for (const debt of debtGroups) {
         if (mes <= debt.mesTermino) {
-          valorMensal += debt.valorMensal;
+          parcelamentos += debt.valorMensal;
         }
         if (debt.mesTermino === mes) {
           parcelasEncerram++;
         }
       }
 
-      runningTotal -= valorMensal;
-      if (runningTotal < 0) runningTotal = 0;
+      const total = parcelamentos + emprestimoMensal + recorrenteMensal;
 
       const [y, m] = mes.split('-').map(Number);
       months.push({
         mes,
         label: `${getMonthName(m - 1)}/${y}`,
-        valorMensal,
+        parcelamentos,
+        emprestimos: emprestimoMensal,
+        recorrentes: recorrenteMensal,
+        total,
         parcelasEncerram,
-        saldoRestante: runningTotal,
       });
     }
 
     return months;
-  }, [debtGroups, summary.totalRestante]);
+  }, [debtGroups, loanGroups, recurringDebts]);
 
-  // Conta name lookup
   const getContaNome = (contaId: string) => contas?.find(c => c.id === contaId)?.nome || '';
 
   if (isLoading) {
@@ -289,27 +464,54 @@ export default function DividasPage() {
     );
   }
 
+  const hasAnyDebt = debtGroups.length > 0 || loanGroups.length > 0 || recurringDebts.length > 0;
+
   return (
     <div className="space-y-6 animate-fade-in">
       <div>
-        <h1 className="text-2xl font-bold">Dívidas</h1>
+        <h1 className="text-2xl font-bold">Dívidas & Obrigações</h1>
         <p className="text-sm text-muted-foreground">
-          Acompanhe seus parcelamentos e projeção de quitação
+          Visão completa: empréstimos, parcelamentos e comprometimento mensal
         </p>
       </div>
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">
-              Dívida restante
+              Comprometimento mensal
+            </CardTitle>
+            <Wallet className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <p className="text-2xl font-bold text-destructive">
+              {formatCurrency(summary.totalMensal)}
+            </p>
+            <div className="mt-1 space-y-0.5 text-xs text-muted-foreground">
+              {summary.totalMensalEmprestimos > 0 && (
+                <p>Empréstimos: {formatCurrency(summary.totalMensalEmprestimos)}</p>
+              )}
+              {summary.totalMensalParcelamentos > 0 && (
+                <p>Parcelamentos: {formatCurrency(summary.totalMensalParcelamentos)}</p>
+              )}
+              {summary.totalMensalRecorrentes > 0 && (
+                <p>Recorrentes: {formatCurrency(summary.totalMensalRecorrentes)}</p>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">
+              Dívida restante (parcelas)
             </CardTitle>
             <Landmark className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <p className="text-2xl font-bold text-destructive">
-              {formatCurrency(summary.totalRestante)}
+              {formatCurrency(summary.totalRestanteParcelamentos)}
             </p>
             <p className="text-xs text-muted-foreground mt-1">
               {debtGroups.length} parcelamento{debtGroups.length !== 1 ? 's' : ''} ativo{debtGroups.length !== 1 ? 's' : ''}
@@ -320,16 +522,18 @@ export default function DividasPage() {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">
-              Parcela mensal total
+              Empréstimos bancários
             </CardTitle>
-            <Receipt className="h-4 w-4 text-muted-foreground" />
+            <Building2 className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <p className="text-2xl font-bold">
-              {formatCurrency(summary.totalMensal)}
+              {formatCurrency(summary.totalMensalEmprestimos)}
+              <span className="text-sm font-normal text-muted-foreground">/mês</span>
             </p>
             <p className="text-xs text-muted-foreground mt-1">
-              Soma de todas as parcelas ativas
+              {loanGroups.length} contrato{loanGroups.length !== 1 ? 's' : ''}
+              {recurringDebts.length > 0 && ` + ${recurringDebts.length} recorrente`}
             </p>
           </CardContent>
         </Card>
@@ -337,7 +541,7 @@ export default function DividasPage() {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">
-              Meses até quitar
+              Meses até quitar parcelas
             </CardTitle>
             <CalendarClock className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
@@ -359,6 +563,114 @@ export default function DividasPage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Cheque Especial Warning */}
+      {chequeEspecialAccounts.length > 0 && (
+        <Card className="border-destructive/30 bg-destructive/5">
+          <CardContent className="p-4">
+            <div className="flex items-start gap-3">
+              <AlertTriangle className="h-5 w-5 text-destructive shrink-0 mt-0.5" />
+              <div className="flex-1">
+                <p className="font-semibold text-sm text-destructive">Cheque especial ativo</p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Juros de cheque especial são os mais caros do mercado (8-15% a.m.). Priorize quitar primeiro.
+                </p>
+                <div className="mt-2 space-y-1">
+                  {chequeEspecialAccounts.map(acc => (
+                    <div key={acc.contaId} className="flex justify-between text-sm">
+                      <span className="text-muted-foreground">{acc.contaNome}</span>
+                      <span>
+                        <span className="font-medium text-destructive">{formatCurrency(acc.jurosTotal)}</span>
+                        <span className="text-xs text-muted-foreground ml-1">
+                          em juros ({acc.jurosCount} cobranças)
+                        </span>
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Empréstimos Bancários */}
+      {(loanGroups.length > 0 || recurringDebts.length > 0) && (
+        <div className="space-y-4">
+          <div className="flex items-center gap-2">
+            <Building2 className="h-5 w-5 text-blue-600" />
+            <h2 className="text-lg font-semibold">Empréstimos & financiamentos</h2>
+            <Badge variant="secondary">{loanGroups.length + recurringDebts.length}</Badge>
+          </div>
+          <p className="text-xs text-muted-foreground -mt-2">
+            Detectados automaticamente dos extratos bancários
+          </p>
+
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
+            {loanGroups.map((loan) => (
+              <Card key={loan.contrato}>
+                <CardContent className="p-4 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="font-medium text-sm">Contrato {loan.contrato}</p>
+                      <p className="text-xs text-muted-foreground">{getContaNome(loan.contaId)}</p>
+                    </div>
+                    <Badge variant="outline" className="text-xs">
+                      {loan.mesesConsecutivos} meses
+                    </Badge>
+                  </div>
+                  <Separator />
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">Parcela média</span>
+                    <span className="font-semibold">{formatCurrency(loan.valorMedio)}</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">Último pagamento</span>
+                    <span className="text-xs">
+                      {new Date(loan.ultimoPagamento + 'T12:00:00').toLocaleDateString('pt-BR')}
+                    </span>
+                  </div>
+                  {loan.pagamentos.length > 1 && (
+                    <div className="text-xs text-muted-foreground pt-1 border-t">
+                      Histórico: {loan.pagamentos.slice(-3).map(p => {
+                        const d = new Date(p.data + 'T12:00:00');
+                        return `${d.toLocaleDateString('pt-BR', { month: 'short' })} ${formatCurrency(p.valor)}`;
+                      }).join(' → ')}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            ))}
+
+            {recurringDebts.map((rd) => (
+              <Card key={rd.descricao} className="border-amber-200 dark:border-amber-800">
+                <CardContent className="p-4 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="font-medium text-sm">{rd.descricao}</p>
+                      <p className="text-xs text-muted-foreground">
+                        Pago via PIX — {rd.pagamentos.length} pagamento{rd.pagamentos.length !== 1 ? 's' : ''}
+                      </p>
+                    </div>
+                    <PiggyBank className="h-4 w-4 text-amber-600" />
+                  </div>
+                  <Separator />
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">Valor fixo</span>
+                    <span className="font-semibold">{formatCurrency(rd.valorMedio)}</span>
+                  </div>
+                  <div className="text-xs text-muted-foreground pt-1 border-t">
+                    Pagamentos: {rd.pagamentos.map(p => {
+                      const d = new Date(p.data + 'T12:00:00');
+                      return d.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' });
+                    }).join(', ')}
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Parcelamentos de Fatura */}
       {faturaDebts.length > 0 && (
@@ -471,15 +783,15 @@ export default function DividasPage() {
         </div>
       )}
 
-      {/* Projecao Mensal */}
+      {/* Projeção Mensal */}
       {projection.length > 0 && (
         <div className="space-y-4">
           <div className="flex items-center gap-2">
             <TrendingDown className="h-5 w-5 text-primary" />
-            <h2 className="text-lg font-semibold">Projeção mensal</h2>
+            <h2 className="text-lg font-semibold">Projeção de comprometimento mensal</h2>
           </div>
           <p className="text-xs text-muted-foreground -mt-2">
-            Estimativa sem considerar juros e encargos adicionais
+            Estimativa dos próximos 12 meses (empréstimos assumem continuidade)
           </p>
 
           <Card>
@@ -489,36 +801,43 @@ export default function DividasPage() {
                   <thead>
                     <tr className="border-b bg-muted/50">
                       <th className="px-4 py-3 text-left font-medium">Mês</th>
-                      <th className="px-4 py-3 text-right font-medium">Valor mensal</th>
+                      <th className="px-4 py-3 text-right font-medium">Empréstimos</th>
+                      <th className="px-4 py-3 text-right font-medium">Parcelas</th>
+                      <th className="px-4 py-3 text-right font-medium">Total</th>
                       <th className="px-4 py-3 text-center font-medium">Encerram</th>
-                      <th className="px-4 py-3 text-right font-medium">Saldo restante</th>
-                      <th className="px-4 py-3 text-center font-medium w-8"></th>
                     </tr>
                   </thead>
                   <tbody>
                     {projection.map((month, i) => {
-                      const prevSaldo =
-                        i === 0
-                          ? summary.totalRestante
-                          : projection[i - 1].saldoRestante;
-                      const dropPercent =
-                        prevSaldo > 0
-                          ? ((prevSaldo - month.saldoRestante) / prevSaldo) * 100
-                          : 0;
-                      const significantDrop = dropPercent > 15;
+                      const isCurrentMonth = i === 0;
+                      const prevTotal = i > 0 ? projection[i - 1].total : month.total;
+                      const dropped = prevTotal > 0 && month.total < prevTotal * 0.85;
 
                       return (
                         <tr
                           key={month.mes}
                           className={`border-b last:border-0 ${
-                            significantDrop
+                            isCurrentMonth
+                              ? 'bg-primary/5 font-medium'
+                              : dropped
                               ? 'bg-green-50 dark:bg-green-950/20'
                               : ''
                           }`}
                         >
-                          <td className="px-4 py-2.5 font-medium">{month.label}</td>
-                          <td className="px-4 py-2.5 text-right">
-                            {formatCurrency(month.valorMensal)}
+                          <td className="px-4 py-2.5">
+                            {month.label}
+                            {isCurrentMonth && (
+                              <span className="ml-2 text-xs text-primary">(atual)</span>
+                            )}
+                          </td>
+                          <td className="px-4 py-2.5 text-right text-muted-foreground">
+                            {formatCurrency(month.emprestimos + month.recorrentes)}
+                          </td>
+                          <td className="px-4 py-2.5 text-right text-muted-foreground">
+                            {formatCurrency(month.parcelamentos)}
+                          </td>
+                          <td className="px-4 py-2.5 text-right font-medium">
+                            {formatCurrency(month.total)}
                           </td>
                           <td className="px-4 py-2.5 text-center">
                             {month.parcelasEncerram > 0 ? (
@@ -526,18 +845,10 @@ export default function DividasPage() {
                                 variant="secondary"
                                 className="bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300 text-xs"
                               >
-                                {month.parcelasEncerram}
+                                -{month.parcelasEncerram}
                               </Badge>
                             ) : (
-                              <span className="text-muted-foreground">-</span>
-                            )}
-                          </td>
-                          <td className="px-4 py-2.5 text-right font-medium">
-                            {formatCurrency(month.saldoRestante)}
-                          </td>
-                          <td className="px-4 py-2.5 text-center">
-                            {significantDrop && (
-                              <ArrowDownRight className="inline h-4 w-4 text-green-600" />
+                              <span className="text-muted-foreground">—</span>
                             )}
                           </td>
                         </tr>
@@ -552,13 +863,13 @@ export default function DividasPage() {
       )}
 
       {/* Empty state */}
-      {debtGroups.length === 0 && !isLoading && (
+      {!hasAnyDebt && !isLoading && (
         <Card className="py-12">
           <CardContent className="flex flex-col items-center justify-center text-center">
             <Landmark className="mb-4 h-12 w-12 text-muted-foreground/50" />
             <h3 className="text-lg font-medium">Nenhuma dívida encontrada</h3>
             <p className="mt-1 text-sm text-muted-foreground">
-              Importe faturas do Mercado Pago (PDF) ou extratos com parcelas para ver seus parcelamentos aqui.
+              Importe seus extratos bancários (OFX), faturas de cartão (CSV/PDF) para ver seus parcelamentos e empréstimos aqui.
             </p>
           </CardContent>
         </Card>
