@@ -14,6 +14,9 @@ import { AlertTriangle, BarChart3, ChevronDown, ChevronUp, CreditCard } from 'lu
 import { MonthSelector } from '@/components/MonthSelector';
 import { ParcelasTimeline } from '@/components/dashboard/ParcelasTimeline';
 import { FaturaDrawer } from '@/components/dashboard/FaturaDrawer';
+import { ManualTransactionModal } from '@/components/contas/ManualTransactionModal';
+import { Button } from '@/components/ui/button';
+import { Plus } from 'lucide-react';
 import { useFontesReceita } from '@/hooks/useFontesReceita';
 import { useFaturaAcumulada } from '@/hooks/useFaturaAcumulada';
 
@@ -25,6 +28,7 @@ export default function DashboardPage() {
   const [month, setMonth] = useState(now.getMonth());
   const [year, setYear] = useState(now.getFullYear());
   const [categoriasExpanded, setCategoriasExpanded] = useState(false);
+  const [manualOpen, setManualOpen] = useState(false);
   const { start, end } = getMonthRange(month, year);
 
   const { data: config } = useQuery({
@@ -209,9 +213,19 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-6 animate-fade-in">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-2">
         <h1 className="text-2xl font-bold">Dashboard</h1>
-        <MonthSelector month={month} year={year} onChange={(m, y) => { setMonth(m); setYear(y); }} />
+        <div className="flex items-center gap-2">
+          <Button
+            size="sm"
+            onClick={() => setManualOpen(true)}
+            className="gap-1"
+          >
+            <Plus className="h-4 w-4" />
+            Novo Lançamento
+          </Button>
+          <MonthSelector month={month} year={year} onChange={(m, y) => { setMonth(m); setYear(y); }} />
+        </div>
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
@@ -425,6 +439,11 @@ export default function DashboardPage() {
         end={end}
         month={month}
         year={year}
+      />
+
+      <ManualTransactionModal
+        open={manualOpen}
+        onOpenChange={setManualOpen}
       />
     </div>
   );
