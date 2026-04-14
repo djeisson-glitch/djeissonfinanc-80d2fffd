@@ -9,6 +9,7 @@ import {
   TrendingUp,
   ClipboardList,
   BarChart3,
+  Landmark,
 } from 'lucide-react';
 import { NavLink } from '@/components/NavLink';
 import { useLocation } from 'react-router-dom';
@@ -33,6 +34,7 @@ const items = [
   { title: 'Projeções', url: '/projecoes', icon: TrendingUp },
   { title: 'Planejamento', url: '/planejamento', icon: ClipboardList },
   { title: 'Análises', url: '/analises', icon: BarChart3 },
+  { title: 'Dívidas', url: '/dividas', icon: Landmark },
   { title: 'Categorias', url: '/categorias', icon: FolderOpen },
   { title: 'Configurações', url: '/configuracoes', icon: Settings },
 ];
