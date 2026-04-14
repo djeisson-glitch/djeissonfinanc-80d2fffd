@@ -22,7 +22,7 @@ interface Transacao {
   id: string;
   descricao: string;
   descricao_normalizada: string | null;
-  valor: number;
+  valor: number | string;
   tipo: string;
   parcela_atual: number | null;
   parcela_total: number | null;
@@ -30,6 +30,7 @@ interface Transacao {
   mes_competencia: string | null;
   data: string;
   categoria: string | null;
+  conta_id: string;
 }
 
 interface DebtGroup {
@@ -46,6 +47,7 @@ interface DebtGroup {
   progressPercent: number;
   isFatura: boolean;
   faturaMonth?: string;
+  categoria: string | null;
 }
 
 function addMonths(yyyyMM: string, months: number): string {
@@ -63,17 +65,37 @@ function formatMesCompetencia(yyyyMM: string): string {
 
 function cleanEstablishmentName(desc: string): string {
   return desc
-    .replace(/^(MERCADOLIVRE\*|MERCADOPAGO\*|MP\*|EC\s\*)\s*/i, '')
+    .replace(/^(MERCADOLIVRE\*|MERCADOPAGO\*|MP\*|EC\s?\*)\s*/i, '')
     .replace(/\s+/g, ' ')
     .trim();
 }
 
 function extractFaturaMonth(desc: string): string | undefined {
-  const match = desc.match(/fatura\s+de\s+(\w+)\/(\d{4})/i);
+  const match = desc.match(/fatura\s+de\s+(\w+)\/?(\d{4})?/i);
   if (match) {
-    return `${match[1]}/${match[2]}`;
+    return match[2] ? `${match[1]}/${match[2]}` : match[1];
   }
   return undefined;
+}
+
+/**
+ * Build a grouping key that distinguishes different purchases even with similar descriptions.
+ * Priority: grupo_parcela > (descricao_normalizada + parcela_total + conta_id)
+ * This prevents merging two different "MERCADOPAGO*4PRODUTOS" purchases (e.g., 7/12 vs 7/13).
+ */
+function getGroupKey(tx: Transacao): string {
+  if (tx.grupo_parcela) return tx.grupo_parcela;
+
+  // For "Parcela da fatura", group by the fatura origin month extracted from description
+  const isFatura = /parcela da fatura/i.test(tx.descricao);
+  if (isFatura) {
+    const fatMonth = extractFaturaMonth(tx.descricao);
+    return `fatura_parcelada_${fatMonth || tx.descricao}_${tx.conta_id}`;
+  }
+
+  // For regular purchases, use description + parcela_total + conta_id to disambiguate
+  const desc = tx.descricao_normalizada || tx.descricao;
+  return `${desc}_${tx.parcela_total}_${tx.conta_id}`;
 }
 
 export default function DividasPage() {
@@ -85,9 +107,10 @@ export default function DividasPage() {
       const { data, error } = await supabase
         .from('transacoes')
         .select(
-          'id, descricao, descricao_normalizada, valor, tipo, parcela_atual, parcela_total, grupo_parcela, mes_competencia, data, categoria'
+          'id, descricao, descricao_normalizada, valor, tipo, parcela_atual, parcela_total, grupo_parcela, mes_competencia, data, categoria, conta_id'
         )
         .eq('user_id', user!.id)
+        .eq('tipo', 'despesa') // Only expenses — exclude credits/devolutions
         .not('parcela_total', 'is', null)
         .gt('parcela_total', 1);
       if (error) throw error;
@@ -96,17 +119,33 @@ export default function DividasPage() {
     enabled: !!user,
   });
 
+  const { data: contas } = useQuery({
+    queryKey: ['contas', user?.id],
+    queryFn: async () => {
+      const { data } = await supabase.from('contas').select('id, nome, tipo').eq('user_id', user!.id);
+      return data || [];
+    },
+    enabled: !!user,
+  });
+
   const debtGroups = useMemo(() => {
     if (!transactions || transactions.length === 0) return [];
 
-    // Group by grupo_parcela if available, otherwise by descricao_normalizada or descricao
+    // Group using smart key that distinguishes different purchases
     const grouped = new Map<string, Transacao[]>();
 
     for (const tx of transactions) {
-      const key =
-        tx.grupo_parcela ||
-        tx.descricao_normalizada ||
-        tx.descricao;
+      // Skip payment/credit transactions that shouldn't count as debt
+      const descLower = tx.descricao.toLowerCase();
+      if (
+        descLower.includes('crédito por parcelamento') ||
+        descLower.includes('credito por parcelamento') ||
+        descLower.includes('pagamento da fatura')
+      ) {
+        continue;
+      }
+
+      const key = getGroupKey(tx);
       if (!grouped.has(key)) {
         grouped.set(key, []);
       }
@@ -124,9 +163,12 @@ export default function DividasPage() {
       const parcelaAtual = latest.parcela_atual || 0;
       const parcelaTotal = latest.parcela_total || 0;
       const remaining = Math.max(0, parcelaTotal - parcelaAtual);
+      const valorNum = Math.abs(Number(latest.valor));
 
       // If remaining is 0, the debt is paid off - skip it
       if (remaining === 0) continue;
+      // Skip if valor is invalid
+      if (!valorNum || isNaN(valorNum)) continue;
 
       const mesComp = latest.mes_competencia || latest.data.substring(0, 7);
       const mesTermino = addMonths(mesComp, remaining);
@@ -134,18 +176,21 @@ export default function DividasPage() {
 
       result.push({
         key,
-        displayName: cleanEstablishmentName(latest.descricao),
+        displayName: isFatura
+          ? `Fatura de ${extractFaturaMonth(latest.descricao) || 'N/A'}`
+          : cleanEstablishmentName(latest.descricao),
         descricao: latest.descricao,
         parcelaAtual,
         parcelaTotal,
-        valorMensal: Math.abs(latest.valor),
+        valorMensal: valorNum,
         parcelasRestantes: remaining,
-        valorRestante: Math.abs(latest.valor) * remaining,
+        valorRestante: valorNum * remaining,
         mesCompetencia: mesComp,
         mesTermino,
         progressPercent: Math.round((parcelaAtual / parcelaTotal) * 100),
         isFatura,
         faturaMonth: isFatura ? extractFaturaMonth(latest.descricao) : undefined,
+        categoria: latest.categoria,
       });
     }
 
@@ -169,27 +214,16 @@ export default function DividasPage() {
     if (debtGroups.length === 0) {
       return {
         totalRestante: 0,
-        parcelaMensalMedia: 0,
-        proximaFatura: 0,
+        totalMensal: 0,
         mesesAteQuitar: 0,
       };
     }
 
     const totalRestante = debtGroups.reduce((s, d) => s + d.valorRestante, 0);
     const totalMensal = debtGroups.reduce((s, d) => s + d.valorMensal, 0);
-
-    // Next month's estimated bill = sum of all active monthly values
-    const proximaFatura = totalMensal;
-
-    // Months until all debts are cleared = max remaining parcelas
     const mesesAteQuitar = Math.max(...debtGroups.map((d) => d.parcelasRestantes));
 
-    return {
-      totalRestante,
-      parcelaMensalMedia: totalMensal,
-      proximaFatura,
-      mesesAteQuitar,
-    };
+    return { totalRestante, totalMensal, mesesAteQuitar };
   }, [debtGroups]);
 
   // Monthly projection (next 12 months)
@@ -214,12 +248,9 @@ export default function DividasPage() {
       let parcelasEncerram = 0;
 
       for (const debt of debtGroups) {
-        // Check if this debt is still active in this month
-        const debtEndMonth = debt.mesTermino;
-        if (mes <= debtEndMonth) {
+        if (mes <= debt.mesTermino) {
           valorMensal += debt.valorMensal;
         }
-        // Check if this debt ends this month
         if (debt.mesTermino === mes) {
           parcelasEncerram++;
         }
@@ -241,42 +272,47 @@ export default function DividasPage() {
     return months;
   }, [debtGroups, summary.totalRestante]);
 
+  // Conta name lookup
+  const getContaNome = (contaId: string) => contas?.find(c => c.id === contaId)?.nome || '';
+
   if (isLoading) {
     return (
-      <div className="space-y-6 p-6">
-        <h1 className="text-2xl font-bold">Dividas</h1>
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
-          {[...Array(4)].map((_, i) => (
+      <div className="space-y-6 animate-fade-in">
+        <h1 className="text-2xl font-bold">Dívidas</h1>
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+          {[...Array(3)].map((_, i) => (
             <Skeleton key={i} className="h-28 rounded-xl" />
           ))}
         </div>
-        <Skeleton className="h-64 rounded-xl" />
         <Skeleton className="h-64 rounded-xl" />
       </div>
     );
   }
 
   return (
-    <div className="space-y-8 p-6">
+    <div className="space-y-6 animate-fade-in">
       <div>
-        <h1 className="text-2xl font-bold tracking-tight">Dividas</h1>
-        <p className="text-muted-foreground">
-          Acompanhe seus parcelamentos e projecao de quitacao
+        <h1 className="text-2xl font-bold">Dívidas</h1>
+        <p className="text-sm text-muted-foreground">
+          Acompanhe seus parcelamentos e projeção de quitação
         </p>
       </div>
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">
-              Divida restante
+              Dívida restante
             </CardTitle>
             <Landmark className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <p className="text-2xl font-bold text-destructive">
               {formatCurrency(summary.totalRestante)}
+            </p>
+            <p className="text-xs text-muted-foreground mt-1">
+              {debtGroups.length} parcelamento{debtGroups.length !== 1 ? 's' : ''} ativo{debtGroups.length !== 1 ? 's' : ''}
             </p>
           </CardContent>
         </Card>
@@ -290,7 +326,10 @@ export default function DividasPage() {
           </CardHeader>
           <CardContent>
             <p className="text-2xl font-bold">
-              {formatCurrency(summary.parcelaMensalMedia)}
+              {formatCurrency(summary.totalMensal)}
+            </p>
+            <p className="text-xs text-muted-foreground mt-1">
+              Soma de todas as parcelas ativas
             </p>
           </CardContent>
         </Card>
@@ -298,21 +337,7 @@ export default function DividasPage() {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">
-              Proxima fatura estimada
-            </CardTitle>
-            <CreditCard className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <p className="text-2xl font-bold">
-              {formatCurrency(summary.proximaFatura)}
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
-              Meses ate quitar
+              Meses até quitar
             </CardTitle>
             <CalendarClock className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
@@ -320,9 +345,17 @@ export default function DividasPage() {
             <p className="text-2xl font-bold">
               {summary.mesesAteQuitar}{' '}
               <span className="text-sm font-normal text-muted-foreground">
-                {summary.mesesAteQuitar === 1 ? 'mes' : 'meses'}
+                {summary.mesesAteQuitar === 1 ? 'mês' : 'meses'}
               </span>
             </p>
+            {summary.mesesAteQuitar > 0 && (
+              <p className="text-xs text-muted-foreground mt-1">
+                Previsão: {formatMesCompetencia(addMonths(
+                  `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`,
+                  summary.mesesAteQuitar
+                ))}
+              </p>
+            )}
           </CardContent>
         </Card>
       </div>
@@ -331,28 +364,27 @@ export default function DividasPage() {
       {faturaDebts.length > 0 && (
         <div className="space-y-4">
           <div className="flex items-center gap-2">
-            <CreditCard className="h-5 w-5 text-primary" />
+            <CreditCard className="h-5 w-5 text-warning" />
             <h2 className="text-lg font-semibold">Parcelamentos de fatura</h2>
-            <Badge variant="secondary">{faturaDebts.length}</Badge>
+            <Badge variant="destructive">{faturaDebts.length}</Badge>
           </div>
+          <p className="text-xs text-muted-foreground -mt-2">
+            Faturas que foram refinanciadas — incluem juros de 8-17% a.m.
+          </p>
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
             {faturaDebts.map((debt) => (
-              <Card key={debt.key} className="relative overflow-hidden">
-                <div
-                  className="absolute inset-x-0 top-0 h-1 bg-primary"
-                  style={{ width: `${debt.progressPercent}%` }}
-                />
+              <Card key={debt.key} className="border-warning/30">
                 <CardHeader className="pb-3">
                   <div className="flex items-center justify-between">
                     <CardTitle className="text-sm font-medium">
-                      Fatura de {debt.faturaMonth || 'N/A'}
+                      {debt.displayName}
                     </CardTitle>
                     <Badge variant="outline">
                       {debt.parcelaAtual}/{debt.parcelaTotal}
                     </Badge>
                   </div>
                 </CardHeader>
-                <CardContent className="space-y-3">
+                <CardContent className="space-y-2">
                   <div className="flex justify-between text-sm">
                     <span className="text-muted-foreground">Valor mensal</span>
                     <span className="font-medium">
@@ -360,7 +392,7 @@ export default function DividasPage() {
                     </span>
                   </div>
                   <div className="flex justify-between text-sm">
-                    <span className="text-muted-foreground">Restante</span>
+                    <span className="text-muted-foreground">Restante ({debt.parcelasRestantes}x)</span>
                     <span className="font-medium text-destructive">
                       {formatCurrency(debt.valorRestante)}
                     </span>
@@ -391,7 +423,7 @@ export default function DividasPage() {
             <Badge variant="secondary">{purchaseDebts.length}</Badge>
           </div>
 
-          <div className="space-y-3">
+          <div className="space-y-2">
             {purchaseDebts.map((debt) => (
               <Card key={debt.key}>
                 <CardContent className="p-4">
@@ -400,37 +432,35 @@ export default function DividasPage() {
                       <p className="truncate font-medium" title={debt.descricao}>
                         {debt.displayName}
                       </p>
-                      <div className="mt-1 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+                      <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
                         <Badge variant="outline" className="text-xs">
                           {debt.parcelaAtual}/{debt.parcelaTotal}
                         </Badge>
-                        {debt.categoria && (
-                          <span className="text-xs">{debt.categoria}</span>
+                        <span>Termina {formatMesCompetencia(debt.mesTermino)}</span>
+                        {debt.categoria && debt.categoria !== 'Outros' && (
+                          <span>· {debt.categoria}</span>
                         )}
-                        <span className="text-xs">
-                          Termina {formatMesCompetencia(debt.mesTermino)}
-                        </span>
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-6 text-right">
+                    <div className="flex items-center gap-6 text-right shrink-0">
                       <div>
-                        <p className="text-sm text-muted-foreground">Mensal</p>
-                        <p className="font-medium">
+                        <p className="text-xs text-muted-foreground">Mensal</p>
+                        <p className="font-medium text-sm">
                           {formatCurrency(debt.valorMensal)}
                         </p>
                       </div>
                       <div>
-                        <p className="text-sm text-muted-foreground">Restante</p>
-                        <p className="font-medium text-destructive">
+                        <p className="text-xs text-muted-foreground">Restante ({debt.parcelasRestantes}x)</p>
+                        <p className="font-medium text-sm text-destructive">
                           {formatCurrency(debt.valorRestante)}
                         </p>
                       </div>
-                      <div className="hidden w-20 sm:block">
-                        <p className="mb-1 text-right text-xs text-muted-foreground">
+                      <div className="hidden w-16 sm:block">
+                        <p className="mb-1 text-right text-[10px] text-muted-foreground">
                           {debt.progressPercent}%
                         </p>
-                        <Progress value={debt.progressPercent} className="h-2" />
+                        <Progress value={debt.progressPercent} className="h-1.5" />
                       </div>
                     </div>
                   </div>
@@ -446,8 +476,11 @@ export default function DividasPage() {
         <div className="space-y-4">
           <div className="flex items-center gap-2">
             <TrendingDown className="h-5 w-5 text-primary" />
-            <h2 className="text-lg font-semibold">Projecao mensal</h2>
+            <h2 className="text-lg font-semibold">Projeção mensal</h2>
           </div>
+          <p className="text-xs text-muted-foreground -mt-2">
+            Estimativa sem considerar juros e encargos adicionais
+          </p>
 
           <Card>
             <CardContent className="p-0">
@@ -455,17 +488,11 @@ export default function DividasPage() {
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b bg-muted/50">
-                      <th className="px-4 py-3 text-left font-medium">Mes</th>
-                      <th className="px-4 py-3 text-right font-medium">
-                        Valor mensal
-                      </th>
-                      <th className="px-4 py-3 text-center font-medium">
-                        Parcelas encerram
-                      </th>
-                      <th className="px-4 py-3 text-right font-medium">
-                        Saldo restante
-                      </th>
-                      <th className="px-4 py-3 text-center font-medium w-12"></th>
+                      <th className="px-4 py-3 text-left font-medium">Mês</th>
+                      <th className="px-4 py-3 text-right font-medium">Valor mensal</th>
+                      <th className="px-4 py-3 text-center font-medium">Encerram</th>
+                      <th className="px-4 py-3 text-right font-medium">Saldo restante</th>
+                      <th className="px-4 py-3 text-center font-medium w-8"></th>
                     </tr>
                   </thead>
                   <tbody>
@@ -483,35 +510,32 @@ export default function DividasPage() {
                       return (
                         <tr
                           key={month.mes}
-                          className={`border-b last:border-0 transition-colors ${
+                          className={`border-b last:border-0 ${
                             significantDrop
                               ? 'bg-green-50 dark:bg-green-950/20'
                               : ''
                           }`}
                         >
-                          <td className="px-4 py-3 font-medium">{month.label}</td>
-                          <td className="px-4 py-3 text-right">
+                          <td className="px-4 py-2.5 font-medium">{month.label}</td>
+                          <td className="px-4 py-2.5 text-right">
                             {formatCurrency(month.valorMensal)}
                           </td>
-                          <td className="px-4 py-3 text-center">
+                          <td className="px-4 py-2.5 text-center">
                             {month.parcelasEncerram > 0 ? (
                               <Badge
                                 variant="secondary"
-                                className="bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300"
+                                className="bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300 text-xs"
                               >
-                                {month.parcelasEncerram}{' '}
-                                {month.parcelasEncerram === 1
-                                  ? 'encerra'
-                                  : 'encerram'}
+                                {month.parcelasEncerram}
                               </Badge>
                             ) : (
                               <span className="text-muted-foreground">-</span>
                             )}
                           </td>
-                          <td className="px-4 py-3 text-right font-medium">
+                          <td className="px-4 py-2.5 text-right font-medium">
                             {formatCurrency(month.saldoRestante)}
                           </td>
-                          <td className="px-4 py-3 text-center">
+                          <td className="px-4 py-2.5 text-center">
                             {significantDrop && (
                               <ArrowDownRight className="inline h-4 w-4 text-green-600" />
                             )}
@@ -532,9 +556,9 @@ export default function DividasPage() {
         <Card className="py-12">
           <CardContent className="flex flex-col items-center justify-center text-center">
             <Landmark className="mb-4 h-12 w-12 text-muted-foreground/50" />
-            <h3 className="text-lg font-medium">Nenhuma divida encontrada</h3>
+            <h3 className="text-lg font-medium">Nenhuma dívida encontrada</h3>
             <p className="mt-1 text-sm text-muted-foreground">
-              Transacoes parceladas aparecerão aqui automaticamente.
+              Importe faturas do Mercado Pago (PDF) ou extratos com parcelas para ver seus parcelamentos aqui.
             </p>
           </CardContent>
         </Card>
