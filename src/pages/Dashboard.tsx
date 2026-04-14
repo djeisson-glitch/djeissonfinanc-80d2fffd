@@ -10,7 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { Skeleton } from '@/components/ui/skeleton';
-import { AlertTriangle, BarChart3, CreditCard } from 'lucide-react';
+import { AlertTriangle, BarChart3, ChevronDown, ChevronUp, CreditCard } from 'lucide-react';
 import { MonthSelector } from '@/components/MonthSelector';
 import { ParcelasTimeline } from '@/components/dashboard/ParcelasTimeline';
 import { FaturaDrawer } from '@/components/dashboard/FaturaDrawer';
@@ -24,6 +24,7 @@ export default function DashboardPage() {
   const now = new Date();
   const [month, setMonth] = useState(now.getMonth());
   const [year, setYear] = useState(now.getFullYear());
+  const [categoriasExpanded, setCategoriasExpanded] = useState(false);
   const { start, end } = getMonthRange(month, year);
 
   const { data: config } = useQuery({
@@ -318,7 +319,7 @@ export default function DashboardPage() {
       )}
 
       <div className="grid gap-4 md:grid-cols-2">
-        <Card>
+        <Card className="md:col-span-2">
           <CardHeader>
             <CardTitle className="text-lg flex items-center gap-2">
               <BarChart3 className="h-5 w-5" />
@@ -329,27 +330,45 @@ export default function DashboardPage() {
             {categoryRanking.length === 0 ? (
               <p className="text-sm text-muted-foreground">Nenhuma despesa este mês</p>
             ) : (
-              <div className="space-y-3">
-                {categoryRanking.map(({ cat, total, pct, color }) => (
+              <>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3">
+                  {(categoriasExpanded ? categoryRanking : categoryRanking.slice(0, 8)).map(({ cat, total, pct, color }) => (
+                    <button
+                      key={cat}
+                      className="flex items-center justify-between w-full hover:bg-muted/50 rounded-lg p-2 -m-2 transition-colors cursor-pointer text-left min-w-0"
+                      onClick={() => navigate(`/transacoes?categoria=${encodeURIComponent(cat)}`)}
+                    >
+                      <div className="flex items-center gap-2 min-w-0 flex-1">
+                        <div
+                          className="w-3 h-3 rounded-full shrink-0"
+                          style={{ backgroundColor: color }}
+                        />
+                        <span className="text-sm font-medium truncate">{cat}</span>
+                      </div>
+                      <div className="text-right shrink-0 ml-2">
+                        <span className="text-sm font-medium">{formatCurrency(total)}</span>
+                        <span className="text-xs text-muted-foreground ml-2">{pct.toFixed(0)}%</span>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+                {categoryRanking.length > 8 && (
                   <button
-                    key={cat}
-                    className="flex items-center justify-between w-full hover:bg-muted/50 rounded-lg p-2 -m-2 transition-colors cursor-pointer text-left"
-                    onClick={() => navigate(`/transacoes?categoria=${encodeURIComponent(cat)}`)}
+                    onClick={() => setCategoriasExpanded(!categoriasExpanded)}
+                    className="mt-4 w-full flex items-center justify-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors py-2 border-t"
                   >
-                    <div className="flex items-center gap-2">
-                      <div
-                        className="w-3 h-3 rounded-full shrink-0"
-                        style={{ backgroundColor: color }}
-                      />
-                      <span className="text-sm font-medium">{cat}</span>
-                    </div>
-                    <div className="text-right">
-                      <span className="text-sm font-medium">{formatCurrency(total)}</span>
-                      <span className="text-xs text-muted-foreground ml-2">{pct.toFixed(0)}%</span>
-                    </div>
+                    {categoriasExpanded ? (
+                      <>
+                        Mostrar menos <ChevronUp className="h-4 w-4" />
+                      </>
+                    ) : (
+                      <>
+                        Ver todas ({categoryRanking.length}) <ChevronDown className="h-4 w-4" />
+                      </>
+                    )}
                   </button>
-                ))}
-              </div>
+                )}
+              </>
             )}
           </CardContent>
         </Card>
