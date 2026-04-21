@@ -779,7 +779,7 @@ export default function TransacoesPage() {
               essencial: editingTx.essencial,
               ignorar_dashboard: editingTx.ignorar_dashboard || false,
             }); }} className="space-y-4">
-              <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/50">
+              <div className="flex items-start gap-3 p-3 rounded-lg bg-muted/50 min-w-0">
                 <div
                   className="w-8 h-8 rounded-full shrink-0 flex items-center justify-center"
                   style={{ backgroundColor: (editingTx.categoria_id ? getColor(editingTx.categoria_id) : getCategoriaColor(editingTx.categoria)) + '20' }}
@@ -790,7 +790,7 @@ export default function TransacoesPage() {
                   />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium truncate">{editingTx.descricao}</p>
+                  <p className="text-sm font-medium break-words">{editingTx.descricao}</p>
                   <p className="text-xs text-muted-foreground">{formatDate(editingTx.data)} · {formatCurrency(Number(editingTx.valor))}</p>
                 </div>
               </div>
