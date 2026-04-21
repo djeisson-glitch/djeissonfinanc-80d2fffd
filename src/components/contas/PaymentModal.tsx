@@ -62,6 +62,12 @@ export function PaymentModal({ open, onOpenChange, contaId, contaNome, faturaTot
       const valorPagamento = mode === 'total' ? faturaTotal : valorPago;
       const billingPeriod = `${year}-${String(month + 1).padStart(2, '0')}`;
 
+      // Create the installment group up front so the payment row links to the same group
+      // as its future parcelas (when partial). This keeps the payment and the parcelamento
+      // visibly tied together in the UI.
+      const grupo_parcela =
+        mode === 'parcial' && restante > 0 && parcelas > 0 ? crypto.randomUUID() : null;
+
       // Create payment transaction on credit card account (receita = reduces card debt)
       const paymentHash = generateHash(baseDate, `Pagamento fatura ${contaNome}`, valorPagamento, pessoaNome);
       const { data: paymentData, error: paymentError } = await supabase.from('transacoes').insert({
@@ -77,6 +83,7 @@ export function PaymentModal({ open, onOpenChange, contaId, contaNome, faturaTot
         pessoa: pessoaNome,
         mes_competencia: billingPeriod,
         ignorar_dashboard: true,
+        grupo_parcela,
       }).select('id').single();
 
       if (paymentError) throw paymentError;
@@ -100,9 +107,8 @@ export function PaymentModal({ open, onOpenChange, contaId, contaNome, faturaTot
         });
       }
 
-      // If partial, create future installments for remaining
-      if (mode === 'parcial' && restante > 0 && parcelas > 0) {
-        const grupo_parcela = crypto.randomUUID();
+      // If partial, create future installments for remaining (linked to the same grupo_parcela)
+      if (mode === 'parcial' && restante > 0 && parcelas > 0 && grupo_parcela) {
         const installments = [];
         for (let i = 1; i <= parcelas; i++) {
           const d = new Date(year, month + i, 1);

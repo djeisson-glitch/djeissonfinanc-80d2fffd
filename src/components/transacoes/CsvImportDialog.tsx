@@ -680,16 +680,8 @@ export function CsvImportDialog({ open, onOpenChange }: Props) {
     setProgress(5);
 
     try {
-      const csvDates = parsedTransactions.map((t) => new Date(t.data + "T00:00:00").getTime());
-      const newestDate = new Date(Math.max(...csvDates));
-      const targetMonth =
-        isCredito && dueConfirmed
-          ? `${dueYear}-${String(dueMonth + 1).padStart(2, "0")}`
-          : `${newestDate.getFullYear()}-${String(newestDate.getMonth() + 1).padStart(2, "0")}`;
-
-      await cleanOrphanProjections(context.contaId, context.currentUserId, parsedTransactions, targetMonth);
-      setProgress(10);
-
+      // NOTE: cleanOrphanProjections moved to handleImport so that projections are not
+      // deleted prematurely if buildImportPlan throws a CONFLICTS error during preview.
       const plan = await buildImportPlan(context.contaId, context.currentUserId);
       setPreparedPlan(plan);
       setProgress(100);
@@ -855,6 +847,18 @@ export function CsvImportDialog({ open, onOpenChange }: Props) {
       }
       setProgress(10);
       const plan = preparedPlan ?? (await buildImportPlan(context.contaId, context.currentUserId));
+
+      // Clean orphan projections AFTER buildImportPlan succeeds (no CONFLICTS thrown),
+      // so projections are preserved if the user needs to resolve conflicts first.
+      {
+        const csvDates = parsedTransactions.map((t) => new Date(t.data + "T00:00:00").getTime());
+        const newestDate = new Date(Math.max(...csvDates));
+        const targetMonth =
+          isCredito && dueConfirmed
+            ? `${dueYear}-${String(dueMonth + 1).padStart(2, "0")}`
+            : `${newestDate.getFullYear()}-${String(newestDate.getMonth() + 1).padStart(2, "0")}`;
+        await cleanOrphanProjections(context.contaId, context.currentUserId, parsedTransactions, targetMonth);
+      }
 
       // Step 1: Delete auto-projected duplicates
       let deletedCount = 0;

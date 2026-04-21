@@ -63,7 +63,7 @@ export function ManualTransactionModal({
 
   const contaSelecionada = contas?.find(c => c.id === selectedContaId);
   const effectiveContaTipo: 'credito' | 'debito' | undefined =
-    contaTipo || contaSelecionada?.tipo;
+    contaTipo || (contaSelecionada?.tipo as 'credito' | 'debito' | undefined);
   const effectiveContaNome = contaNome || contaSelecionada?.nome || '';
   const isCredito = effectiveContaTipo === 'credito';
 
