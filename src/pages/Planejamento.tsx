@@ -47,7 +47,7 @@ export default function PlanejamentoPage() {
     mutationFn: async ({ descricao, valor }: { descricao: string; valor: number }) => {
       const { error } = await supabase.from('fontes_receita').insert({
         user_id: user!.id,
-        descricao,
+        nome: descricao,
         valor,
         ativo: true,
       });
@@ -98,7 +98,7 @@ export default function PlanejamentoPage() {
         .select('*')
         .eq('user_id', user!.id)
         .eq('mes', billingMonth)
-        .order('vencimento');
+        .order('data_vencimento');
       return (data || []) as any[];
     },
     enabled: !!user,
@@ -108,7 +108,10 @@ export default function PlanejamentoPage() {
     mutationFn: async (params: { descricao: string; valor: number; tipo: 'pagar' | 'receber'; vencimento: string }) => {
       const { error } = await supabase.from('contas_pagar_receber').insert({
         user_id: user!.id,
-        ...params,
+        descricao: params.descricao,
+        valor: params.valor,
+        tipo: params.tipo,
+        data_vencimento: params.vencimento || null,
         mes: billingMonth,
       });
       if (error) throw error;
@@ -304,8 +307,8 @@ export default function PlanejamentoPage() {
     const { error } = await supabase
       .from('planejamento_categorias')
       .upsert(
-        { user_id: user.id, categoria, valor_planejado: valor, mes: billingMonth },
-        { onConflict: 'user_id,categoria,mes' }
+        { user_id: user.id, categoria_nome: categoria, valor_planejado: valor, mes: billingMonth },
+        { onConflict: 'user_id,categoria_nome,mes' }
       );
     if (error) {
       toast({ title: 'Erro ao salvar meta', variant: 'destructive' });
