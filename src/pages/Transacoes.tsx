@@ -767,7 +767,7 @@ export default function TransacoesPage() {
 
       {/* Edit Dialog */}
       <Dialog open={!!editingTx} onOpenChange={() => setEditingTx(null)}>
-        <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto">
+        <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto overflow-x-hidden">
           <DialogHeader>
             <DialogTitle>Editar Transação</DialogTitle>
           </DialogHeader>
@@ -815,23 +815,24 @@ export default function TransacoesPage() {
                 <Label>Essencial</Label>
                 <Switch checked={editingTx.essencial} onCheckedChange={v => setEditingTx({ ...editingTx, essencial: v })} />
               </div>
-              <div className="flex items-center gap-3 rounded-lg border p-3">
+              <div className="flex items-start gap-3 rounded-lg border p-3 min-w-0">
                 <Checkbox
                   id="ignorar-dashboard"
                   checked={editingTx.ignorar_dashboard || false}
                   onCheckedChange={(v) => setEditingTx({ ...editingTx, ignorar_dashboard: !!v })}
+                  className="mt-0.5 shrink-0"
                 />
-                <div>
+                <div className="min-w-0 flex-1">
                   <Label htmlFor="ignorar-dashboard" className="text-sm font-medium cursor-pointer">Ignorar no dashboard</Label>
                   <p className="text-xs text-muted-foreground">Não contabilizar nos totais</p>
                 </div>
               </div>
-              <div className="flex items-center justify-between rounded-lg border p-3">
-                <div>
+              <div className="flex items-start justify-between gap-3 rounded-lg border p-3 min-w-0">
+                <div className="min-w-0 flex-1">
                   <p className="text-sm font-medium">Aprender padrão?</p>
-                  <p className="text-xs text-muted-foreground">"{editingTx.descricao}" = "{editingTx.categoria}"</p>
+                  <p className="text-xs text-muted-foreground break-words">"{editingTx.descricao}" = "{editingTx.categoria}"</p>
                 </div>
-                <Switch checked={learnPattern} onCheckedChange={setLearnPattern} />
+                <Switch checked={learnPattern} onCheckedChange={setLearnPattern} className="shrink-0" />
               </div>
               <div className="flex gap-2">
                 <Button className="flex-1" type="submit">
