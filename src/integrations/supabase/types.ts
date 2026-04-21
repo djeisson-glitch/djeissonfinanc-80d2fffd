@@ -121,6 +121,78 @@ export type Database = {
         }
         Relationships: []
       }
+      contas_pagar_receber: {
+        Row: {
+          categoria: string | null
+          created_at: string
+          data_vencimento: string | null
+          descricao: string
+          id: string
+          mes: string
+          pago: boolean
+          tipo: string
+          updated_at: string
+          user_id: string
+          valor: number
+        }
+        Insert: {
+          categoria?: string | null
+          created_at?: string
+          data_vencimento?: string | null
+          descricao: string
+          id?: string
+          mes: string
+          pago?: boolean
+          tipo?: string
+          updated_at?: string
+          user_id: string
+          valor?: number
+        }
+        Update: {
+          categoria?: string | null
+          created_at?: string
+          data_vencimento?: string | null
+          descricao?: string
+          id?: string
+          mes?: string
+          pago?: boolean
+          tipo?: string
+          updated_at?: string
+          user_id?: string
+          valor?: number
+        }
+        Relationships: []
+      }
+      fontes_receita: {
+        Row: {
+          ativo: boolean
+          created_at: string
+          id: string
+          nome: string
+          updated_at: string
+          user_id: string
+          valor: number
+        }
+        Insert: {
+          ativo?: boolean
+          created_at?: string
+          id?: string
+          nome: string
+          updated_at?: string
+          user_id: string
+          valor?: number
+        }
+        Update: {
+          ativo?: boolean
+          created_at?: string
+          id?: string
+          nome?: string
+          updated_at?: string
+          user_id?: string
+          valor?: number
+        }
+        Relationships: []
+      }
       grupos_parcela: {
         Row: {
           categoria_id: string | null
@@ -244,6 +316,39 @@ export type Database = {
           linhas_rejeitadas?: number
           total_linhas_csv?: number
           user_id?: string
+        }
+        Relationships: []
+      }
+      planejamento_categorias: {
+        Row: {
+          categoria_id: string | null
+          categoria_nome: string
+          created_at: string
+          id: string
+          mes: string
+          updated_at: string
+          user_id: string
+          valor_planejado: number
+        }
+        Insert: {
+          categoria_id?: string | null
+          categoria_nome: string
+          created_at?: string
+          id?: string
+          mes: string
+          updated_at?: string
+          user_id: string
+          valor_planejado?: number
+        }
+        Update: {
+          categoria_id?: string | null
+          categoria_nome?: string
+          created_at?: string
+          id?: string
+          mes?: string
+          updated_at?: string
+          user_id?: string
+          valor_planejado?: number
         }
         Relationships: []
       }
