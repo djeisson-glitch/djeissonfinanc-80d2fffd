@@ -767,7 +767,7 @@ export default function TransacoesPage() {
 
       {/* Edit Dialog */}
       <Dialog open={!!editingTx} onOpenChange={() => setEditingTx(null)}>
-        <DialogContent>
+        <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Editar Transação</DialogTitle>
           </DialogHeader>
