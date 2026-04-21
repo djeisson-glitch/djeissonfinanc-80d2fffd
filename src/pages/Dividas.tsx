@@ -211,21 +211,33 @@ export default function DividasPage() {
       }
     }
 
-    // Calculate average monthly payment per contract
+    // Calculate average monthly payment per contract.
+    // Use only regular installments ('parcela') for the monthly average; amortizations are
+    // one-off events and would inflate the average. If only amortizations exist, fall back
+    // to their average so the loan still appears.
     const result: LoanGroup[] = [];
     for (const [, loan] of loans) {
       if (loan.pagamentos.length === 0) continue;
 
-      // Group payments by month and sum them (amortizacao + parcela in same month = one payment)
-      const byMonth = new Map<string, number>();
-      for (const p of loan.pagamentos) {
-        const month = p.data.substring(0, 7);
-        byMonth.set(month, (byMonth.get(month) || 0) + p.valor);
-      }
+      const parcelas = loan.pagamentos.filter((p) => p.tipo === 'parcela');
+      const amortizacoes = loan.pagamentos.filter((p) => p.tipo === 'amortizacao');
 
-      const monthlyValues = Array.from(byMonth.values());
-      loan.valorMedio = monthlyValues.reduce((s, v) => s + v, 0) / monthlyValues.length;
-      loan.mesesConsecutivos = byMonth.size;
+      if (parcelas.length > 0) {
+        // Group regular installments by month and sum them
+        const byMonth = new Map<string, number>();
+        for (const p of parcelas) {
+          const month = p.data.substring(0, 7);
+          byMonth.set(month, (byMonth.get(month) || 0) + p.valor);
+        }
+        const monthlyValues = Array.from(byMonth.values());
+        loan.valorMedio = monthlyValues.reduce((s, v) => s + v, 0) / monthlyValues.length;
+        loan.mesesConsecutivos = byMonth.size;
+      } else {
+        // Fallback: only amortizations exist
+        loan.valorMedio = amortizacoes.reduce((s, p) => s + p.valor, 0) / amortizacoes.length;
+        const months = new Set(amortizacoes.map((p) => p.data.substring(0, 7)));
+        loan.mesesConsecutivos = months.size;
+      }
 
       result.push(loan);
     }
