@@ -143,6 +143,37 @@ export default function DashboardPage() {
     enabled: !!user,
   });
 
+  // Saldo anterior = balance across debit accounts strictly BEFORE the current billing month's start.
+  // Uses the same all-transactions logic as saldoAtual (including ignorar_dashboard) to stay symmetric.
+  const { data: saldoAnterior } = useQuery({
+    queryKey: ['dashboard', 'saldo-anterior', user?.id, start],
+    queryFn: async () => {
+      const { data: contasList } = await supabase.from('contas').select('id, saldo_inicial, tipo, data_abertura').eq('user_id', user!.id);
+      if (!contasList?.length) return 0;
+      const debitAccounts = contasList.filter(c => c.tipo === 'debito');
+      // Only count opening balance if account was opened before the current month
+      let total = debitAccounts.reduce((s, c) => {
+        if (!c.data_abertura || c.data_abertura < start) return s + (c.saldo_inicial || 0);
+        return s;
+      }, 0);
+      for (const conta of debitAccounts) {
+        const { data: txs } = await supabase
+          .from('transacoes')
+          .select('valor, tipo')
+          .eq('conta_id', conta.id)
+          .eq('user_id', user!.id)
+          .lt('data', start);
+        if (txs) {
+          for (const t of txs) {
+            total += t.tipo === 'receita' ? Number(t.valor) : -Number(t.valor);
+          }
+        }
+      }
+      return total;
+    },
+    enabled: !!user,
+  });
+
   const { receitaBase } = useFontesReceita();
   const reserva = config?.reserva_minima || 2000;
 
@@ -167,10 +198,8 @@ export default function DashboardPage() {
   const totalAPagar = (contasPR || []).filter((c: any) => c.tipo === 'pagar').reduce((s: number, c: any) => s + Number(c.valor), 0);
   const totalAReceber = (contasPR || []).filter((c: any) => c.tipo === 'receber').reduce((s: number, c: any) => s + Number(c.valor), 0);
 
-  // Saldo anterior = saldo atual - receitas do mês + despesas do mês (o que sobrou antes deste mês)
-  const saldoAnterior = (saldoAtual || 0) - totalReceitas + totalDespesas;
   // Disponível = saldo anterior + receitas + a receber - despesas - a pagar
-  const disponivel = saldoAnterior + totalReceitas + totalAReceber - totalDespesas - totalAPagar;
+  const disponivel = (saldoAnterior || 0) + totalReceitas + totalAReceber - totalDespesas - totalAPagar;
   const percentGasto = totalReceitas > 0 ? (totalDespesas / totalReceitas) * 100 : (totalDespesas > 0 ? 100 : 0);
 
   const categorias = transacoesMes
@@ -260,7 +289,7 @@ export default function DashboardPage() {
               {formatCurrency(disponivel)}
             </p>
             <p className="text-xs text-muted-foreground">
-              {saldoAnterior >= 0 ? '+' : ''}{formatCurrency(saldoAnterior)} anterior
+              {(saldoAnterior || 0) >= 0 ? '+' : ''}{formatCurrency(saldoAnterior || 0)} anterior
               {totalAPagar > 0 && ` · ${formatCurrency(totalAPagar)} a pagar`}
               {totalAReceber > 0 && ` · ${formatCurrency(totalAReceber)} a receber`}
             </p>

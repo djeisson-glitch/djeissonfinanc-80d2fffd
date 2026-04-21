@@ -12,6 +12,7 @@ import { PenLine, AlertTriangle, Calendar, Tag, Layers, ChevronDown, ChevronUp }
 import { getCategoriaColor } from '@/types/database.types';
 import { ManualTransactionModal } from '@/components/contas/ManualTransactionModal';
 import { useFaturaAcumulada } from '@/hooks/useFaturaAcumulada';
+import { isDevolution } from '@/lib/csv-parser';
 
 interface Props {
   open: boolean;
@@ -76,7 +77,10 @@ export function FaturaDrawer({ open, onOpenChange, cardId, cardName, start, end,
   });
 
   const despesas = transacoes?.filter(t => t.tipo === 'despesa') || [];
-  const total = despesas.reduce((s, t) => s + Number(t.valor), 0);
+  const estornos = transacoes?.filter(t => t.tipo === 'receita' && isDevolution(t.descricao)) || [];
+  const totalDespesas = despesas.reduce((s, t) => s + Number(t.valor), 0);
+  const totalEstornos = estornos.reduce((s, t) => s + Math.abs(Number(t.valor)), 0);
+  const total = totalDespesas - totalEstornos;
 
   const porCategoria = despesas.reduce((acc, t) => {
     const cat = t.categoria || 'Outros';

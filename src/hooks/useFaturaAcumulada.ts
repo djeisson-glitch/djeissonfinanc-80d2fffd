@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
+import { isFaturaPayment, isDevolution } from '@/lib/csv-parser';
 
 interface FaturaMes {
   periodo: string; // YYYY-MM
@@ -17,23 +18,7 @@ interface FaturaAcumulada {
   historico: FaturaMes[];   // monthly breakdown
 }
 
-function isPaymentDescription(desc: string): boolean {
-  const d = desc.toLowerCase();
-  const isDevolution = d.includes('devoluc') || d.includes('devolução') || d.includes('estorno');
-  if (isDevolution) return false;
-  return (
-    d.includes('pag fat') ||
-    /pagamento\s+(d[ae]\s+)?fatura/.test(d) ||
-    d.includes('crédito por parcelamento') ||
-    d.includes('credito por parcelamento') ||
-    d.includes('pagamento recebido')
-  );
-}
-
-function isDevolution(desc: string): boolean {
-  const d = desc.toLowerCase();
-  return d.includes('devoluc') || d.includes('devolução') || d.includes('estorno');
-}
+// Detection helpers moved to @/lib/csv-parser for reuse across parsers/hooks/pages.
 
 /**
  * Hook that calculates accumulated credit card balances.
@@ -74,13 +59,13 @@ export function useFaturaAcumulada(cardIds: string[], billingMonth: string) {
           }
 
           // Detect payments (receita that are fatura payments)
-          if (isPaymentDescription(t.descricao)) {
+          if (isFaturaPayment(t.descricao)) {
             byPeriod[periodo].pagamentos += Math.abs(Number(t.valor));
           }
 
-          // Devolutions reduce despesas
+          // Devolutions reduce despesas (valor is always stored positive; use abs for safety)
           if (isDevolution(t.descricao) && t.tipo === 'receita') {
-            byPeriod[periodo].despesas -= Number(t.valor);
+            byPeriod[periodo].despesas -= Math.abs(Number(t.valor));
           }
         }
 

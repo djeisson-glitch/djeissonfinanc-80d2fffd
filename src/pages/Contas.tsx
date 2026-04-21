@@ -18,6 +18,7 @@ import { MonthSelector } from '@/components/MonthSelector';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import { cn } from '@/lib/utils';
+import { isFaturaPayment, isDevolution } from '@/lib/csv-parser';
 import { format, parse } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
@@ -112,19 +113,13 @@ export default function ContasPage() {
         if (t.tipo === 'despesa') {
           faturas[t.conta_id].despesas += Number(t.valor);
         }
-        const desc = t.descricao.toLowerCase();
-        const isDevolution = desc.includes('devoluc') || desc.includes('devolução') || desc.includes('estorno');
-        const isPayment =
-          desc.includes('pag fat') ||
-          /pagamento\s+(d[ae]\s+)?fatura/.test(desc) ||
-          desc.includes('crédito por parcelamento') ||
-          desc.includes('credito por parcelamento') ||
-          desc.includes('pagamento recebido');
-        if (!isDevolution && isPayment && t.tipo === 'receita') {
+        const devolution = isDevolution(t.descricao);
+        const payment = isFaturaPayment(t.descricao);
+        if (payment && t.tipo === 'receita') {
           faturas[t.conta_id].pagamentos += Math.abs(Number(t.valor));
         }
-        if (isDevolution && t.tipo === 'receita') {
-          faturas[t.conta_id].despesas -= Number(t.valor);
+        if (devolution && t.tipo === 'receita') {
+          faturas[t.conta_id].despesas -= Math.abs(Number(t.valor));
         }
       });
       return faturas;

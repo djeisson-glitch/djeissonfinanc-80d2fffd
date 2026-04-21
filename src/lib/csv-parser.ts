@@ -50,6 +50,29 @@ interface ParseResult {
 }
 
 /**
+ * Shared detection helpers — keep logic consistent across parsers, hooks and pages.
+ * Always check isDevolution BEFORE isFaturaPayment; a string like "Estorno pag fat"
+ * should classify as devolution, not payment.
+ */
+export function isDevolution(desc: string): boolean {
+  const d = desc.toLowerCase();
+  return d.includes('devoluc') || d.includes('devolução') || d.includes('estorno');
+}
+
+export function isFaturaPayment(desc: string): boolean {
+  if (isDevolution(desc)) return false;
+  const d = desc.toLowerCase();
+  return (
+    d.includes('pag fat') ||
+    d.includes('pagto fatura') ||
+    /pagamento\s+(d[ae]\s+)?fatura/.test(d) ||
+    d.includes('crédito por parcelamento') ||
+    d.includes('credito por parcelamento') ||
+    d.includes('pagamento recebido')
+  );
+}
+
+/**
  * Normalizes a description for deduplication:
  * - Remove multiple spaces
  * - Uppercase
@@ -131,18 +154,8 @@ function parseValue(valorStr: string): number | null {
 
 function classifyTransaction(parcela_atual: number | null, parcela_total: number | null, valor: number, descricao: string): TransactionClassification {
   if (valor < 0) {
-    const desc = descricao.toLowerCase();
     // "Pag Fat" / "Pagamento da fatura" / "Crédito por parcelamento" / "Pagamento recebido" (Nubank) = acerto de fatura → excluir
-    if (
-      desc.includes('pag fat') ||
-      desc.includes('pagto fatura') ||
-      /pagamento\s+(d[ae]\s+)?fatura/.test(desc) ||
-      desc.includes('crédito por parcelamento') ||
-      desc.includes('credito por parcelamento') ||
-      desc.includes('pagamento recebido')
-    ) {
-      return 'payment';
-    }
+    if (isFaturaPayment(descricao)) return 'payment';
     // Devoluções, estornos e outros créditos → importar como receita
     return 'refund';
   }
@@ -345,8 +358,10 @@ export function parseSicrediCSV(csvText: string, defaultPessoa: string = 'Titula
   // inject a synthetic "Encargos da Fatura" transaction to reconcile.
   if (headerFaturaTotal !== null && headerFaturaTotal > 0 && detectedDueDate) {
     const sumDespesas = transactions.filter(t => t.tipo === 'despesa').reduce((s, t) => s + t.valor, 0);
+    // Exclude fatura payments (they settle the previous balance, not the current invoice)
+    // but KEEP credits like "Crédito por parcelamento" since those reduce the current invoice.
     const sumReceitas = transactions
-      .filter(t => t.tipo === 'receita' && !t.descricao.toLowerCase().includes('pag fat'))
+      .filter(t => t.tipo === 'receita' && !/pag\s*fat|pagamento\s+(d[ae]\s+)?fatura|pagamento recebido/i.test(t.descricao))
       .reduce((s, t) => s + t.valor, 0);
     const linesFatura = sumDespesas - sumReceitas;
     const missing = headerFaturaTotal - linesFatura;
