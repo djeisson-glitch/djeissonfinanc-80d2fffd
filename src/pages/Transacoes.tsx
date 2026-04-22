@@ -76,17 +76,34 @@ export default function TransacoesPage() {
     enabled: !!user,
   });
 
+  const billingMonth = `${year}-${String(month + 1).padStart(2, '0')}`;
+
   const { data: transacoes } = useQuery({
-    queryKey: ['transacoes', user?.id, start, end],
+    queryKey: ['transacoes', user?.id, start, end, billingMonth],
     queryFn: async () => {
-      const { data } = await supabase
+      // Credit card transactions are identified by mes_competencia (billing period).
+      // Debit/cash transactions have mes_competencia = null and are filtered by data.
+      // This mirrors the Dashboard logic so category totals are consistent.
+      const { data: byCompetencia } = await supabase
         .from('transacoes')
         .select('*')
         .eq('user_id', user!.id)
+        .eq('mes_competencia', billingMonth)
+        .order('data', { ascending: false });
+
+      const { data: byDate } = await supabase
+        .from('transacoes')
+        .select('*')
+        .eq('user_id', user!.id)
+        .is('mes_competencia', null)
         .gte('data', start)
         .lte('data', end)
         .order('data', { ascending: false });
-      return data || [];
+
+      // Merge and deduplicate by id
+      const all = [...(byCompetencia || []), ...(byDate || [])];
+      const seen = new Set<string>();
+      return all.filter(t => { if (seen.has(t.id)) return false; seen.add(t.id); return true; });
     },
     enabled: !!user,
   });
