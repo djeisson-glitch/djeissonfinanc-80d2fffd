@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
+import { useTodayIso } from '@/hooks/useTodayIso';
 import { getMonthRange, formatCurrency, getMonthName } from '@/lib/format';
 import { CATEGORIAS_CONFIG, getCategoriaColor } from '@/types/database.types';
 import { useCategorias } from '@/hooks/useCategorias';
@@ -121,17 +122,22 @@ export default function DashboardPage() {
   });
 
   // Current balance across accounts
+  // Today's ISO date (auto-refreshes across midnight / on tab focus) — used to
+  // exclude future-dated transactions (projected salary, installments scheduled
+  // for upcoming months, etc.) so saldo reflects money actually landed.
+  const todayIso = useTodayIso();
   const { data: saldoAtual } = useQuery({
-    queryKey: ['dashboard', 'saldo-total', user?.id],
+    queryKey: ['dashboard', 'saldo-total', user?.id, todayIso],
     queryFn: async () => {
       const { data: contasList } = await supabase.from('contas').select('id, saldo_inicial, tipo').eq('user_id', user!.id);
       if (!contasList?.length) return 0;
       const debitAccounts = contasList.filter(c => c.tipo === 'debito');
       let total = debitAccounts.reduce((s, c) => s + (c.saldo_inicial || 0), 0);
       for (const conta of debitAccounts) {
-        // Include ALL transactions for accurate balance (fatura payments
-        // are internal transfers but still affect bank balance)
-        const { data: txs } = await supabase.from('transacoes').select('valor, tipo').eq('conta_id', conta.id).eq('user_id', user!.id);
+        // Include ALL transactions up to today for accurate balance (fatura payments
+        // are internal transfers but still affect bank balance). Future-dated
+        // transactions (projected income, scheduled installments) are excluded.
+        const { data: txs } = await supabase.from('transacoes').select('valor, tipo').eq('conta_id', conta.id).eq('user_id', user!.id).lte('data', todayIso);
         if (txs) {
           for (const t of txs) {
             total += t.tipo === 'receita' ? Number(t.valor) : -Number(t.valor);

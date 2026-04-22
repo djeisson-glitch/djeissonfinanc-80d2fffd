@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
+import { useTodayIso } from '@/hooks/useTodayIso';
 import { formatCurrency, getMonthRange } from '@/lib/format';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -61,16 +62,22 @@ export default function ContasPage() {
     enabled: !!user,
   });
 
+  // Today's ISO date (auto-refreshes across midnight / on tab focus) — used to
+  // exclude future-dated transactions (projected salary, scheduled installments)
+  // so each account's saldo reflects money actually landed.
+  const todayIso = useTodayIso();
   const { data: saldos } = useQuery({
-    queryKey: ['saldos', user?.id],
+    queryKey: ['saldos', user?.id, todayIso],
     queryFn: async () => {
       const { data } = await supabase
         .from('transacoes')
         .select('conta_id, tipo, valor')
-        .eq('user_id', user!.id);
+        .eq('user_id', user!.id)
+        .lte('data', todayIso);
 
-      // Include ALL transactions (even ignorar_dashboard) for accurate
-      // account balances — fatura payments affect card/bank balances
+      // Include ALL transactions up to today (even ignorar_dashboard) for accurate
+      // account balances — fatura payments affect card/bank balances. Future-dated
+      // entries (projected income, scheduled installments) are excluded.
       const saldoPorConta: Record<string, number> = {};
       data?.forEach(t => {
         if (!saldoPorConta[t.conta_id]) saldoPorConta[t.conta_id] = 0;
