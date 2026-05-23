@@ -1,16 +1,15 @@
--- Contas a pagar e receber: lançamentos manuais de compromissos futuros
-CREATE TABLE IF NOT EXISTS contas_pagar_receber (
-  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
-  descricao TEXT NOT NULL,
-  valor NUMERIC NOT NULL,
-  tipo TEXT NOT NULL CHECK (tipo IN ('pagar', 'receber')),
-  vencimento DATE NOT NULL,
-  pago BOOLEAN NOT NULL DEFAULT false,
-  mes TEXT NOT NULL, -- YYYY-MM
-  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
-);
-
-ALTER TABLE contas_pagar_receber ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Users can manage their own bills" ON contas_pagar_receber
-  FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
+-- ============================================================================
+-- SUPERSEDED / NO-OP
+-- ============================================================================
+-- Substituída por 20260421181831_fe7b8d2f-3a01-4981-9533-83053eb41ab2.sql, que
+-- cria contas_pagar_receber com o schema que está VIVO em produção (colunas:
+-- data_vencimento nullable, categoria, updated_at; tipo sem CHECK). A versão
+-- original aqui criava um schema divergente (vencimento NOT NULL, tipo com
+-- CHECK, sem categoria) que nunca chegou a valer em produção — confirmado pelo
+-- types.ts gerado a partir do banco real.
+--
+-- Mantida como no-op (em vez de deletada) para preservar o nome do arquivo no
+-- histórico de migrations e evitar que um `db reset` rode o CREATE TABLE antigo
+-- e faça a 20260421 falhar com "relation already exists".
+--
+-- NÃO reintroduzir CREATE TABLE aqui — o schema canônico vive na 20260421181831.

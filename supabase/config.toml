@@ -1,7 +1,12 @@
 project_id = "sciotyrsanhmuiqwqypu"
 
+# verify_jwt = true exige um JWT de usuário autenticado para invocar a function.
+# Ambas são chamadas via supabase.functions.invoke(), que anexa o JWT da sessão
+# automaticamente, então usuários logados continuam funcionando. Isso fecha o
+# abuso anônimo: sem isso, qualquer um na internet podia chamar e queimar os
+# créditos de IA do Lovable.
 [functions.categorize]
-verify_jwt = false
+verify_jwt = true
 
 [functions.ai-financial-advisor]
-verify_jwt = false
+verify_jwt = true
