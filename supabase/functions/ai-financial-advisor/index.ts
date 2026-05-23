@@ -66,24 +66,37 @@ ${context.mediaHistorica ? `Média histórica (3 meses): R$ ${context.mediaHisto
       }
 
       case "financing_viability": {
-        systemPrompt = `Você é um consultor financeiro e imobiliário brasileiro. Analise a viabilidade de um financiamento imobiliário e dê um parecer claro e honesto com recomendações. Seja objetivo e use dados reais do contexto financeiro do usuário.`;
-        userPrompt = `Simulação de financiamento:
+        systemPrompt = `Você é um consultor financeiro e imobiliário brasileiro, direto e técnico. Analise a viabilidade de um financiamento da Caixa (sistema SAC) com base SÓ nos números fornecidos.
+
+Regras de resposta (OBRIGATÓRIAS):
+- Comece com um veredito em 1 linha: **APROVAR**, **APROVAR COM RESSALVAS** ou **NÃO AGORA**.
+- Depois, no máximo 5 bullets. CADA bullet cita um número concreto do contexto (R$ ou %) e explica a consequência. Nada de conselho genérico ("controle seus gastos", "monte uma reserva") sem número.
+- Aponte explicitamente O MAIOR risco e A ÚNICA alavanca de maior impacto (ex: "aumentar entrada em R$ X derruba a parcela para R$ Y").
+- Se houver venda de imóvel financiando a entrada, avalie se o líquido cobre entrada + custos + reserva, e o risco de timing (vender antes de comprar).
+- Não repita todos os números de volta; interprete. Máximo ~180 palavras. Português do Brasil. Markdown.`;
+        userPrompt = `Simulação de financiamento (Caixa, SAC):
 - Valor do imóvel: R$ ${context.valorImovel}
 - Entrada: R$ ${context.entrada} (${context.percEntrada?.toFixed(1)}%)
 - Valor financiado: R$ ${context.financiado}
 - Taxa de juros: ${context.taxaAnual}% a.a.
 - Prazo: ${context.prazoAnos} anos
-- Sistema: ${context.sistema}
-- Parcela inicial: R$ ${context.parcelaInicial}
-- Total de juros: R$ ${context.totalJuros}
+- Parcela inicial (SAC, decrescente): R$ ${context.parcelaInicial}
+- Total de juros no prazo: R$ ${context.totalJuros}
+- % da renda comprometida pela parcela: ${context.percRenda?.toFixed(1)}%
+- Semáforo do checklist: ${context.semaforo}
 
 Contexto financeiro:
-- Renda mensal: R$ ${context.receitaMensal}
-- Despesas mensais atuais: R$ ${context.despesasMensais}
-- Saldo livre atual: R$ ${context.saldoLivre}
-- Saldo com financiamento: R$ ${context.saldoComFinanciamento}
-- % da renda comprometida: ${context.percRenda?.toFixed(1)}%
-- Semáforo atual: ${context.semaforo}`;
+- Renda bruta familiar: R$ ${context.receitaMensal}
+- Outras dívidas mensais: R$ ${context.despesasMensais}
+- Saldo livre hoje: R$ ${context.saldoLivre}
+- Saldo livre após a parcela: R$ ${context.saldoComFinanciamento}
+${context.temVenda ? `
+Entrada financiada pela VENDA do imóvel atual:
+- Valor de venda: R$ ${context.valorVendaImovel}
+- Líquido da venda (após quitar saldo/IPTU/IR/custos): R$ ${context.liquidoVenda}
+- Capital total para a compra: R$ ${context.capitalParaCompra}
+- Reserva de emergência necessária: R$ ${context.reservaNecessaria}
+- Sobra após entrada + custos + reserva: R$ ${context.capitalRestante}` : ''}`;
         break;
       }
 

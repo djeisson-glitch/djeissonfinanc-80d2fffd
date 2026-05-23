@@ -6,7 +6,7 @@ import { Label } from '@/components/ui/label';
 import { Slider } from '@/components/ui/slider';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { CheckCircle, XCircle, Info, ArrowRight, Car, ChevronDown, AlertTriangle, Wallet } from 'lucide-react';
+import { CheckCircle, XCircle, Info, ArrowRight, Car, ChevronDown, AlertTriangle, Wallet, Home } from 'lucide-react';
 import { SacParams, calcViabilidade } from '@/lib/sac-utils';
 import { AiFinancingAnalysis } from './AiFinancingAnalysis';
 
@@ -144,6 +144,45 @@ export function ViabilidadeTab({ params, onChange }: Props) {
         </Card>
       </div>
 
+      {/* Row 1.5: Venda do imóvel atual → capital de entrada */}
+      <Card className="border-primary/30">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm flex items-center gap-2">
+            <Home className="h-4 w-4" />
+            Venda do imóvel atual → Entrada
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+            <CurrencyInput label="Valor de venda" value={params.valorVendaImovel} onChange={val => onChange({ valorVendaImovel: val })} tooltip="Valor pelo qual você espera vender o apartamento atual." />
+            <CurrencyInput label="Saldo devedor a quitar" value={params.saldoDevedorImovelVender} onChange={val => onChange({ saldoDevedorImovelVender: val })} tooltip="Saldo do financiamento do apartamento que será quitado na venda." />
+            <CurrencyInput label="IPTU atrasado" value={params.iptuAtrasado} onChange={val => onChange({ iptuAtrasado: val })} />
+            <CurrencyInput label="IR sobre ganho (estimado)" value={params.irVendaEstimado} onChange={val => onChange({ irVendaEstimado: val })} tooltip="Imposto de renda sobre ganho de capital. Confirme o valor com um contador — veja o aviso abaixo." />
+            <CurrencyInput label="Outros custos (corretagem)" value={params.outrosCustosVenda} onChange={val => onChange({ outrosCustosVenda: val })} />
+            <CurrencyInput label="FGTS disponível" value={params.fgtsDisponivel} onChange={val => onChange({ fgtsDisponivel: val })} tooltip="FGTS que pode ser usado na compra (regras da Caixa se aplicam)." />
+          </div>
+          <div className="bg-muted/50 rounded-lg p-2.5 space-y-0.5 text-sm">
+            <StatRow label="Valor de venda" value={formatCurrency(params.valorVendaImovel)} />
+            <StatRow label="(−) Saldo devedor + IPTU + IR + custos" value={`- ${formatCurrency(params.saldoDevedorImovelVender + params.iptuAtrasado + params.irVendaEstimado + params.outrosCustosVenda)}`} className="text-destructive" />
+            <div className="border-t pt-1 mt-1">
+              <StatRow label="Líquido da venda" value={formatCurrency(v.liquidoVenda)} className="font-bold" />
+              <StatRow label="+ FGTS" value={formatCurrency(params.fgtsDisponivel)} />
+              <StatRow label="+ Outras reservas" value={formatCurrency(params.capitalDisponivel)} />
+              <StatRow label="= Capital para a compra" value={formatCurrency(v.capitalParaCompra)} className="font-bold text-primary text-base" />
+            </div>
+          </div>
+          {v.temVenda && (params.irVendaEstimado > 0 || params.saldoDevedorImovelVender > 0) && (
+            <div className="flex items-start gap-2 rounded-lg border border-amber-500/40 bg-amber-500/5 p-2.5 text-xs">
+              <AlertTriangle className="h-4 w-4 text-amber-500 shrink-0 mt-0.5" />
+              <p className="text-muted-foreground">
+                <span className="font-medium text-foreground">Confirme com um contador.</span> O IR sobre ganho de capital e a forma de quitação dependem da titularidade do imóvel
+                (no seu caso, em nome de terceiro com acordo de usufruto). Isenções (único imóvel, reinvestimento em 180 dias, fator de redução) podem mudar bastante o valor — o número acima é só o que você informou.
+              </p>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
       {/* Row 2: Custos + Capital | Totais */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div className="space-y-4">
@@ -163,18 +202,22 @@ export function ViabilidadeTab({ params, onChange }: Props) {
           </Card>
 
           <Card>
-            <CardHeader className="pb-2"><CardTitle className="text-sm">Capital Disponível</CardTitle></CardHeader>
+            <CardHeader className="pb-2"><CardTitle className="text-sm">Capital e Reserva</CardTitle></CardHeader>
             <CardContent className="space-y-3">
               <div className="grid grid-cols-2 gap-3">
-                <CurrencyInput label="Capital disponível" value={params.capitalDisponivel} onChange={v => onChange({ capitalDisponivel: v })} />
+                <CurrencyInput label="Outras reservas" value={params.capitalDisponivel} onChange={v => onChange({ capitalDisponivel: v })} tooltip="Poupança/investimentos além do líquido da venda e do FGTS (preenchidos no bloco de venda acima)." />
                 <div className="space-y-1.5">
                   <Label className="text-xs">Reserva ({params.reservaMeses} meses)</Label>
                   <Slider value={[params.reservaMeses]} onValueChange={([val]) => onChange({ reservaMeses: val })} min={3} max={12} step={1} className="mt-1" />
                 </div>
               </div>
               <div className="bg-muted/50 rounded-lg p-2.5 space-y-0.5 text-sm">
-                <StatRow label="Reserva necessária" value={formatCurrency(v.reservaNecessaria)} />
-                <StatRow label="Capital restante" value={formatCurrency(v.capitalRestante)} className={v.capitalRestante >= 0 ? 'text-green-500' : 'text-destructive'} />
+                <StatRow label="Capital para a compra" value={formatCurrency(v.capitalParaCompra)} className="font-medium" />
+                <StatRow label="(−) Entrada + ITBI + escritura" value={`- ${formatCurrency(v.totalDesembolso)}`} />
+                <StatRow label="(−) Reserva de emergência" value={`- ${formatCurrency(v.reservaNecessaria)}`} />
+                <div className="border-t pt-1 mt-1">
+                  <StatRow label="Sobra após a compra" value={formatCurrency(v.capitalRestante)} className={v.capitalRestante >= 0 ? 'text-green-500 font-bold' : 'text-destructive font-bold'} />
+                </div>
               </div>
             </CardContent>
           </Card>
@@ -364,6 +407,13 @@ export function ViabilidadeTab({ params, onChange }: Props) {
         saldoComFinanciamento: params.rendaBruta - params.dividasMensais - v.parcelaMes1,
         percRenda: v.percentComprometida,
         semaforo: v.diagnostico === 'viavel' ? 'verde' : v.diagnostico === 'parcial' ? 'amarelo' : 'vermelho',
+        // Origem da entrada: venda do imóvel atual
+        temVenda: v.temVenda,
+        valorVendaImovel: params.valorVendaImovel,
+        liquidoVenda: v.liquidoVenda,
+        capitalParaCompra: v.capitalParaCompra,
+        capitalRestante: v.capitalRestante,
+        reservaNecessaria: v.reservaNecessaria,
       }} />
     </div>
   );

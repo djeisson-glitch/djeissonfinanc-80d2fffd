@@ -449,20 +449,26 @@ export type Database = {
           dividas_mensais: number
           entrada: number
           escritura_percent: number
+          fgts_disponivel: number
           id: string
+          iptu_atrasado: number
+          ir_venda_estimado: number
           itbi_percent: number
           limite_comprometimento: number
           nome: string
+          outros_custos_venda: number
           parcela_carro: number
           prazo_meses: number
           renda_bruta: number
           reserva_meses: number
           saldo_devedor_carro: number
+          saldo_devedor_imovel_vender: number
           taxa_anual_nominal: number
           tr_anual: number
           updated_at: string
           user_id: string
           valor_imovel: number
+          valor_venda_imovel: number
         }
         Insert: {
           aluguel_atual?: number
@@ -472,20 +478,26 @@ export type Database = {
           dividas_mensais?: number
           entrada: number
           escritura_percent?: number
+          fgts_disponivel?: number
           id?: string
+          iptu_atrasado?: number
+          ir_venda_estimado?: number
           itbi_percent?: number
           limite_comprometimento?: number
           nome?: string
+          outros_custos_venda?: number
           parcela_carro?: number
           prazo_meses: number
           renda_bruta: number
           reserva_meses?: number
           saldo_devedor_carro?: number
+          saldo_devedor_imovel_vender?: number
           taxa_anual_nominal: number
           tr_anual?: number
           updated_at?: string
           user_id: string
           valor_imovel: number
+          valor_venda_imovel?: number
         }
         Update: {
           aluguel_atual?: number
@@ -495,20 +507,26 @@ export type Database = {
           dividas_mensais?: number
           entrada?: number
           escritura_percent?: number
+          fgts_disponivel?: number
           id?: string
+          iptu_atrasado?: number
+          ir_venda_estimado?: number
           itbi_percent?: number
           limite_comprometimento?: number
           nome?: string
+          outros_custos_venda?: number
           parcela_carro?: number
           prazo_meses?: number
           renda_bruta?: number
           reserva_meses?: number
           saldo_devedor_carro?: number
+          saldo_devedor_imovel_vender?: number
           taxa_anual_nominal?: number
           tr_anual?: number
           updated_at?: string
           user_id?: string
           valor_imovel?: number
+          valor_venda_imovel?: number
         }
         Relationships: []
       }

@@ -24,6 +24,12 @@ interface Props {
     saldoComFinanciamento: number;
     percRenda: number;
     semaforo: string;
+    temVenda?: boolean;
+    valorVendaImovel?: number;
+    liquidoVenda?: number;
+    capitalParaCompra?: number;
+    capitalRestante?: number;
+    reservaNecessaria?: number;
   };
 }
 

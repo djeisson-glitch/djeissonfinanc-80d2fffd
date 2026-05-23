@@ -19,6 +19,14 @@ export interface SacParams {
   condominioAtual: number;
   saldoDevedorCarro: number;
   parcelaCarro: number;
+  // Venda do imóvel atual (gera o capital de entrada). Todos default 0 quando
+  // não há venda envolvida — mantém compatibilidade com simulações antigas.
+  valorVendaImovel: number;
+  saldoDevedorImovelVender: number; // financiamento a quitar na venda
+  iptuAtrasado: number;
+  irVendaEstimado: number; // ganho de capital — valor informado pelo usuário
+  outrosCustosVenda: number; // corretagem, etc.
+  fgtsDisponivel: number;
 }
 
 export interface SacRow {
@@ -124,6 +132,10 @@ export interface ViabilidadeResult {
   percentComprometida: number;
   reservaNecessaria: number;
   capitalRestante: number;
+  // Venda do imóvel atual
+  temVenda: boolean;
+  liquidoVenda: number;
+  capitalParaCompra: number; // líquido da venda + FGTS + outras reservas
   totalAmortizado: number;
   totalTR: number;
   totalJuros: number;
@@ -176,9 +188,20 @@ export function calcViabilidade(p: SacParams): ViabilidadeResult {
     ? (parcelaMes1 / p.rendaBruta) * 100
     : 0;
 
+  // Venda do imóvel atual → capital para a compra
+  // Líquido = valor de venda menos o que precisa ser pago na transação
+  // (saldo devedor a quitar, IPTU atrasado, IR sobre ganho de capital, outros custos).
+  const temVenda = p.valorVendaImovel > 0;
+  const liquidoVenda = Math.max(
+    0,
+    p.valorVendaImovel - p.saldoDevedorImovelVender - p.iptuAtrasado - p.irVendaEstimado - p.outrosCustosVenda,
+  );
+  // Capital total disponível para a compra = líquido da venda + FGTS + outras reservas.
+  const capitalParaCompra = liquidoVenda + p.fgtsDisponivel + p.capitalDisponivel;
+
   // Bloco D
   const reservaNecessaria = parcelaMes1 * p.reservaMeses;
-  const capitalRestante = p.capitalDisponivel - totalDesembolso - reservaNecessaria;
+  const capitalRestante = capitalParaCompra - totalDesembolso - reservaNecessaria;
 
   // CET
   const custoEfetivoTotal = totais.totalGeralPago + p.entrada + itbiRS + escrituraRS;
@@ -197,7 +220,7 @@ export function calcViabilidade(p: SacParams): ViabilidadeResult {
   // Bloco J - cenário carro
   // Quitar o carro NÃO altera entrada/financiamento — o imóvel já está definido.
   // A comparação é: comprometimento COM parcela do carro vs SEM parcela do carro.
-  const capitalLiquidoSemCarro = p.capitalDisponivel - p.saldoDevedorCarro;
+  const capitalLiquidoSemCarro = capitalParaCompra - p.saldoDevedorCarro;
   const percentSemQuitacao = p.rendaBruta > 0
     ? ((parcelaMes1 + p.parcelaCarro) / p.rendaBruta) * 100
     : 0;
@@ -234,6 +257,7 @@ export function calcViabilidade(p: SacParams): ViabilidadeResult {
     itbiRS, escrituraRS, totalDesembolso,
     maxDisponivel, percentComprometida,
     reservaNecessaria, capitalRestante,
+    temVenda, liquidoVenda, capitalParaCompra,
     ...totais, custoEfetivoTotal,
     checkEntrada, checkParcela, checkCapital, checkPrazo,
     totalHabitacaoHoje, custoAtualTotal, deltaMensal,

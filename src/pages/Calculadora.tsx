@@ -43,6 +43,12 @@ const DEFAULT_PARAMS: SacParams = {
   condominioAtual: 120,
   saldoDevedorCarro: 33000,
   parcelaCarro: 1263,
+  valorVendaImovel: 0,
+  saldoDevedorImovelVender: 0,
+  iptuAtrasado: 0,
+  irVendaEstimado: 0,
+  outrosCustosVenda: 0,
+  fgtsDisponivel: 0,
 };
 
 interface SavedSimulation {
@@ -70,6 +76,12 @@ function paramsToRow(params: SacParams) {
     condominio_atual: params.condominioAtual,
     saldo_devedor_carro: params.saldoDevedorCarro,
     parcela_carro: params.parcelaCarro,
+    valor_venda_imovel: params.valorVendaImovel,
+    saldo_devedor_imovel_vender: params.saldoDevedorImovelVender,
+    iptu_atrasado: params.iptuAtrasado,
+    ir_venda_estimado: params.irVendaEstimado,
+    outros_custos_venda: params.outrosCustosVenda,
+    fgts_disponivel: params.fgtsDisponivel,
   };
 }
 
@@ -91,6 +103,12 @@ function rowToParams(row: any): SacParams {
     condominioAtual: Number(row.condominio_atual),
     saldoDevedorCarro: Number(row.saldo_devedor_carro),
     parcelaCarro: Number(row.parcela_carro ?? 1263),
+    valorVendaImovel: Number(row.valor_venda_imovel ?? 0),
+    saldoDevedorImovelVender: Number(row.saldo_devedor_imovel_vender ?? 0),
+    iptuAtrasado: Number(row.iptu_atrasado ?? 0),
+    irVendaEstimado: Number(row.ir_venda_estimado ?? 0),
+    outrosCustosVenda: Number(row.outros_custos_venda ?? 0),
+    fgtsDisponivel: Number(row.fgts_disponivel ?? 0),
   };
 }
 
