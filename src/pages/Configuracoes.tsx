@@ -23,6 +23,7 @@ import { useCategorias } from '@/hooks/useCategorias';
 import { parseSicrediCSV, normalizeDescription } from '@/lib/csv-parser';
 import { Progress } from '@/components/ui/progress';
 import { formatCurrency } from '@/lib/format';
+import { ConfirmDelete } from '@/components/ConfirmDelete';
 
 export default function ConfiguracoesPage() {
   const { user } = useAuth();
@@ -188,9 +189,16 @@ export default function ConfiguracoesPage() {
                     </Badge>
                   </TableCell>
                   <TableCell>
-                    <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => deleteRuleMutation.mutate(r.id)}>
-                      <Trash2 className="h-3 w-3" />
-                    </Button>
+                    <ConfirmDelete
+                      onConfirm={() => deleteRuleMutation.mutate(r.id)}
+                      title="Excluir regra?"
+                      description="A regra de categorização automática será removida. Esta ação não pode ser desfeita."
+                      trigger={
+                        <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive">
+                          <Trash2 className="h-3 w-3" />
+                        </Button>
+                      }
+                    />
                   </TableCell>
                 </TableRow>
               ))}

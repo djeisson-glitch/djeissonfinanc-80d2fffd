@@ -3,6 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useTodayIso } from '@/hooks/useTodayIso';
 import { formatCurrency, getMonthRange } from '@/lib/format';
+import { fetchAllRows } from '@/lib/supabase-fetch';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -69,17 +70,17 @@ export default function ContasPage() {
   const { data: saldos } = useQuery({
     queryKey: ['saldos', user?.id, todayIso],
     queryFn: async () => {
-      const { data } = await supabase
+      const data = await fetchAllRows<{ conta_id: string; tipo: string; valor: number }>(() => supabase
         .from('transacoes')
         .select('conta_id, tipo, valor')
         .eq('user_id', user!.id)
-        .lte('data', todayIso);
+        .lte('data', todayIso));
 
       // Include ALL transactions up to today (even ignorar_dashboard) for accurate
       // account balances — fatura payments affect card/bank balances. Future-dated
       // entries (projected income, scheduled installments) are excluded.
       const saldoPorConta: Record<string, number> = {};
-      data?.forEach(t => {
+      data.forEach(t => {
         if (!saldoPorConta[t.conta_id]) saldoPorConta[t.conta_id] = 0;
         if (t.tipo === 'receita') saldoPorConta[t.conta_id] += Number(t.valor);
         else saldoPorConta[t.conta_id] -= Number(t.valor);
@@ -98,22 +99,22 @@ export default function ContasPage() {
       // By mes_competencia (primary) — no ignorar_dashboard filter since
       // fatura payments are marked as internal transfers but must be
       // counted for accurate card balance display
-      const { data: byPeriod } = await supabase
+      const byPeriod = await fetchAllRows<{ conta_id: string; tipo: string; valor: number; descricao: string; mes_competencia: string | null }>(() => supabase
         .from('transacoes')
         .select('conta_id, tipo, valor, descricao, mes_competencia')
         .eq('user_id', user!.id)
-        .eq('mes_competencia', billingPeriod);
+        .eq('mes_competencia', billingPeriod));
 
       // Fallback for older imports without mes_competencia
-      const { data: byDate } = await supabase
+      const byDate = await fetchAllRows<{ conta_id: string; tipo: string; valor: number; descricao: string; mes_competencia: string | null }>(() => supabase
         .from('transacoes')
         .select('conta_id, tipo, valor, descricao, mes_competencia')
         .eq('user_id', user!.id)
         .is('mes_competencia', null)
         .gte('data', start)
-        .lte('data', end);
+        .lte('data', end));
 
-      const allTxs = [...(byPeriod || []), ...(byDate || [])];
+      const allTxs = [...byPeriod, ...byDate];
       const faturas: Record<string, { despesas: number; pagamentos: number }> = {};
       allTxs.forEach(t => {
         if (!faturas[t.conta_id]) faturas[t.conta_id] = { despesas: 0, pagamentos: 0 };

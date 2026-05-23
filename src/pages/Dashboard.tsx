@@ -134,11 +134,12 @@ export default function DashboardPage() {
       if (!contasList?.length) return 0;
       const debitAccounts = contasList.filter(c => c.tipo === 'debito');
       let total = debitAccounts.reduce((s, c) => s + (c.saldo_inicial || 0), 0);
-      for (const conta of debitAccounts) {
-        // Include ALL transactions up to today for accurate balance (fatura payments
-        // are internal transfers but still affect bank balance). Future-dated
-        // transactions (projected income, scheduled installments) are excluded.
-        const txs = await fetchAllRows<{ valor: number; tipo: string }>(() => supabase.from('transacoes').select('valor, tipo').eq('conta_id', conta.id).eq('user_id', user!.id).lte('data', todayIso));
+      const debitIds = debitAccounts.map(c => c.id);
+      if (debitIds.length) {
+        // Single query across all debit accounts (no N+1). Include ALL transactions
+        // up to today for accurate balance (fatura payments are internal transfers
+        // but still move the bank balance). Future-dated entries are excluded.
+        const txs = await fetchAllRows<{ valor: number; tipo: string }>(() => supabase.from('transacoes').select('valor, tipo').in('conta_id', debitIds).eq('user_id', user!.id).lte('data', todayIso));
         for (const t of txs) {
           total += t.tipo === 'receita' ? Number(t.valor) : -Number(t.valor);
         }
@@ -161,11 +162,12 @@ export default function DashboardPage() {
         if (!c.data_abertura || c.data_abertura < start) return s + (c.saldo_inicial || 0);
         return s;
       }, 0);
-      for (const conta of debitAccounts) {
+      const debitIds = debitAccounts.map(c => c.id);
+      if (debitIds.length) {
         const txs = await fetchAllRows<{ valor: number; tipo: string }>(() => supabase
           .from('transacoes')
           .select('valor, tipo')
-          .eq('conta_id', conta.id)
+          .in('conta_id', debitIds)
           .eq('user_id', user!.id)
           .lt('data', start));
         for (const t of txs) {

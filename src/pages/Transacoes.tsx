@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useSearchParams } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
-import { formatCurrency, formatDate, getMonthRange } from '@/lib/format';
+import { formatCurrency, formatDate, getMonthRange, toLocalIso } from '@/lib/format';
 import { fetchAllRows } from '@/lib/supabase-fetch';
 import { CATEGORIAS, CATEGORIAS_DESPESA, CATEGORIAS_RECEITA, CATEGORIAS_CONFIG, getCategoriaColor, getSubcategorias } from '@/types/database.types';
 import { useCategorias } from '@/hooks/useCategorias';
@@ -178,10 +178,10 @@ export default function TransacoesPage() {
       const updateData: any = {
         categoria: recatCategoria.nome,
         essencial: recatCategoria.essencial,
+        // Always sync categoria_id (null when the target has no id), otherwise the
+        // old categoria_id would linger and disagree with the new categoria string.
+        categoria_id: recatCategoria.id ?? null,
       };
-      if (recatCategoria.id) {
-        updateData.categoria_id = recatCategoria.id;
-      }
       await supabase.from('transacoes').update(updateData).in('id', ids);
     },
     onSuccess: () => {
@@ -214,7 +214,7 @@ export default function TransacoesPage() {
     setSearchParams(searchParams, { replace: true });
   };
 
-  const filtered = (transacoes?.filter(t => {
+  const filtered = useMemo(() => (transacoes?.filter(t => {
     if (!showIgnoradas && t.ignorar_dashboard) return false;
     if (filterCategoria !== 'all' && t.categoria !== filterCategoria) return false;
     if (filterTipo !== 'all' && t.tipo !== filterTipo) return false;
@@ -224,7 +224,7 @@ export default function TransacoesPage() {
     if (filterPessoa !== 'all' && t.pessoa !== filterPessoa) return false;
     if (search && !t.descricao.toLowerCase().includes(search.toLowerCase())) return false;
     return true;
-  }) || []);
+  }) || []), [transacoes, showIgnoradas, filterCategoria, filterTipo, filterEssencial, filterConta, filterPessoa, search]);
 
   // Group filtered transactions by day
   const groupedByDay = useMemo(() => {
@@ -318,7 +318,11 @@ export default function TransacoesPage() {
   const totalReceitas = filtered.filter(t => t.tipo === 'receita').reduce((s, t) => s + Number(t.valor), 0);
   const totalDespesas = filtered.filter(t => t.tipo === 'despesa').reduce((s, t) => s + Number(t.valor), 0);
 
-  const pessoas = [...new Set(transacoes?.map(t => t.pessoa) || [])];
+  // Filter out empty/null so we never render <SelectItem value=""> (Radix throws on it).
+  const pessoas = useMemo(
+    () => [...new Set((transacoes?.map(t => t.pessoa) || []).filter((p): p is string => !!p))],
+    [transacoes],
+  );
   const { getCategoriaById, getDisplayName, getColor } = useCategorias();
 
   const hasActiveFilters = filterCategoria !== 'all' || filterTipo !== 'all' || filterEssencial !== 'all' || filterConta !== 'all' || filterPessoa !== 'all';
@@ -329,8 +333,8 @@ export default function TransacoesPage() {
     const yesterday = new Date();
     yesterday.setDate(yesterday.getDate() - 1);
 
-    const isToday = dateStr === today.toISOString().substring(0, 10);
-    const isYesterday = dateStr === yesterday.toISOString().substring(0, 10);
+    const isToday = dateStr === toLocalIso(today);
+    const isYesterday = dateStr === toLocalIso(yesterday);
 
     const dayName = isToday ? 'Hoje' : isYesterday ? 'Ontem' : date.toLocaleDateString('pt-BR', { weekday: 'long' });
     const dayDate = date.toLocaleDateString('pt-BR', { day: '2-digit', month: 'long' });

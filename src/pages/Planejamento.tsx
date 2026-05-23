@@ -9,6 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { MonthSelector } from '@/components/MonthSelector';
 import { formatCurrency, getMonthName } from '@/lib/format';
 import { fetchAllRows } from '@/lib/supabase-fetch';
+import { ConfirmDelete } from '@/components/ConfirmDelete';
 import { useToast } from '@/hooks/use-toast';
 import {
   Target, TrendingUp, TrendingDown, Minus, Save, Lightbulb,
@@ -59,11 +60,14 @@ export default function PlanejamentoPage() {
       if (!contas?.length) return 0;
       const debito = contas.filter(c => c.tipo === 'debito');
       let total = debito.reduce((s: number, c: any) => s + (c.saldo_inicial || 0), 0);
-      for (const conta of debito) {
+      const debitIds = debito.map((c: any) => c.id);
+      if (debitIds.length) {
+        // Uma query só para todas as contas de débito (sem N+1); só até hoje,
+        // ignora futuras; sem filtro ignorar_dashboard (pagamentos de fatura são saídas reais).
         const txs = await fetchAllRows<{ valor: number; tipo: string }>(() => supabase
           .from('transacoes').select('valor, tipo')
-          .eq('conta_id', conta.id).eq('user_id', user!.id)
-          .lte('data', todayStr));          // ← só até hoje, ignora futuras; sem filtro ignorar_dashboard (pagamentos de fatura são saídas reais)
+          .in('conta_id', debitIds).eq('user_id', user!.id)
+          .lte('data', todayStr));
         for (const t of txs) total += t.tipo === 'receita' ? Number(t.valor) : -Number(t.valor);
       }
       return total;
@@ -344,9 +348,16 @@ export default function PlanejamentoPage() {
                   </div>
                   <div className="flex items-center gap-2">
                     <span className="font-semibold text-sm text-emerald-600">{formatCurrency(f.valor)}</span>
-                    <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-destructive" onClick={() => deleteFonteMutation.mutate(f.id)}>
-                      <Trash2 className="h-3 w-3" />
-                    </Button>
+                    <ConfirmDelete
+                      onConfirm={() => deleteFonteMutation.mutate(f.id)}
+                      title={`Excluir "${f.nome || f.descricao}"?`}
+                      description="Esta fonte de receita será removida e deixará de compor sua renda. Esta ação não pode ser desfeita."
+                      trigger={
+                        <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-destructive">
+                          <Trash2 className="h-3 w-3" />
+                        </Button>
+                      }
+                    />
                   </div>
                 </div>
               ))}

@@ -11,6 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { useToast } from '@/hooks/use-toast';
 import { Plus, Pencil, Trash2, ChevronDown, ChevronRight, FolderOpen } from 'lucide-react';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { ConfirmDelete } from '@/components/ConfirmDelete';
 
 export default function CategoriasPage() {
   const { user } = useAuth();
@@ -149,9 +150,16 @@ export default function CategoriasPage() {
                     <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEdit(parent)}>
                       <Pencil className="h-3 w-3" />
                     </Button>
-                    <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => deleteMutation.mutate(parent.id)}>
-                      <Trash2 className="h-3 w-3" />
-                    </Button>
+                    <ConfirmDelete
+                      onConfirm={() => deleteMutation.mutate(parent.id)}
+                      title={`Excluir "${parent.nome}"?`}
+                      description="A categoria e suas subcategorias serão removidas. As transações vinculadas ficam sem categoria. Esta ação não pode ser desfeita."
+                      trigger={
+                        <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive">
+                          <Trash2 className="h-3 w-3" />
+                        </Button>
+                      }
+                    />
                   </div>
                   {subs.length > 0 && (
                     <CollapsibleContent>
@@ -163,9 +171,16 @@ export default function CategoriasPage() {
                             <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEdit(sub)}>
                               <Pencil className="h-3 w-3" />
                             </Button>
-                            <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => deleteMutation.mutate(sub.id)}>
-                              <Trash2 className="h-3 w-3" />
-                            </Button>
+                            <ConfirmDelete
+                              onConfirm={() => deleteMutation.mutate(sub.id)}
+                              title={`Excluir "${sub.nome}"?`}
+                              description="A subcategoria será removida. As transações vinculadas ficam sem categoria. Esta ação não pode ser desfeita."
+                              trigger={
+                                <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive">
+                                  <Trash2 className="h-3 w-3" />
+                                </Button>
+                              }
+                            />
                           </div>
                         ))}
                       </div>
