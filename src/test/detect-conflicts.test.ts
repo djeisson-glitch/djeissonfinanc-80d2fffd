@@ -74,4 +74,41 @@ describe('detectConflicts — dedup independente de hash', () => {
     expect(r.clean).toHaveLength(1);
     expect(r.exactMatches).toHaveLength(0);
   });
+
+  it('lançamento real substitui a recorrente auto-projetada do mesmo mês (autoReplacement)', () => {
+    const proj = existing({
+      id: 'proj1',
+      descricao: 'NETFLIX.COM (auto-projetada)',
+      valor: 55,
+      data: '2026-08-10',
+      data_original: '2026-08-10',
+      hash_transacao: 'projhash',
+    });
+    const real = planned({
+      descricao: 'NETFLIX.COM',
+      valor: 59.9, // variou um pouco
+      data: '2026-08-12',
+      data_original: '2026-08-12',
+      hash_transacao: 'realhash',
+    });
+    const r = detectConflicts([real], [proj]);
+    expect(r.autoReplacements).toHaveLength(1);
+    expect(r.autoReplacements[0].existingId).toBe('proj1');
+    expect(r.clean).toHaveLength(0);
+  });
+
+  it('não substitui recorrente projetada de outro mês', () => {
+    const proj = existing({
+      id: 'proj1',
+      descricao: 'NETFLIX (auto-projetada)',
+      valor: 55,
+      data: '2026-09-10',
+      data_original: '2026-09-10',
+      hash_transacao: 'projhash',
+    });
+    const real = planned({ descricao: 'NETFLIX', valor: 55, data: '2026-08-10', data_original: '2026-08-10' });
+    const r = detectConflicts([real], [proj]);
+    expect(r.autoReplacements).toHaveLength(0);
+    expect(r.clean).toHaveLength(1);
+  });
 });

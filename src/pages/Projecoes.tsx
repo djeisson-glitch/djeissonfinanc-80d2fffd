@@ -12,6 +12,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import { TrendingUp, Lock, Activity, Pencil, X, Check, ChevronDown, ChevronRight } from 'lucide-react';
 import { IncomeCommitmentChart } from '@/components/dashboard/IncomeCommitmentChart';
+import { RecorrentesProjecao } from '@/components/projecoes/RecorrentesProjecao';
 import { toast } from 'sonner';
 import { useFontesReceita } from '@/hooks/useFontesReceita';
 import {
@@ -222,6 +223,8 @@ export default function ProjecoesPage() {
           <div className="flex items-center gap-1"><Pencil className="h-3 w-3" /> Manual</div>
         </div>
       </div>
+
+      <RecorrentesProjecao />
 
       {/* Chart */}
       <Card>

@@ -232,6 +232,29 @@ export function detectConflicts(
 
     const txOriginal = (tx as any).data_original || tx.data;
 
+    // Recurring projection replacement: a real (non-installment) transaction coming
+    // from the import replaces a previously projected recurring "(auto-projetada)"
+    // of the SAME month/skeleton/pessoa. Without this, the projected entry and the
+    // real one would coexist as duplicates. Value can drift (bills vary), so the
+    // tolerance is generous.
+    if (isFromCsv && !tx.parcela_atual && !tx.parcela_total) {
+      const txMonth = ((tx as any).mes_competencia as string | null) || txOriginal.substring(0, 7);
+      const recProjMatch = existing.find(e => {
+        if (!e.descricao.includes('(auto-projetada)')) return false;
+        if (e.parcela_total != null) return false; // recorrente projetada não tem parcela
+        if (normalize(e.descricao) !== prefix) return false;
+        const eMonth = e.mes_competencia || (e.data_original || e.data).substring(0, 7);
+        if (eMonth !== txMonth) return false;
+        if (e.pessoa.toLowerCase() !== tx.pessoa.toLowerCase()) return false;
+        const tol = Math.max(5, Math.abs(Number(e.valor)) * 0.3);
+        return Math.abs(Number(e.valor) - tx.valor) <= tol;
+      });
+      if (recProjMatch) {
+        autoReplacements.push({ planned: tx, existingId: recProjMatch.id });
+        continue;
+      }
+    }
+
     // Hash-independent dedup against NON-auto-projected existing transactions.
     // The hash is raw-description based, so it misses the same transaction
     // re-imported with slightly different text (garbled PDF fonts, extra spaces)
