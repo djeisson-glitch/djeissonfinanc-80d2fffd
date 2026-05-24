@@ -102,7 +102,7 @@ export default function AnalisesPage() {
       let total = debitAccounts.reduce((s, c) => s + (c.saldo_inicial || 0), 0);
       const debitIds = debitAccounts.map(c => c.id);
       if (debitIds.length) {
-        const txs = await fetchAllRows<{ valor: number; tipo: string }>(() => supabase.from('transacoes').select('valor, tipo').in('conta_id', debitIds).eq('user_id', user!.id).lte('data', todayIso));
+        const txs = await fetchAllRows<{ valor: number; tipo: string }>(() => supabase.from('transacoes').select('valor, tipo').in('conta_id', debitIds).eq('user_id', user!.id).neq('categoria', 'Saldo Inicial').lte('data', todayIso));
         for (const t of txs) {
           total += t.tipo === 'receita' ? Number(t.valor) : -Number(t.valor);
         }
@@ -126,7 +126,7 @@ export default function AnalisesPage() {
       }, 0);
       const debitIds = debitAccounts.map(c => c.id);
       if (debitIds.length) {
-        const txs = await fetchAllRows<{ valor: number; tipo: string }>(() => supabase.from('transacoes').select('valor, tipo').in('conta_id', debitIds).eq('user_id', user!.id).lt('data', start));
+        const txs = await fetchAllRows<{ valor: number; tipo: string }>(() => supabase.from('transacoes').select('valor, tipo').in('conta_id', debitIds).eq('user_id', user!.id).neq('categoria', 'Saldo Inicial').lt('data', start));
         for (const t of txs) {
           total += t.tipo === 'receita' ? Number(t.valor) : -Number(t.valor);
         }

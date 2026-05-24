@@ -139,7 +139,7 @@ export default function DashboardPage() {
         // Single query across all debit accounts (no N+1). Include ALL transactions
         // up to today for accurate balance (fatura payments are internal transfers
         // but still move the bank balance). Future-dated entries are excluded.
-        const txs = await fetchAllRows<{ valor: number; tipo: string }>(() => supabase.from('transacoes').select('valor, tipo').in('conta_id', debitIds).eq('user_id', user!.id).lte('data', todayIso));
+        const txs = await fetchAllRows<{ valor: number; tipo: string }>(() => supabase.from('transacoes').select('valor, tipo').in('conta_id', debitIds).eq('user_id', user!.id).neq('categoria', 'Saldo Inicial').lte('data', todayIso));
         for (const t of txs) {
           total += t.tipo === 'receita' ? Number(t.valor) : -Number(t.valor);
         }
@@ -169,6 +169,7 @@ export default function DashboardPage() {
           .select('valor, tipo')
           .in('conta_id', debitIds)
           .eq('user_id', user!.id)
+          .neq('categoria', 'Saldo Inicial')
           .lt('data', start));
         for (const t of txs) {
           total += t.tipo === 'receita' ? Number(t.valor) : -Number(t.valor);

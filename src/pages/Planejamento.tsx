@@ -67,6 +67,7 @@ export default function PlanejamentoPage() {
         const txs = await fetchAllRows<{ valor: number; tipo: string }>(() => supabase
           .from('transacoes').select('valor, tipo')
           .in('conta_id', debitIds).eq('user_id', user!.id)
+          .neq('categoria', 'Saldo Inicial')
           .lte('data', todayStr));
         for (const t of txs) total += t.tipo === 'receita' ? Number(t.valor) : -Number(t.valor);
       }

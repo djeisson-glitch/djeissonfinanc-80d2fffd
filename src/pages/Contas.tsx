@@ -74,6 +74,7 @@ export default function ContasPage() {
         .from('transacoes')
         .select('conta_id, tipo, valor')
         .eq('user_id', user!.id)
+        .neq('categoria', 'Saldo Inicial')
         .lte('data', todayIso));
 
       // Include ALL transactions up to today (even ignorar_dashboard) for accurate
@@ -143,28 +144,11 @@ export default function ContasPage() {
       if (editConta) {
         await supabase.from('contas').update({ nome, tipo, saldo_inicial: finalSaldo, data_abertura: dataAberturaStr, banco: banco || null, codigo_banco: codigoBanco || null, agencia: agencia || null, numero_conta: numeroConta || null }).eq('id', editConta.id);
       } else {
-        const { data: newConta, error } = await supabase.from('contas').insert({ user_id: user!.id, nome, tipo, saldo_inicial: finalSaldo, data_abertura: dataAberturaStr, banco: banco || null, codigo_banco: codigoBanco || null, agencia: agencia || null, numero_conta: numeroConta || null }).select('id').single();
+        const { error } = await supabase.from('contas').insert({ user_id: user!.id, nome, tipo, saldo_inicial: finalSaldo, data_abertura: dataAberturaStr, banco: banco || null, codigo_banco: codigoBanco || null, agencia: agencia || null, numero_conta: numeroConta || null }).select('id').single();
         if (error) throw error;
-
-        // Create opening balance transaction for debit accounts
-        if (tipo !== 'credito' && finalSaldo !== 0) {
-          const txTipo = finalSaldo > 0 ? 'receita' : 'despesa';
-          const hash = `saldo_abertura_${newConta.id}_${Date.now()}`;
-          await supabase.from('transacoes').insert({
-            user_id: user!.id,
-            conta_id: newConta.id,
-            data: dataAberturaStr,
-            descricao: 'Saldo de Abertura',
-            descricao_normalizada: 'SALDO DE ABERTURA',
-            valor: Math.abs(finalSaldo),
-            categoria: 'Saldo Inicial',
-            tipo: txTipo,
-            essencial: false,
-            hash_transacao: hash,
-            pessoa: 'Sistema',
-            ignorar_dashboard: true,
-          });
-        }
+        // O saldo de abertura vive no campo `saldo_inicial` (somado uma única vez
+        // no cálculo de saldo). NÃO criar transação "Saldo de Abertura" — isso
+        // duplicava o valor, pois os cálculos de saldo já somam o campo + as transações.
       }
     },
     onSuccess: () => {
