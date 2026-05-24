@@ -1,4 +1,4 @@
-import { normalizeDescription, generateHash, type ClassifiedTransaction, type SkippedLine, type CsvLineLogEntry } from './csv-parser';
+import { normalizeDescription, generateHash, parseParcelaFromDesc, type ClassifiedTransaction, type SkippedLine, type CsvLineLogEntry } from './csv-parser';
 
 interface PdfParseResult {
   transactions: ClassifiedTransaction[];
@@ -406,6 +406,16 @@ function parseMercadoPago(
       if (!descricao || valor === null) {
         lineLogs.push({ lineNumber, content: text, status: 'rejeitada', reason: 'Sem descrição ou valor' });
         continue;
+      }
+
+      // Fallback: parcela embutida na descrição (ex: "Parcelamento de fatura 3/10",
+      // "Parcela da fatura (3/10)") quando não veio no formato "Parcela N de M".
+      if (parcela_atual === null) {
+        const p = parseParcelaFromDesc(descricao);
+        if (p) {
+          parcela_atual = p.atual;
+          parcela_total = p.total;
+        }
       }
 
       const isCredit = section === 'mov' && /cr[eé]dito|pagamento da fatura/i.test(descricao);
