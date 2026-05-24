@@ -101,6 +101,41 @@ export function normalizeDescription(desc: string): string {
   return normalized.substring(0, 40);
 }
 
+// Limite razoável de parcelas num cartão — evita interpretar datas (ex: "12/2025")
+// como parcela "12 de 2025".
+const MAX_PARCELAS = 99;
+
+function validParcela(atual: number, total: number): { atual: number; total: number } | null {
+  if (!Number.isFinite(atual) || !Number.isFinite(total)) return null;
+  if (total < 2 || total > MAX_PARCELAS) return null; // 1/1 não é parcelamento
+  if (atual < 1 || atual > total) return null;
+  return { atual, total };
+}
+
+/**
+ * Extrai parcela de um CAMPO dedicado (ex: coluna "Parcela" do Sicredi).
+ * Aceita com ou sem parênteses e com espaços: "(01/12)", "01/12", "1 / 12".
+ */
+export function parseParcelaField(field: string | null | undefined): { atual: number; total: number } | null {
+  if (!field) return null;
+  const m = field.match(/(\d{1,3})\s*\/\s*(\d{1,3})/);
+  if (!m) return null;
+  return validParcela(parseInt(m[1], 10), parseInt(m[2], 10));
+}
+
+/**
+ * Extrai parcela de uma DESCRIÇÃO livre. Exige contexto (parênteses ou a palavra
+ * "parcela/parc/de") para não confundir com datas (ex: "03/2025" não é parcela).
+ */
+export function parseParcelaFromDesc(desc: string): { atual: number; total: number } | null {
+  if (!desc) return null;
+  let m = desc.match(/\((\d{1,3})\s*\/\s*(\d{1,3})\)/); // (03/10)
+  if (!m) m = desc.match(/parc(?:ela)?\.?\s*(\d{1,3})\s*\/\s*(\d{1,3})/i); // Parcela 03/10
+  if (!m) m = desc.match(/\b(\d{1,3})\s*de\s*(\d{1,3})\b/i); // 3 de 10
+  if (!m) return null;
+  return validParcela(parseInt(m[1], 10), parseInt(m[2], 10));
+}
+
 export function generateHash(
   data: string,
   descricao: string,
@@ -303,10 +338,10 @@ export function parseSicrediCSV(csvText: string, defaultPessoa: string = 'Titula
       return;
     }
 
-    // Parse parcela field: (01/12), (02/03), etc
-    const parcelaMatch = parcela?.match(/\((\d+)\/(\d+)\)/);
-    const parcela_atual = parcelaMatch ? parseInt(parcelaMatch[1]) : null;
-    const parcela_total = parcelaMatch ? parseInt(parcelaMatch[2]) : null;
+    // Parcela: tenta a coluna dedicada (com/sem parênteses) e cai pra descrição.
+    const parcelaInfo = parseParcelaField(parcela) || parseParcelaFromDesc(descricao);
+    const parcela_atual = parcelaInfo?.atual ?? null;
+    const parcela_total = parcelaInfo?.total ?? null;
 
     const rawValor = valor;
     const tipo = valor < 0 ? 'receita' as const : 'despesa' as const;
@@ -497,10 +532,10 @@ export function parseNubankCSV(csvText: string, defaultPessoa: string = 'Titular
       return;
     }
 
-    // Parcela parsing: " - Parcela N/X" at end of description
-    const parcelaMatch = descricao.match(/\s*[-–]\s*Parcela\s+(\d+)\/(\d+)\s*$/i);
-    const parcela_atual = parcelaMatch ? parseInt(parcelaMatch[1]) : null;
-    const parcela_total = parcelaMatch ? parseInt(parcelaMatch[2]) : null;
+    // Parcela: "... - Parcela N/X" e variações, via detector robusto.
+    const parcelaInfo = parseParcelaFromDesc(descricao);
+    const parcela_atual = parcelaInfo?.atual ?? null;
+    const parcela_total = parcelaInfo?.total ?? null;
 
     // Sign convention: positive = despesa, negative = receita (payment/refund)
     const tipo: 'receita' | 'despesa' = valor < 0 ? 'receita' : 'despesa';
