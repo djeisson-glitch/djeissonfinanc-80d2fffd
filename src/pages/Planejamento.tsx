@@ -10,10 +10,12 @@ import { MonthSelector } from '@/components/MonthSelector';
 import { formatCurrency, getMonthName } from '@/lib/format';
 import { fetchAllRows } from '@/lib/supabase-fetch';
 import { ConfirmDelete } from '@/components/ConfirmDelete';
+import { BudgetReviewCard } from '@/components/planejamento/BudgetReviewCard';
+import { monthPace, projetarFimMes, buildBudgetAlerts, compute503020, suggestMeta } from '@/lib/budget-insights';
 import { useToast } from '@/hooks/use-toast';
 import {
   Target, TrendingUp, TrendingDown, Minus, Save, Lightbulb,
-  Plus, Trash2, AlertCircle, Wallet, CheckCircle2, ChevronDown, ChevronUp,
+  Plus, Trash2, AlertCircle, Wallet, CheckCircle2, ChevronDown, ChevronUp, AlertTriangle, PiggyBank,
 } from 'lucide-react';
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
@@ -81,10 +83,10 @@ export default function PlanejamentoPage() {
     queryKey: ['planejamento-txmes', user?.id, billingMonth],
     queryFn: async () => {
       const [byComp, byDate] = await Promise.all([
-        fetchAllRows(() => supabase.from('transacoes').select('valor, tipo, categoria, descricao, data')
+        fetchAllRows(() => supabase.from('transacoes').select('valor, tipo, categoria, descricao, data, essencial')
           .eq('user_id', user!.id).eq('ignorar_dashboard', false)
           .eq('mes_competencia', billingMonth)),
-        fetchAllRows(() => supabase.from('transacoes').select('valor, tipo, categoria, descricao, data')
+        fetchAllRows(() => supabase.from('transacoes').select('valor, tipo, categoria, descricao, data, essencial')
           .eq('user_id', user!.id).eq('ignorar_dashboard', false)
           .is('mes_competencia', null)
           .gte('data', startDate).lte('data', endDate)),
@@ -235,6 +237,35 @@ export default function PlanejamentoPage() {
 
   const totalPlanejado = categoryData.reduce((s, c) => s + (c.meta || 0), 0);
 
+  // ── inteligência: ritmo, 50/30/20, alertas ─────────────────────────────────
+  const pace = useMemo(() => monthPace(year, month, new Date()), [year, month]);
+  const essenciaisMes = useMemo(
+    () => (txMes || []).filter(t => t.tipo === 'despesa' && (t as any).essencial).reduce((s, t) => s + Number(t.valor), 0),
+    [txMes],
+  );
+  const naoEssenciaisMes = despesaMes - essenciaisMes;
+  const receitaPlanej = receitaEsperada > 0 ? receitaEsperada : receitaMes;
+  const regra = useMemo(() => compute503020(receitaPlanej, essenciaisMes, naoEssenciaisMes), [receitaPlanej, essenciaisMes, naoEssenciaisMes]);
+  const alertas = useMemo(
+    () => buildBudgetAlerts(categoryData.map(c => ({ categoria: c.categoria, gastoMes: c.gastoMes, media: c.media, meta: c.meta })), pace),
+    [categoryData, pace],
+  );
+  const despesaProjetada = projetarFimMes(despesaMes, pace);
+  const sobraProjetada = receitaPlanej - despesaProjetada;
+
+  const aplicarMetasPelaMedia = async () => {
+    if (!user) return;
+    const alvos = categoryData.filter(c => c.meta == null && c.media > 0);
+    if (alvos.length === 0) { toast({ title: 'Nenhuma categoria sem meta com histórico' }); return; }
+    const rows = alvos.map(c => ({ user_id: user.id, categoria_nome: c.categoria, valor_planejado: suggestMeta(c.media), mes: billingMonth }));
+    const { error } = await supabase.from('planejamento_categorias').upsert(rows, { onConflict: 'user_id,categoria_nome,mes' });
+    if (error) toast({ title: 'Erro ao aplicar metas', variant: 'destructive' });
+    else {
+      queryClient.invalidateQueries({ queryKey: ['planejamento-metas'] });
+      toast({ title: `${rows.length} metas definidas pela média histórica` });
+    }
+  };
+
   // ── save/delete meta ──────────────────────────────────────────────────────
 
   const saveMeta = async (categoria: string, valor: number) => {
@@ -312,6 +343,103 @@ export default function PlanejamentoPage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* ── Saúde do orçamento (50/30/20) + Projeção ── */}
+      <div className="grid gap-4 md:grid-cols-2">
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm flex items-center gap-2"><PiggyBank className="h-4 w-4" /> Regra 50/30/20</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3 text-sm">
+            {receitaPlanej <= 0 ? (
+              <p className="text-xs text-muted-foreground">Configure a receita esperada do mês para ver a regra.</p>
+            ) : (
+              [
+                { label: 'Essenciais', val: regra.essenciais, pct: regra.pctEssenciais, alvoPct: 50, alvo: regra.alvoEssenciais, color: 'bg-blue-500' },
+                { label: 'Não-essenciais', val: regra.naoEssenciais, pct: regra.pctNaoEssenciais, alvoPct: 30, alvo: regra.alvoNaoEssenciais, color: 'bg-amber-500' },
+                { label: 'Sobra / poupança', val: regra.poupanca, pct: regra.pctPoupanca, alvoPct: 20, alvo: regra.alvoPoupanca, color: 'bg-emerald-500' },
+              ].map(r => {
+                const acima = r.label !== 'Sobra / poupança' && r.pct > r.alvoPct;
+                const abaixo = r.label === 'Sobra / poupança' && r.pct < r.alvoPct;
+                return (
+                  <div key={r.label} className="space-y-1">
+                    <div className="flex justify-between text-xs">
+                      <span className="text-muted-foreground">{r.label} <span className="text-[10px]">(meta {r.alvoPct}%)</span></span>
+                      <span className={`font-medium ${acima || abaixo ? 'text-amber-600' : ''}`}>{r.pct.toFixed(0)}% · {formatCurrency(r.val)}</span>
+                    </div>
+                    <div className="h-2 rounded-full bg-muted overflow-hidden">
+                      <div className={`h-full ${r.color}`} style={{ width: `${Math.max(0, Math.min(100, r.pct))}%` }} />
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm flex items-center gap-2"><TrendingDown className="h-4 w-4" /> Projeção do mês</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2 text-sm">
+            <div className="flex justify-between"><span className="text-muted-foreground">Gasto até agora</span><span className="font-medium">{formatCurrency(despesaMes)}</span></div>
+            <div className="flex justify-between"><span className="text-muted-foreground">Projeção fim do mês</span><span className="font-medium">{formatCurrency(despesaProjetada)}</span></div>
+            <div className="border-t pt-1">
+              <div className="flex justify-between"><span className="text-muted-foreground">Sobra projetada</span><span className={`font-bold ${sobraProjetada >= 0 ? 'text-emerald-600' : 'text-destructive'}`}>{formatCurrency(sobraProjetada)}</span></div>
+            </div>
+            <p className="text-[10px] text-muted-foreground">{pace.isMesCorrente ? `no ritmo do dia ${pace.diaAtual}/${pace.diasMes}` : 'mês fechado (valor real)'}</p>
+            <Button variant="outline" size="sm" className="w-full gap-1.5 mt-1" onClick={aplicarMetasPelaMedia}>
+              <Lightbulb className="h-3.5 w-3.5" /> Definir metas pela média histórica
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* ── Alertas ── */}
+      {alertas.length > 0 && (
+        <Card className="border-amber-500/40 bg-amber-500/5">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm flex items-center gap-2"><AlertTriangle className="h-4 w-4 text-amber-500" /> Alertas do orçamento ({alertas.length})</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-1.5">
+            {alertas.slice(0, 6).map((a, i) => (
+              <div key={`${a.categoria}-${i}`} className="flex items-start gap-2 text-sm">
+                <span className={`mt-0.5 h-2 w-2 rounded-full shrink-0 ${a.severidade === 'alto' ? 'bg-destructive' : 'bg-amber-500'}`} />
+                <span>
+                  <span className="font-medium">{a.categoria}</span>{' '}
+                  {a.tipo === 'estourou' && <span className="text-muted-foreground">estourou a meta — gastou {formatCurrency(a.gastoMes)} de {formatCurrency(a.meta || 0)}</span>}
+                  {a.tipo === 'vai_estourar' && <span className="text-muted-foreground">no ritmo atual fecha em {formatCurrency(a.projecao)} (meta {formatCurrency(a.meta || 0)})</span>}
+                  {a.tipo === 'acima_media' && <span className="text-muted-foreground">{formatCurrency(a.gastoMes)} este mês vs média de {formatCurrency(a.media)}</span>}
+                </span>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* ── Resumo por IA ── */}
+      <BudgetReviewCard
+        context={{
+          receita: receitaPlanej,
+          despesaMes,
+          despesaProjetada,
+          sobraProjetada,
+          essenciais: essenciaisMes,
+          naoEssenciais: naoEssenciaisMes,
+          pctEssenciais: regra.pctEssenciais,
+          pctPoupanca: regra.pctPoupanca,
+          mesCorrente: pace.isMesCorrente,
+          alertas: alertas.slice(0, 8).map(a => ({
+            categoria: a.categoria,
+            tipo: a.tipo,
+            gastoMes: a.gastoMes,
+            projecao: a.projecao,
+            meta: a.meta,
+            media: a.media,
+          })),
+          categorias: categoryData.slice(0, 12).map(c => ({ categoria: c.categoria, gastoMes: c.gastoMes, media: c.media, meta: c.meta })),
+        }}
+      />
 
       {/* ── Fontes de receita (colapsável) ── */}
       <Card>

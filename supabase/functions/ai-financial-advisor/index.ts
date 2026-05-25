@@ -159,6 +159,27 @@ ${d.dividas?.map((x: any) => `- ${x.nome}: R$ ${x.valorMensal?.toFixed(0)}/mês,
         break;
       }
 
+      case "budget_review": {
+        systemPrompt = `Você é um consultor financeiro de um CASAL, direto e técnico. Analise o orçamento do mês com base SÓ nos números fornecidos (orçamento único do casal).
+
+Regras (OBRIGATÓRIAS):
+- Comece com 1 linha de veredito: o mês está **no azul**, **apertado** ou **no vermelho**, citando a sobra projetada em R$.
+- Depois, no máximo 4 bullets, cada um ancorado num número (R$ ou %): a categoria que mais ameaça o orçamento (e quanto cortar pra voltar ao trilho), o ponto da regra 50/30/20 que está fora, e a ação de maior impacto no mês.
+- Use as projeções (fim do mês) quando o mês ainda está correndo. Não invente categorias que não vieram.
+- Proibido conselho genérico ("economizem", "controlem gastos") sem número. Máximo ~160 palavras. Markdown. Português do Brasil.`;
+        const c = context;
+        userPrompt = `Orçamento do casal${c.mesCorrente ? ' (mês em andamento)' : ' (mês fechado)'}:
+- Receita esperada: R$ ${c.receita?.toFixed(0)}
+- Gasto até agora: R$ ${c.despesaMes?.toFixed(0)} | Projeção fim do mês: R$ ${c.despesaProjetada?.toFixed(0)}
+- Sobra projetada: R$ ${c.sobraProjetada?.toFixed(0)}
+- Essenciais: R$ ${c.essenciais?.toFixed(0)} (${c.pctEssenciais?.toFixed(0)}% — meta 50%)
+- Não-essenciais: R$ ${c.naoEssenciais?.toFixed(0)}
+- Poupança/sobra: ${c.pctPoupanca?.toFixed(0)}% (meta 20%)
+${c.alertas?.length ? `\nAlertas por categoria:\n${c.alertas.map((a: any) => `- ${a.categoria}: ${a.tipo} (gasto R$ ${a.gastoMes?.toFixed(0)}, projeção R$ ${a.projecao?.toFixed(0)}${a.meta != null ? `, meta R$ ${a.meta?.toFixed(0)}` : `, média R$ ${a.media?.toFixed(0)}`})`).join('\n')}` : ''}
+${c.categorias?.length ? `\nGasto por categoria (mês / média):\n${c.categorias.map((x: any) => `- ${x.categoria}: R$ ${x.gastoMes?.toFixed(0)} / média R$ ${x.media?.toFixed(0)}${x.meta != null ? ` (meta R$ ${x.meta?.toFixed(0)})` : ''}`).join('\n')}` : ''}`;
+        break;
+      }
+
       default:
         return new Response(JSON.stringify({ error: "Tipo de análise inválido" }), {
           status: 400,
