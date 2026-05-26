@@ -36,8 +36,12 @@ export interface FinancialHealthParams {
 // Internal helpers
 // ---------------------------------------------------------------------------
 
-function getMonthKey(data: string): string {
-  return data.substring(0, 7); // YYYY-MM
+// Mês de atribuição da transação. Usa mes_competencia (período de fatura do
+// cartão) quando presente, senão YYYY-MM da data. ALINHADO com projection-engine
+// e income-commitment — sem isso, parcelas de cartão caíam no mês da COMPRA
+// (data), distorcendo a estabilidade de gastos e a reserva vs. o resto do app.
+function getMonthKey(t: TransactionRecord): string {
+  return t.mes_competencia || t.data.substring(0, 7); // YYYY-MM
 }
 
 /**
@@ -47,7 +51,7 @@ function getMonthKey(data: string): string {
 function getLastNMonths(transactions: TransactionRecord[], n: number): string[] {
   const months = new Set<string>();
   for (const t of transactions) {
-    months.add(getMonthKey(t.data));
+    months.add(getMonthKey(t));
   }
   return Array.from(months).sort().slice(-n);
 }
@@ -64,7 +68,7 @@ function totalExpensesForMonth(
       (t) =>
         t.tipo === 'despesa' &&
         !t.ignorar_dashboard &&
-        getMonthKey(t.data) === month,
+        getMonthKey(t) === month,
     )
     .reduce((sum, t) => sum + t.valor, 0);
 }
@@ -78,7 +82,7 @@ function averageMonthlyExpenses(transactions: TransactionRecord[]): number {
   );
   const months: Record<string, number> = {};
   for (const t of despesas) {
-    const m = getMonthKey(t.data);
+    const m = getMonthKey(t);
     months[m] = (months[m] || 0) + t.valor;
   }
   const values = Object.values(months);
@@ -244,7 +248,7 @@ function scoreComprometimentoParcelas(
     if (t.tipo === 'despesa' && !t.ignorar_dashboard && t.parcela_atual && t.parcela_total) {
       totalInstallments += t.valor;
     }
-    months.add(getMonthKey(t.data));
+    months.add(getMonthKey(t));
   }
 
   const monthCount = months.size || 1;

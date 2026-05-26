@@ -57,14 +57,17 @@ export interface SmartInsight {
 // Helpers
 // ---------------------------------------------------------------------------
 
-function getMonth(dateStr: string): string {
-  return dateStr.substring(0, 7);
+// Mês de atribuição: mes_competencia (fatura do cartão) quando presente, senão
+// YYYY-MM da data. ALINHADO com projection-engine/financial-health — sem isso,
+// parcelas de cartão caíam no mês da COMPRA e distorciam tendências/anomalias.
+function getMonth(t: TransactionRecord): string {
+  return t.mes_competencia || t.data.substring(0, 7);
 }
 
 function getSortedUniqueMonths(transactions: TransactionRecord[]): string[] {
   const set = new Set<string>();
   for (const t of transactions) {
-    set.add(getMonth(t.data));
+    set.add(getMonth(t));
   }
   return Array.from(set).sort();
 }
@@ -78,7 +81,7 @@ function buildCategoryMonthlyTotals(
   );
   for (const t of despesas) {
     const cat = t.categoria;
-    const mes = getMonth(t.data);
+    const mes = getMonth(t);
     if (!result[cat]) result[cat] = {};
     if (!result[cat][mes]) result[cat][mes] = 0;
     result[cat][mes] += t.valor;
@@ -219,7 +222,7 @@ export function detectRecurringCharges(
         categoria: t.categoria,
       };
     }
-    const mes = getMonth(t.data);
+    const mes = getMonth(t);
     if (!groups[normDesc].months.has(mes)) {
       groups[normDesc].months.add(mes);
       groups[normDesc].valores.push(t.valor);
@@ -268,9 +271,9 @@ export function calculateMonthlyDigest(
     ? allMonths[allMonths.length - 3]
     : null;
 
-  const monthTx = validTx.filter((t) => getMonth(t.data) === targetMonth);
+  const monthTx = validTx.filter((t) => getMonth(t) === targetMonth);
   const prevMonthTx = prevMonth
-    ? validTx.filter((t) => getMonth(t.data) === prevMonth)
+    ? validTx.filter((t) => getMonth(t) === prevMonth)
     : [];
 
   const despesas = monthTx.filter((t) => t.tipo === 'despesa');
