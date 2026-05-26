@@ -10,7 +10,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { generateHash } from '@/lib/csv-parser';
+import { generateHash, isFaturaPayment } from '@/lib/csv-parser';
 
 interface Props {
   open: boolean;
@@ -88,23 +88,47 @@ export function PaymentModal({ open, onOpenChange, contaId, contaNome, faturaTot
 
       if (paymentError) throw paymentError;
 
-      // Create corresponding debit transaction on the origin debit account (despesa = money leaving)
+      // Create corresponding debit transaction on the origin debit account (despesa = money leaving).
+      // ANTES, checa se o débito desse pagamento JÁ existe na conta de origem —
+      // tipicamente importado do extrato OFX/PDF (ex: "PAGTO FATURA", "Pagamento de
+      // fatura"). Se já existe, NÃO cria de novo (senão o pagamento conta em dobro
+      // na conta corrente). Casa por: pagamento de fatura + valor ~igual + data
+      // dentro de ~45 dias do período.
+      let debitoDuplicado = false;
       if (effectiveContaOrigem) {
-        const debitHash = generateHash(baseDate, `Pag Fat Deb Cc - ${contaNome}`, valorPagamento, pessoaNome) + '_deb';
-        await supabase.from('transacoes').insert({
-          user_id: user.id,
-          conta_id: effectiveContaOrigem,
-          data: baseDate,
-          descricao: `Pag Fat Deb Cc - ${contaNome}`,
-          valor: valorPagamento,
-          categoria: 'Pagamento Fatura',
-          tipo: 'despesa',
-          essencial: true,
-          hash_transacao: debitHash,
-          pessoa: pessoaNome,
-          mes_competencia: billingPeriod,
-          ignorar_dashboard: true,
+        const { data: candidatos } = await supabase
+          .from('transacoes')
+          .select('descricao, valor, data')
+          .eq('user_id', user.id)
+          .eq('conta_id', effectiveContaOrigem)
+          .eq('tipo', 'despesa')
+          .gte('valor', valorPagamento - 0.5)
+          .lte('valor', valorPagamento + 0.5);
+        const base = new Date(baseDate + 'T00:00:00').getTime();
+        debitoDuplicado = (candidatos || []).some((t) => {
+          if (!isFaturaPayment(t.descricao)) return false;
+          const dt = new Date((t.data as string) + 'T00:00:00').getTime();
+          const dias = Math.abs(dt - base) / 86400000;
+          return dias <= 45;
         });
+
+        if (!debitoDuplicado) {
+          const debitHash = generateHash(baseDate, `Pag Fat Deb Cc - ${contaNome}`, valorPagamento, pessoaNome) + '_deb';
+          await supabase.from('transacoes').insert({
+            user_id: user.id,
+            conta_id: effectiveContaOrigem,
+            data: baseDate,
+            descricao: `Pag Fat Deb Cc - ${contaNome}`,
+            valor: valorPagamento,
+            categoria: 'Pagamento Fatura',
+            tipo: 'despesa',
+            essencial: true,
+            hash_transacao: debitHash,
+            pessoa: pessoaNome,
+            mes_competencia: billingPeriod,
+            ignorar_dashboard: true,
+          });
+        }
       }
 
       // If partial, create future installments for remaining (linked to the same grupo_parcela)
@@ -142,7 +166,12 @@ export function PaymentModal({ open, onOpenChange, contaId, contaNome, faturaTot
       queryClient.invalidateQueries({ queryKey: ['faturas'] });
       queryClient.invalidateQueries({ queryKey: ['saldos'] });
       queryClient.invalidateQueries({ queryKey: ['dashboard'] });
-      toast({ title: mode === 'total' ? 'Pagamento total registrado' : 'Pagamento parcial + parcelamento registrado' });
+      toast({
+        title: mode === 'total' ? 'Pagamento total registrado' : 'Pagamento parcial + parcelamento registrado',
+        description: debitoDuplicado
+          ? 'O débito já constava no extrato da conta (importado) — não foi duplicado.'
+          : undefined,
+      });
       onOpenChange(false);
     } catch (err) {
       console.error(err);
