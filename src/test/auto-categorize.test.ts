@@ -32,6 +32,8 @@ describe('autoCategorizarTransacao — padrões do usuário', () => {
     ['LIQUIDACAO BOLETO-          19791896000283 SUPERGASBRAS ENERGIA LTDA', 'Casa'],
     ['LIQUIDACAO BOLETO-          00360305000104 GCI CAIXA   HABITACAO', 'Casa'],
     ['AMORTIZACAO CONTRATO-C5A920011 ', 'Empréstimos'],
+    ['PAGAMENTO PIX-PIX_DEB   10573521000191 MERCADO PAGO INSTITUICAO DE PAGAMENTO LTDA', 'Operação bancária'],
+    ['PAGTO FATURA MASTER-008323084 ', 'Operação bancária'],
     ['APLICACAO POUPANCA-SOBRAS_CP ', 'Investimentos'],
     ['COMPRA DEBITO MASTER-CM0436559 MTD AmorSaude Passo Fu   Passo Fundo  BR', 'Saúde'],
     // Fixes de padrões truncados

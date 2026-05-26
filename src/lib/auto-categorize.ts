@@ -16,8 +16,11 @@ interface CategoriaRule {
 }
 
 const RULES: CategoriaRule[] = [
-  // PAGAMENTO DE FATURA
-  { patterns: ['PAGTO FATURA', 'PAGAMENTO FATURA', 'PAGTO FAT', 'PAG FATURA'], categoria: 'Operação bancária' },
+  // PAGAMENTO DE FATURA / CARTÃO / TRANSFERÊNCIA PRO MP (saída da conta, não é consumo)
+  // Obs: o PIX pro "MERCADO PAGO INSTITUICAO" é uma mistura (fatura do cartão e
+  // parcela do empréstimo MP) — não dá pra distinguir pelo texto, então fica como
+  // Operação bancária pra não virar gasto falso. Vem ANTES do catch-all 'MERCADOPAGO*'.
+  { patterns: ['PAGTO FATURA', 'PAGAMENTO FATURA', 'PAGTO FAT', 'PAG FATURA', 'MERCADO PAGO INSTITUICAO', '10573521000191'], categoria: 'Operação bancária' },
 
   // EMPRÉSTIMOS
   { patterns: ['LIQUIDACAO DE PARCELA', 'LIQUIDAÇÃO DE PARCELA', 'PARCELA-C5A', 'AMORTIZACAO CONTRATO', 'AMORTIZAÇÃO CONTRATO'], categoria: 'Empréstimos' },
