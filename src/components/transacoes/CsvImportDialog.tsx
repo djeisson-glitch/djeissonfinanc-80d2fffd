@@ -157,8 +157,11 @@ export function CsvImportDialog({ open, onOpenChange }: Props) {
       },
       new Date(parsedTransactions[0].data + "T00:00:00"),
     );
-    const dueDate = new Date(dueYear, dueMonth, 1);
-    if (dueDate < latestTx) {
+    // Compara com o ÚLTIMO dia do mês da fatura — lançamentos DENTRO do mês
+    // (consumos, encargos) são normais e não devem disparar o alerta. Só avisa
+    // se houver transação realmente depois do fim do período escolhido.
+    const fimPeriodo = new Date(dueYear, dueMonth + 1, 0, 23, 59, 59);
+    if (fimPeriodo < latestTx) {
       return `Período da fatura (${MONTH_NAMES[dueMonth]}/${dueYear}) é anterior a transações no extrato`;
     }
     return null;
