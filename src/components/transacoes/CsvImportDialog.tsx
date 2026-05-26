@@ -268,6 +268,7 @@ export function CsvImportDialog({ open, onOpenChange }: Props) {
     let openingDetected: { balance: number; date: string } | null = null;
     let accountNumber: string | null = null;
     let dueDay: number | null = null;
+    let detectedDue: { month: number; year: number } | null = null;
 
     if (ext === "pdf") {
       try {
@@ -305,6 +306,9 @@ export function CsvImportDialog({ open, onOpenChange }: Props) {
         lineLogs = parsed.lineLogs;
         contaDetectada = parsed.institution;
         dueDay = parsed.detectedDueDate?.day ?? null;
+        if (parsed.detectedDueDate) {
+          detectedDue = { month: parsed.detectedDueDate.month, year: parsed.detectedDueDate.year };
+        }
       } catch (err: any) {
         if (err?.message === "PDF_PASSWORD") {
           toast({
@@ -404,11 +408,18 @@ export function CsvImportDialog({ open, onOpenChange }: Props) {
     setDetectedAccountNumber(accountNumber);
     setParsedDueDay(dueDay);
 
-    // For non-CSV file types, set default due date
+    // Para PDF/OFX: prioriza o vencimento DETECTADO no documento (ex: "Vence em
+    // 20/02/2026" → fatura de fevereiro). Só cai no palpite por data de transação
+    // quando o documento não traz o vencimento.
     if (ext !== 'csv') {
-      const defaultDue = getDefaultDueDate(transactions);
-      setDueMonth(defaultDue.month);
-      setDueYear(defaultDue.year);
+      if (detectedDue) {
+        setDueMonth(detectedDue.month);
+        setDueYear(detectedDue.year);
+      } else {
+        const defaultDue = getDefaultDueDate(transactions);
+        setDueMonth(defaultDue.month);
+        setDueYear(defaultDue.year);
+      }
     }
 
     if (contaDetectada && contasList) {
