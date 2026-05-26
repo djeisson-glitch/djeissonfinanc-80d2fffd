@@ -113,8 +113,18 @@ export default function ConciliacaoPage() {
         .reverse();
     }
 
+    // Candidato a pagamento de fatura na conta corrente: além do "PAGTO FATURA"
+    // clássico (isFaturaPayment), inclui PIX/transferência ao Mercado Pago
+    // (CNPJ 10573521000191), que paga a fatura do cartão MP mas não tem a palavra
+    // "fatura" no texto. Como pode ser fatura OU parcela de empréstimo, fica como
+    // candidato pra VOCÊ conciliar (não classifica sozinho).
+    const ehPagamentoCartao = (desc: string) =>
+      isFaturaPayment(desc) ||
+      /mercado\s*pago/i.test(desc) ||
+      desc.includes('10573521000191');
+
     const pagamentos = txs
-      .filter((t) => debitIds.has(t.conta_id) && t.tipo === 'despesa' && isFaturaPayment(t.descricao) && !t.ignorar_dashboard)
+      .filter((t) => debitIds.has(t.conta_id) && t.tipo === 'despesa' && ehPagamentoCartao(t.descricao) && !t.ignorar_dashboard)
       .map((pay) => {
         const payMonth = (pay.data || '').substring(0, 7);
         // Match: prioriza o cartão+mês cujo total bate por VALOR (±1), preferindo
