@@ -1132,27 +1132,39 @@ export function CsvImportDialog({ open, onOpenChange }: Props) {
         logEntries: plan.logEntries,
       });
 
-      await supabase.from("historico_importacoes").insert({
-        user_id: context.currentUserId,
-        nome_arquivo: file!.name,
-        tipo_arquivo: fileType || "csv",
-        conta_nome: plan.contaNome,
-        conta_id: context.contaId,
-        qtd_importada: imported,
-        qtd_duplicadas: plan.duplicateItems.length,
-        qtd_total: plan.allTransactionsCount,
-      });
-
-      await supabase.from("import_logs").insert([
-        {
+      // Registros de auditoria (histórico + logs). NÃO são críticos: as transações
+      // já foram inseridas acima. Se qualquer um falhar (coluna ausente, RLS, etc.),
+      // apenas logamos — jamais deixar um erro de bookkeeping reportar o import inteiro
+      // como "Erro ao importar" e confundir o usuário com dados que já entraram.
+      try {
+        await supabase.from("historico_importacoes").insert({
           user_id: context.currentUserId,
-          arquivo: file!.name,
-          total_linhas_csv: parsedTotalLines,
-          linhas_importadas: plan.importedOriginals.length,
-          linhas_rejeitadas: parsedLineLogs.filter((entry) => entry.status !== "importada").length,
-          detalhes_json: plan.logEntries as any,
-        },
-      ]);
+          nome_arquivo: file!.name,
+          tipo_arquivo: fileType || "csv",
+          conta_nome: plan.contaNome,
+          conta_id: context.contaId,
+          qtd_importada: imported,
+          qtd_duplicadas: plan.duplicateItems.length,
+          qtd_total: plan.allTransactionsCount,
+        });
+      } catch (logErr) {
+        console.error("[Import] Falha ao gravar histórico_importacoes (não-crítico):", logErr);
+      }
+
+      try {
+        await supabase.from("import_logs").insert([
+          {
+            user_id: context.currentUserId,
+            arquivo: file!.name,
+            total_linhas_csv: parsedTotalLines,
+            linhas_importadas: plan.importedOriginals.length,
+            linhas_rejeitadas: parsedLineLogs.filter((entry) => entry.status !== "importada").length,
+            detalhes_json: plan.logEntries as any,
+          },
+        ]);
+      } catch (logErr) {
+        console.error("[Import] Falha ao gravar import_logs (não-crítico):", logErr);
+      }
 
       if (openingApplied) {
         const [y, m, d] = openingApplied.date.split("-");
