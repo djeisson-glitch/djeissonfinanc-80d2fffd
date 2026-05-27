@@ -402,6 +402,8 @@ export function CsvImportDialog({ open, onOpenChange }: Props) {
       if (contaDetectada && ["black", "mercado pago", "nubank"].some((n) => contaDetectada!.toLowerCase().includes(n))) {
         accountType = "credito";
       }
+      // "Total desta fatura" do cabeçalho do CSV (ex: Sicredi/Black) → marcador.
+      headerTotalDetected = (parsed as any).headerTotal != null && (parsed as any).headerTotal > 0 ? (parsed as any).headerTotal : null;
       // Use auto-detected due date from CSV header
       if (parsed.detectedDueDate) {
         setDueMonth(parsed.detectedDueDate.month);

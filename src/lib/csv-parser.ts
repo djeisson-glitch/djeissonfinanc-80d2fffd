@@ -47,6 +47,8 @@ interface ParseResult {
   lineLogs: CsvLineLogEntry[];
   /** Auto-detected due date from CSV header (e.g. "Data de Vencimento ;15/03/2026") */
   detectedDueDate: { month: number; year: number; day?: number } | null;
+  /** "Total desta fatura" do cabeçalho — fonte da verdade do "A pagar" do cartão. */
+  headerTotal?: number;
 }
 
 /**
@@ -481,6 +483,7 @@ export function parseSicrediCSV(csvText: string, defaultPessoa: string = 'Titula
   return {
     contaDetectada,
     detectedDueDate,
+    headerTotal: headerFaturaTotal ?? undefined,
     transactions,
     skippedLines,
     totalLines: lines.length,
