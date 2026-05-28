@@ -167,27 +167,36 @@ export default function ConciliacaoPage() {
         .eq('id', payId).eq('user_id', user!.id);
       if (e1) throw e1;
 
-      // 2) baixa no cartão — SÓ se a fatura ainda não estiver coberta. Muitas
-      // faturas (Sicredi/Nubank) já trazem a linha de pagamento no próprio extrato;
-      // criar outra aqui pagaria em DOBRO (foi o que zerou/negativou o Black).
+      // 2) baixa no cartão — IDEMPOTENTE e auto-corretiva: remove baixas de
+      // conciliação anteriores deste cartão+mês e lança UMA baixa com o valor
+      // certo. O "a pagar" base é o TOTAL do marcador (fonte da verdade); sem
+      // marcador, cai em compras − pagamentos internos. Nunca paga em dobro nem
+      // deixa resíduo. (Reconciliar conserta baixas parciais antigas.)
       const cardTxs = (txs || []).filter((t) => t.conta_id === cardId && (t.mes_competencia || t.data.substring(0, 7)) === period);
+      const priorConc = cardTxs.filter((t) => isConciliacaoPayment(t.descricao));
+      if (priorConc.length > 0) {
+        await supabase.from('transacoes').delete().in('id', priorConc.map((t) => t.id)).eq('user_id', user!.id);
+      }
+      const markerTx = cardTxs.find((t) => isFaturaTotalMarker(t.descricao));
       const compras = cardTxs
-        .filter((t) => t.tipo === 'despesa' && !isFaturaPayment(t.descricao) && !isSaldoAnteriorFatura(t.descricao))
+        .filter((t) => t.tipo === 'despesa' && !isFaturaPayment(t.descricao) && !isSaldoAnteriorFatura(t.descricao) && !isFaturaTotalMarker(t.descricao))
         .reduce((s, t) => s + Number(t.valor), 0)
         - cardTxs.filter((t) => isDevolution(t.descricao) && t.tipo === 'receita').reduce((s, t) => s + Math.abs(Number(t.valor)), 0);
-      const pagoExistente = cardTxs.filter((t) => isFaturaPayment(t.descricao)).reduce((s, t) => s + Math.abs(Number(t.valor)), 0);
-      const falta = compras - pagoExistente; // quanto ainda falta pagar nessa fatura
-      const aBaixar = Math.min(Number(valor), falta);
+      const pagoNaoConc = cardTxs
+        .filter((t) => isFaturaPayment(t.descricao) && !isConciliacaoPayment(t.descricao))
+        .reduce((s, t) => s + Math.abs(Number(t.valor)), 0);
+      const aPagarAtual = markerTx != null ? Math.max(0, Number(markerTx.valor)) : Math.max(0, compras - pagoNaoConc);
+      const aBaixar = Math.min(Number(valor), aPagarAtual);
 
       if (aBaixar > 0.5) {
         const baseDate = `${period}-01`;
-        const hash = generateHash(baseDate, `Pag Fat Deb Cc - ${cardNome}`, aBaixar, 'Conciliacao') + '_conc';
-        const { error: e2 } = await supabase.from('transacoes').insert({
+        const hash = `conc_fat_${cardId}_${period}`; // estável por cartão+mês (idempotente)
+        const { error: e2 } = await supabase.from('transacoes').upsert({
           user_id: user!.id, conta_id: cardId, data: baseDate, mes_competencia: period,
           descricao: `Pag Fat Deb Cc - ${cardNome}`, valor: aBaixar, categoria: 'Pagamento Fatura',
           tipo: 'receita', essencial: true, ignorar_dashboard: true, hash_transacao: hash,
           pessoa: user?.user_metadata?.full_name || 'Titular',
-        });
+        }, { onConflict: 'user_id,hash_transacao' });
         if (e2) throw e2;
       }
     },
