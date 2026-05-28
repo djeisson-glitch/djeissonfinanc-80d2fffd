@@ -5,7 +5,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useTodayIso } from '@/hooks/useTodayIso';
 import { formatCurrency } from '@/lib/format';
 import { fetchAllRows } from '@/lib/supabase-fetch';
-import { normalizeDescription, isFaturaPayment, isDevolution, isSaldoAnteriorFatura, isFaturaTotalMarker, isConciliacaoPayment, generateHash } from '@/lib/csv-parser';
+import { normalizeDescription, isFaturaPayment, isDevolution, isSaldoAnteriorFatura, isFaturaTotalMarker, isConciliacaoPayment, isCreditoParcelamento, generateHash } from '@/lib/csv-parser';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -84,21 +84,31 @@ export default function ConciliacaoPage() {
     const debitIds = new Set(contas.filter((c) => c.tipo === 'debito').map((c) => c.id));
 
     const fatura: Record<string, Record<string, { despesas: number; pagamentos: number }>> = {};
-    for (const c of cards) fatura[c.id] = {};
+    // Total informado pelo extrato (marcador), por cartão+período — é a fonte da
+    // verdade do "A pagar" (ex: MP rotativo, onde a acumulação infla). O match da
+    // conciliação usa ESTE total; senão o PIX do MP nunca casaria com a soma inflada.
+    const markerByCard: Record<string, Record<string, number>> = {};
+    for (const c of cards) { fatura[c.id] = {}; markerByCard[c.id] = {}; }
     for (const t of txs) {
       if (!fatura[t.conta_id]) continue;
-      if (isSaldoAnteriorFatura(t.descricao) || isFaturaTotalMarker(t.descricao)) continue; // artefatos
+      if (isFaturaTotalMarker(t.descricao)) {
+        markerByCard[t.conta_id][t.mes_competencia || t.data.substring(0, 7)] = Math.abs(Number(t.valor));
+        continue;
+      }
+      if (isSaldoAnteriorFatura(t.descricao)) continue; // artefato
       const p = t.mes_competencia || t.data.substring(0, 7);
       const b = (fatura[t.conta_id][p] ||= { despesas: 0, pagamentos: 0 });
       if (t.tipo === 'despesa') b.despesas += Number(t.valor);
-      if (isFaturaPayment(t.descricao)) b.pagamentos += Math.abs(Number(t.valor));
+      if (isFaturaPayment(t.descricao) && !isCreditoParcelamento(t.descricao)) b.pagamentos += Math.abs(Number(t.valor));
       if (isDevolution(t.descricao) && t.tipo === 'receita') b.despesas -= Math.abs(Number(t.valor));
     }
     const totalAPagar = (cardId: string, period: string) => {
+      // Marcador manda: é o total que o extrato diz pra pagar.
+      const mk = markerByCard[cardId]?.[period];
+      if (mk != null) return mk;
       const periods = Object.keys(fatura[cardId] || {}).sort();
       let ant = 0;
-      for (const p of periods) if (p < period) ant += fatura[cardId][p].despesas - fatura[cardId][p].pagamentos;
-      ant = Math.max(0, ant);
+      for (const p of periods) if (p < period) ant += Math.max(0, fatura[cardId][p].despesas - fatura[cardId][p].pagamentos);
       const cur = fatura[cardId][period] || { despesas: 0, pagamentos: 0 };
       return ant + cur.despesas - cur.pagamentos;
     };
@@ -119,20 +129,27 @@ export default function ConciliacaoPage() {
     // em aberto — senão (ex: parcela de empréstimo de R$563) não aparece.
     const ehMercadoPago = (desc: string) => /mercado\s*pago/i.test(desc) || desc.includes('10573521000191');
 
-    // Valores já conciliados (existe uma baixa "Pag Fat Deb Cc - X" no cartão).
-    // Um pagamento da conta corrente é candidato se AINDA não tem baixa
-    // correspondente — independente de ignorar_dashboard (conciliações antigas
-    // marcaram o débito como ignorado, mas se a baixa foi removida ele precisa
-    // reaparecer pra reconciliar).
-    const valoresConciliados = txs
-      .filter((t) => isConciliacaoPayment(t.descricao))
-      .map((t) => Math.abs(Number(t.valor)));
-    const jaConciliado = (v: number) => valoresConciliados.some((x) => Math.abs(x - v) <= 0.5);
+    // Baixas de conciliação existentes, contadas POR VALOR (em centavos). Um
+    // pagamento da conta corrente é candidato se ainda há mais pagamentos daquele
+    // valor do que baixas — assim 2 pagamentos de R$1.000 (cartões diferentes) com
+    // 1 baixa mostram 1 candidato (antes uma baixa escondia TODOS do mesmo valor).
+    const baixasPorValor = new Map<number, number>();
+    for (const t of txs) {
+      if (!isConciliacaoPayment(t.descricao)) continue;
+      const cents = Math.round(Math.abs(Number(t.valor)) * 100);
+      baixasPorValor.set(cents, (baixasPorValor.get(cents) || 0) + 1);
+    }
+    const consumirBaixa = (v: number) => {
+      const cents = Math.round(v * 100);
+      const n = baixasPorValor.get(cents) || 0;
+      if (n > 0) { baixasPorValor.set(cents, n - 1); return true; } // já conciliado
+      return false;
+    };
 
     const pagamentos = txs
       .filter((t) => debitIds.has(t.conta_id) && t.tipo === 'despesa' &&
         (isFaturaPayment(t.descricao) || ehMercadoPago(t.descricao)) &&
-        !jaConciliado(Math.abs(Number(t.valor))))
+        !consumirBaixa(Math.abs(Number(t.valor))))
       .map((pay) => {
         const payMonth = (pay.data || '').substring(0, 7);
         // Match: prioriza o cartão+mês cujo total bate por VALOR (±1), preferindo
@@ -318,18 +335,23 @@ export default function ConciliacaoPage() {
       // da conciliação). Lista os pagamentos do período pra você remover o extra.
       const faturasExcesso: { periodo: string; compras: number; pago: number; pagamentos: Tx[] }[] = [];
       if (c.tipo === 'credito') {
-        const perMap: Record<string, { compras: number; pago: number; pagamentos: Tx[] }> = {};
+        const perMap: Record<string, { compras: number; pago: number; marker: number | null; pagamentos: Tx[] }> = {};
         for (const t of list) {
-          if (isSaldoAnteriorFatura(t.descricao) || isFaturaTotalMarker(t.descricao)) continue;
+          if (isSaldoAnteriorFatura(t.descricao)) continue;
           const p = t.mes_competencia || t.data.substring(0, 7);
-          perMap[p] ||= { compras: 0, pago: 0, pagamentos: [] };
+          perMap[p] ||= { compras: 0, pago: 0, marker: null, pagamentos: [] };
+          if (isFaturaTotalMarker(t.descricao)) { perMap[p].marker = Math.abs(Number(t.valor)); continue; }
           if (isFaturaPayment(t.descricao)) { perMap[p].pago += Math.abs(Number(t.valor)); perMap[p].pagamentos.push(t); }
           else if (t.tipo === 'despesa') perMap[p].compras += Number(t.valor);
           else if (isDevolution(t.descricao) && t.tipo === 'receita') perMap[p].compras -= Math.abs(Number(t.valor));
         }
         for (const [periodo, v] of Object.entries(perMap)) {
-          if (v.pago > v.compras + 0.5 && v.pagamentos.length > 0) {
-            faturasExcesso.push({ periodo, compras: v.compras, pago: v.pago, pagamentos: v.pagamentos });
+          // Limiar = total real da fatura (marcador quando existe; senão compras).
+          // Usar o marcador evita falso "pago em excesso" quando um estorno reduz
+          // 'compras' abaixo do pagamento do total original.
+          const limite = v.marker != null ? v.marker : v.compras;
+          if (v.pago > limite + 0.5 && v.pagamentos.length > 0) {
+            faturasExcesso.push({ periodo, compras: limite, pago: v.pago, pagamentos: v.pagamentos });
           }
         }
         faturasExcesso.sort((a, b) => a.periodo.localeCompare(b.periodo));

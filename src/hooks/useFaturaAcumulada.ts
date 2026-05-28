@@ -85,8 +85,10 @@ export function useFaturaAcumulada(cardIds: string[], billingMonth: string) {
             byPeriod[periodo].despesas += Number(t.valor);
           }
 
-          // Detect payments (receita that are fatura payments)
-          if (isFaturaPayment(t.descricao)) {
+          // Detect payments (receita que abatem a fatura). "Crédito por
+          // parcelamento" é abatimento INTERNO não-caixa do parcelamento — não
+          // conta como pagamento (senão reduz o "A pagar" sem ter saído dinheiro).
+          if (isFaturaPayment(t.descricao) && !isCreditoParcelamento(t.descricao)) {
             byPeriod[periodo].pagamentos += Math.abs(Number(t.valor));
             // Pagamento EXPLÍCITO (conciliação/"Pagar fatura") — é o único que
             // abate quando há "Total informado", pois o marcador já é líquido.
@@ -115,13 +117,12 @@ export function useFaturaAcumulada(cardIds: string[], billingMonth: string) {
           historico.push({ periodo, despesas, pagamentos, saldo });
 
           if (periodo < billingMonth) {
-            saldoAnterior += saldo;
+            // Floor POR MÊS: não dá pra "dever negativo" de um mês (sobrepagamento
+            // não vira crédito). Floorar o agregado deixava um mês pago a mais
+            // cancelar outro em aberto, escondendo dívida real.
+            saldoAnterior += Math.max(0, saldo);
           }
         }
-
-        // Floor saldo anterior at 0 — can't owe negative from previous months
-        // (overpayment doesn't carry as credit to next month in this model)
-        saldoAnterior = Math.max(0, saldoAnterior);
 
         const currentPeriod = byPeriod[billingMonth] || { despesas: 0, pagamentos: 0, conciliado: 0 };
 
