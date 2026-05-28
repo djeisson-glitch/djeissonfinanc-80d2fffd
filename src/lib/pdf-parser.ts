@@ -764,8 +764,10 @@ export function parseNubankCard(pages: string[], defaultPessoa: string = 'Titula
       descricao = descricao.replace(NUCARD_PARCELA, '').trim();
     }
 
-    // Sinal: valor negativo (pagamento/estorno) ou descrição de pagamento → receita.
-    const ehCredito = valor < 0 || /pagamento|saldo restante|estorno|reembolso|cashback/i.test(descricao);
+    // Sinal pelo VALOR: o Nubank traz crédito/pagamento como negativo. NÃO usar
+    // palavra-chave na descrição (um comércio chamado "Cashback Store" ou
+    // "Estorno Ltda" com compra positiva seria erroneamente virado em receita).
+    const ehCredito = valor < 0;
     const tipo = ehCredito ? ('receita' as const) : ('despesa' as const);
     const rawValor = ehCredito ? -Math.abs(valor) : Math.abs(valor);
     const absValor = Math.abs(valor);

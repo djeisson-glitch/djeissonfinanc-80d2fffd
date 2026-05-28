@@ -343,13 +343,18 @@ export function parseSicrediCSV(csvText: string, defaultPessoa: string = 'Titula
       return;
     }
 
-    if (trimmed.toLowerCase().includes('total')) {
-      lineLogs.push({ lineNumber, content, status: 'ignorada', reason: 'Linha de total (ignorada)' });
-      return;
-    }
-
     // CSV columns: Data ; Descrição ; Parcela ; Valor ; Valor em Dólar ; Adicional ; Nome
     const parts = trimmed.split(';').map((p) => p.trim());
+
+    // Linhas-RESUMO ("(=) Total desta fatura", "Total da fatura anterior", etc.)
+    // contêm "total" e NÃO começam com uma data → pular. Uma COMPRA real cujo
+    // comerciante tem "total" no nome (ex: "TOTAL ATACADO", "POSTO TOTAL") começa
+    // com data DD/MM/AAAA e NÃO deve ser descartada.
+    const primeiroCampoEhData = /^\d{2}\/\d{2}\/\d{4}$/.test(parts[0] || '');
+    if (!primeiroCampoEhData && trimmed.toLowerCase().includes('total')) {
+      lineLogs.push({ lineNumber, content, status: 'ignorada', reason: 'Linha de total/resumo (ignorada)' });
+      return;
+    }
     if (parts.length < 3) {
       const reason = `Poucos campos (${parts.length} encontrados, mínimo 3)`;
       skippedLines.push({ lineNumber, content: trimmed, reason });

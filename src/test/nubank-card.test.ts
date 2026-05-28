@@ -68,4 +68,19 @@ describe('parseNubankCard — fatura de cartão Nubank', () => {
   it('captura o total da fatura', () => {
     expect(r.headerTotal).toBe(334.31);
   });
+
+  it('compra em comerciante com "cashback/estorno" no nome continua DESPESA', () => {
+    const fatura = `
+Data de vencimento: 12 JAN 2026
+Período vigente: 04 DEZ a 04 JAN
+TRANSAÇÕES DE 04 DEZ A 04 JAN
+13 DEZ •••• 8858 Cashback Store Compras R$ 88,00
+14 DEZ •••• 8858 Estorno Variedades Ltda R$ 42,00
+`;
+    const rr = parseNubankCard([fatura], 'Maiara');
+    const cs = rr.transactions.find(t => t.descricao.includes('Cashback'));
+    const es = rr.transactions.find(t => t.descricao.includes('Estorno Variedades'));
+    expect(cs?.tipo).toBe('despesa');
+    expect(es?.tipo).toBe('despesa');
+  });
 });

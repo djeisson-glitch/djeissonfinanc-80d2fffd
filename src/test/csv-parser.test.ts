@@ -150,6 +150,18 @@ describe('parseSicrediCSV', () => {
     expect(result.transactions[0].valor).toBe(7038.96);
   });
 
+  it('NÃO descarta compra de comerciante com "total" no nome (linha com data)', () => {
+    const csv = [
+      'Relatório Sicredi',
+      'Data;Descrição;Parcela;Valor',
+      '10/03/2026;TOTAL ATACADO PASSO FUNDO;;"R$ 89,90"',
+    ].join('\n');
+    const result = parseSicrediCSV(csv);
+    expect(result.transactions).toHaveLength(1);
+    expect(result.transactions[0].descricao).toContain('TOTAL ATACADO');
+    expect(result.transactions[0].valor).toBe(89.9);
+  });
+
   it('extrai codigo_cartao e pessoa corretamente', () => {
     const csv = [
       'Relatório Sicredi',
