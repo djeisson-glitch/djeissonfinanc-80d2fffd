@@ -16,11 +16,40 @@ interface CategoriaRule {
 }
 
 const RULES: CategoriaRule[] = [
+  // SALÁRIO / PRÓ-LABORE — receitas recorrentes nominadas (seed do app cria
+  // "Salário Djêisson" e "Salário Maiara"). Vem ANTES das demais pra não cair em
+  // catch-all genérico.
+  { patterns: ['SALÁRIO ', 'SALARIO ', 'PRÓ-LABORE', 'PRO-LABORE', 'PROLABORE'], categoria: 'Salário/Pró-labore' },
+
   // PAGAMENTO DE FATURA / CARTÃO / TRANSFERÊNCIA PRO MP (saída da conta, não é consumo)
   // Obs: o PIX pro "MERCADO PAGO INSTITUICAO" é uma mistura (fatura do cartão e
   // parcela do empréstimo MP) — não dá pra distinguir pelo texto, então fica como
   // Operação bancária pra não virar gasto falso. Vem ANTES do catch-all 'MERCADOPAGO*'.
-  { patterns: ['PAGTO FATURA', 'PAGAMENTO FATURA', 'PAGTO FAT', 'PAG FATURA', 'MERCADO PAGO INSTITUICAO', '10573521000191'], categoria: 'Operação bancária' },
+  { patterns: ['PAGTO FATURA', 'PAGAMENTO FATURA', 'PAGTO FAT', 'PAG FATURA', 'PAG FAT DEB', 'PARCELA DA FATURA', 'MERCADO PAGO INSTITUICAO', '10573521000191'], categoria: 'Operação bancária' },
+
+  // ROTATIVO / JUROS / MULTA / TARIFAS do cartão (linhas internas das faturas)
+  { patterns: ['JUROS DO ROTATIVO', 'JUROS DE MORA', 'JUROS DO CHEQUE', 'MULTA POR ATRASO', 'IOF DO ROTATIVO', 'IOF DE ATRASO', 'IOF S/ OPER', 'IOF S OPER', 'SEGURO PRESTAMISTA'], categoria: 'Operação bancária' },
+
+  // SEGURO DE VIDA (variações sem completar o "PRUDENTIAL")
+  { patterns: ['PRUDENT APOL', 'PRUDENT *', 'PRUDENT'], categoria: 'Saúde' },
+
+  // SEGURO DO CARRO — formato Asaas que carrega o número do cliente
+  { patterns: ['ASA*SUICA SEGURAD', 'ASA SUICA', 'ASAAS SUICA SEGURAD'], categoria: 'Transporte' },
+
+  // CONVÊNIOS DEDUZIDOS DA CONTA (plano de saúde/cooperativa)
+  { patterns: ['DEBITO CONVENIOS', 'PMSARAN', 'UNIMED', 'AMIL', 'BRADESCO SAUDE'], categoria: 'Saúde' },
+
+  // FINANCEIRAS / EMPRÉSTIMOS — PIX a financeiras
+  { patterns: ['REALIZE CREDITO', 'REALIZE CRED', 'CREFISA', 'BMG CONSIGNADO', 'BMG FACTA'], categoria: 'Empréstimos' },
+
+  // TELECOM extra (PIX/boleto pra operadora)
+  { patterns: ['TELEFONICA BRAS', 'TELEFONICA', 'OI CELULAR', 'OI S.A'], categoria: 'Serviços' },
+
+  // E-COMMERCE marketplace adicional (variantes que não casaram)
+  { patterns: ['MERCADO MERCADOLIVR', 'MERCADO RICOFERRAGE', 'MERCADO RICO', '5PRODUTOS', '14PRODUTOS', '15PRODU', 'MP 5PRODUTOS', 'MP 14PRODUTOS', 'ALI GESTAO', 'ALIEXPRESS', 'ALI EXPRESS'], categoria: 'Compras' },
+
+  // SERVIÇOS GENÉRICOS
+  { patterns: ['ARRANJOS EXPRESS', 'COSTUREIRA', 'CHAVEIRO'], categoria: 'Serviços' },
 
   // EMPRÉSTIMOS
   { patterns: ['LIQUIDACAO DE PARCELA', 'LIQUIDAÇÃO DE PARCELA', 'PARCELA-C5A', 'AMORTIZACAO CONTRATO', 'AMORTIZAÇÃO CONTRATO'], categoria: 'Empréstimos' },
@@ -43,8 +72,12 @@ const RULES: CategoriaRule[] = [
   // SEGURO DO CARRO → Transporte
   { patterns: ['SUICA SEGURAD', 'ASAASIP*SUICA', 'ASAAS*SUICA', 'ASAASIPSUICA', 'ASAASSUICA'], categoria: 'Transporte' },
 
-  // ASSINATURA
-  { patterns: ['NETFLIX', 'SPOTIFY', 'AMAZON PRIME', 'YOUTUBE PREMIUM', 'YOUTUBE PREMI', 'APPLECOMBILL', 'APPLE.COM', 'APPLECOM', 'BUDGI', 'PIXIESET', 'GODADDY', 'BRASIL PARAL', 'BRASILPAR', 'KIWIFY', 'HOTMART', 'ORGANIZZE', 'MELIMAIS', 'MELI MAIS'], categoria: 'Assinatura' },
+  // ASSINATURA — apps/sites pagos recorrentes
+  { patterns: ['NETFLIX', 'SPOTIFY', 'AMAZON PRIME', 'YOUTUBE PREMIUM', 'YOUTUBE PREMI', 'GOOGLE YOUTUBE', 'APPLECOMBILL', 'APPLE.COM', 'APPLECOM', 'APPLE COM/BILL', 'APPLE COM', 'BUDGI', 'PIXIESET', 'GODADDY', 'DM GODADDY', 'DM      GODADDY', 'BRASIL PARAL', 'BRASILPAR', 'BRASIL PARAL*', 'KIWIFY', 'HOTMART', 'ORGANIZZE', 'MELIMAIS', 'MELI MAIS', 'DL*GOOGLE', 'DLGOOGLE', 'PG *BRAIP', 'PG *GUIAEXCEL', 'PG *PP NATU', 'PG TORO INVEST', 'EBN*ADOBE', 'EBN ADOBE'], categoria: 'Assinatura' },
+
+  // PRODUTORA (Adverse) — ferramentas/serviços de produção audiovisual usados
+  // como custo direto do trabalho. Vem ANTES das catch-alls de Compras.
+  { patterns: ['ADOBE *ADOBE', 'ADOBE *', 'ADOBE*', 'ALBOOM PHOTOGRAPHER', 'ALBOOM', 'CANVA', 'FRAME.IO', 'FRAMEIO', 'DAVINCI RESOLVE', 'BLACKMAGIC'], categoria: 'Produtora' },
 
   // EDUCAÇÃO
   { patterns: ['HTM*SIMONE', 'HTMSIMONE', 'SIMONE DE OLIVE', 'CURSO', 'ESCOLA', 'FACULDADE', 'MENTORIA'], categoria: 'Educação' },
@@ -58,6 +91,9 @@ const RULES: CategoriaRule[] = [
   // BELEZA
   { patterns: ['OBOTICARIO', 'HNA*OBOTICARIO', 'HNAOBOTICARIO', 'LETICIA MUNIZ', 'NH COMERCIO', 'BEAUTY', 'ESTETICA', 'BARBEARIA', 'DECADA BARBEARIA'], categoria: 'Beleza' },
 
+  // SAÚDE — óticas/lentes (precede o Compras genérico)
+  { patterns: ['99 OTICAS', '99OTICAS', 'OTICA ', 'OPTICA '], categoria: 'Saúde' },
+
   // VESTUÁRIO (calçados/roupas)
   { patterns: ['CALCADOS', 'PITTOL', 'FEIRA DE CALCADOS'], categoria: 'Vestuário' },
 
@@ -70,8 +106,8 @@ const RULES: CategoriaRule[] = [
   // TRANSPORTE (apps, oficina, peças, combustível, lava-jato)
   { patterns: ['PASSAGEM PEDAGIO', 'PEDAGIO', 'MENSALID TAG DE PASSAGEM', 'LAPAZA EMPREEND', '99APP', 'UBER', 'MECANICA', 'AUTO PECAS', 'ABASTECEDORA', 'CAR WASH', 'LAVA JATO', 'POSTO ', 'TAURA AUTO', 'CLOUDPARK', 'ESTACIONAMENTO'], categoria: 'Transporte' },
 
-  // COMPRAS (online)
-  { patterns: ['MERCADOLIVRE', 'MERCADO*MERCAD', 'MERCADOMERCAD', 'MERCADO*RICO', 'MERCADORICO', 'MERCADO*15PROD', 'MERCADO15PROD', 'SHOPEE', 'HAVAN', 'SHEIN', 'SITE HAVAN', 'COMAXCASA', 'MERLIN MAT', 'NOVACOR', 'NOVA COR'], categoria: 'Compras' },
+  // COMPRAS (online + lojas)
+  { patterns: ['MERCADOLIVRE', 'MERCADO*MERCAD', 'MERCADOMERCAD', 'MERCADO*RICO', 'MERCADORICO', 'MERCADO*15PROD', 'MERCADO15PROD', 'SHOPEE', 'HAVAN', 'SHEIN', 'SITE HAVAN', 'COMAXCASA', 'MERLIN MAT', 'NOVACOR', 'NOVA COR', 'EC *5PRODUTOS', 'EC*5PRODUTOS', 'MP *5PRODUTOS', 'MP*5PRODUTOS', '5PRODUTOS', 'MIMI BIJUTERIAS', 'PAPELITA'], categoria: 'Compras' },
 
   // ALIMENTAÇÃO (mercado/atacarejo, restaurantes, delivery, padaria)
   { patterns: ['MIX CENTER', 'FRUTEIRA TERRIBILE', 'COTRISAL', 'SUPERMERCADO', 'ZAFFARI', 'STOK CENTER', 'TOP MAIS', 'MINIMARKET', 'MERCADO MOY', 'DOCE MANIA', '212 BISTRO', 'QUESTO GASTRONOMIA', 'IFOOD', 'IFD*', 'CAFE PREMIUM', 'DONA AUGUSTA', 'AMO RESTAURANTE', 'AMO CABANA', 'RESTAURANTE', 'ALASSIO CAFE', 'CAFE E PROSA', 'CONVENIENCIA', 'QUIERO CAFE', 'PADARIA'], categoria: 'Alimentação' },

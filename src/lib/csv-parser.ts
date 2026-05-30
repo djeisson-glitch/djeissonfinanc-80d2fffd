@@ -118,6 +118,9 @@ export function isFaturaPayment(desc: string): boolean {
     // número de identificação, sem "fatura" no texto). Sempre vem com valor
     // NEGATIVO dentro do CSV do cartão = pagamento da fatura anterior.
     /^pagamento\s+\d{5,}\s*$/i.test(desc.trim()) ||
+    // Nubank: "Parcela da fatura de dezembro/2025" — quando o user parcelou a
+    // fatura anterior. Aparece na fatura corrente como linha PAGA (rolagem).
+    /^parcela\s+da\s+fatura\s+de\s+/i.test(desc.trim()) ||
     d.includes('crédito por parcelamento') ||
     d.includes('credito por parcelamento') ||
     d.includes('pagamento recebido')
