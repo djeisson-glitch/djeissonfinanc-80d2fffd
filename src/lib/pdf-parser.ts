@@ -277,7 +277,7 @@ function classifyTransaction(parcela_atual: number | null, parcela_total: number
 
 // ── Mercado Pago parser ────────────────────────────────────────
 
-function parseMercadoPago(
+export function parseMercadoPago(
   pages: Array<{ rows: PdfTextBlock[]; garbledFonts: Set<string> }>,
   defaultPessoa: string = 'Titular'
 ): PdfParseResult {
