@@ -554,6 +554,9 @@ export type Database = {
           parcela_atual: number | null
           parcela_total: number | null
           pessoa: string
+          reembolso_pessoa: string | null
+          reembolso_transacao_id: string | null
+          reembolso_valor: number | null
           tipo: string
           user_id: string
           valor: number
@@ -579,6 +582,9 @@ export type Database = {
           parcela_atual?: number | null
           parcela_total?: number | null
           pessoa?: string
+          reembolso_pessoa?: string | null
+          reembolso_transacao_id?: string | null
+          reembolso_valor?: number | null
           tipo: string
           user_id: string
           valor: number
@@ -604,6 +610,9 @@ export type Database = {
           parcela_atual?: number | null
           parcela_total?: number | null
           pessoa?: string
+          reembolso_pessoa?: string | null
+          reembolso_transacao_id?: string | null
+          reembolso_valor?: number | null
           tipo?: string
           user_id?: string
           valor?: number

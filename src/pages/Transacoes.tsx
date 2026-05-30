@@ -39,6 +39,13 @@ export default function TransacoesPage() {
   const [search, setSearch] = useState('');
   const [editingTx, setEditingTx] = useState<any>(null);
   const [learnPattern, setLearnPattern] = useState(false);
+  // Reembolso no editor — vincula uma RECEITA nova a esta DESPESA marcando que
+  // outra pessoa vai pagar parte/total. Estado inicial sai da própria transação
+  // (se já tem reembolso vinculado, o toggle vem ligado).
+  const [editReembolsoOn, setEditReembolsoOn] = useState(false);
+  const [editReembolsoPessoa, setEditReembolsoPessoa] = useState('');
+  const [editReembolsoValor, setEditReembolsoValor] = useState('');
+  const [editContaReembolsoId, setEditContaReembolsoId] = useState('');
   const [showIgnoradas, setShowIgnoradas] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
   const [recatTransactions, setRecatTransactions] = useState<any[]>([]);
@@ -201,6 +208,62 @@ export default function TransacoesPage() {
       queryClient.invalidateQueries({ queryKey: ['transacoes'] });
       queryClient.invalidateQueries({ queryKey: ['dashboard'] });
       toast({ title: 'Transação excluída' });
+    },
+  });
+
+  // Quando abrir o editor, sincroniza os estados de reembolso com a transação.
+  useEffect(() => {
+    if (!editingTx) return;
+    const temReembolso = !!editingTx.reembolso_transacao_id;
+    setEditReembolsoOn(temReembolso);
+    setEditReembolsoPessoa(editingTx.reembolso_pessoa || '');
+    setEditReembolsoValor(editingTx.reembolso_valor ? String(editingTx.reembolso_valor) : '');
+    if (!temReembolso) {
+      // default: primeira conta de débito disponível
+      const debito = contas?.find(c => c.tipo === 'debito');
+      if (debito) setEditContaReembolsoId(debito.id);
+    }
+  }, [editingTx, contas]);
+
+  // Cria/remove reembolso da despesa em edição. Roda em paralelo ao update
+  // normal (categoria/essencial); chamado no onSubmit do form.
+  const reembolsoMutation = useMutation({
+    mutationFn: async () => {
+      if (!editingTx || !user) return;
+      const { criarReembolsoVinculado, removerReembolso } = await import('@/lib/reembolso');
+      const temAtual = !!editingTx.reembolso_transacao_id;
+      // 1) Caso A: já tinha e agora foi desligado → remove
+      if (temAtual && !editReembolsoOn) {
+        await removerReembolso(user.id, editingTx.id, editingTx.reembolso_transacao_id);
+        return;
+      }
+      // 2) Caso B: novo OU edição → se já tinha, remove o antigo antes
+      if (editReembolsoOn) {
+        if (!editReembolsoPessoa.trim() || !Number(editReembolsoValor) || !editContaReembolsoId) {
+          throw new Error('Preencha pessoa, valor e conta de destino');
+        }
+        if (temAtual) {
+          await removerReembolso(user.id, editingTx.id, editingTx.reembolso_transacao_id);
+        }
+        await criarReembolsoVinculado({
+          userId: user.id,
+          despesaId: editingTx.id,
+          despesaDescricao: editingTx.descricao,
+          despesaData: editingTx.data,
+          despesaConta: editingTx.conta_id,
+          contaReceitaId: editContaReembolsoId,
+          pessoa: editReembolsoPessoa.trim(),
+          valor: Number(editReembolsoValor),
+          pessoaTitular: editingTx.pessoa || 'Titular',
+        });
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['transacoes'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] });
+    },
+    onError: (e: any) => {
+      toast({ title: 'Erro no reembolso', description: e?.message?.slice(0, 200), variant: 'destructive' });
     },
   });
 
@@ -374,6 +437,18 @@ export default function TransacoesPage() {
             {t.parcela_atual && t.parcela_total && (
               <Badge variant="outline" className="text-[10px] px-1 py-0 h-4">
                 {t.parcela_atual}/{t.parcela_total}
+              </Badge>
+            )}
+            {/* Despesa com reembolso vinculado — sinaliza visualmente e mostra
+                o valor que volta. Útil pra entender de cara qual parcela tem
+                "alguém me paga" embutido. */}
+            {t.reembolso_pessoa && t.reembolso_valor && (
+              <Badge
+                variant="outline"
+                className="text-[10px] px-1.5 py-0 h-4 border-green-300 text-green-700 dark:text-green-400"
+                title={`${t.reembolso_pessoa} paga ${formatCurrency(Number(t.reembolso_valor))}`}
+              >
+                ↩ {t.reembolso_pessoa} · {formatCurrency(Number(t.reembolso_valor))}
               </Badge>
             )}
             {contaNome && (
@@ -794,13 +869,25 @@ export default function TransacoesPage() {
             <DialogTitle>Editar Transação</DialogTitle>
           </DialogHeader>
           {editingTx && (
-            <form onSubmit={(e) => { e.preventDefault(); updateMutation.mutate({
-              id: editingTx.id,
-              categoria: editingTx.categoria,
-              categoria_id: editingTx.categoria_id || null,
-              essencial: editingTx.essencial,
-              ignorar_dashboard: editingTx.ignorar_dashboard || false,
-            }); }} className="space-y-4">
+            <form onSubmit={(e) => {
+              e.preventDefault();
+              updateMutation.mutate({
+                id: editingTx.id,
+                categoria: editingTx.categoria,
+                categoria_id: editingTx.categoria_id || null,
+                essencial: editingTx.essencial,
+                ignorar_dashboard: editingTx.ignorar_dashboard || false,
+              });
+              // Reembolso roda em paralelo — falha aqui não quebra o save da
+              // categoria; o erro vira toast separado.
+              const reembolsoMudou =
+                !!editingTx.reembolso_transacao_id !== editReembolsoOn ||
+                (editReembolsoOn && (
+                  editReembolsoPessoa !== (editingTx.reembolso_pessoa || '') ||
+                  Number(editReembolsoValor) !== Number(editingTx.reembolso_valor || 0)
+                ));
+              if (reembolsoMudou) reembolsoMutation.mutate();
+            }} className="space-y-4">
               <div className="flex items-start gap-3 p-3 rounded-lg bg-muted/50 min-w-0">
                 <div
                   className="w-8 h-8 rounded-full shrink-0 flex items-center justify-center"
@@ -849,6 +936,75 @@ export default function TransacoesPage() {
                   <p className="text-xs text-muted-foreground">Não contabilizar nos totais</p>
                 </div>
               </div>
+              {/* Reembolso por outra pessoa — só aparece em despesa.
+                  Se já tem reembolso vinculado, mostra info; senão, toggle pra
+                  criar. Ao salvar, dispara reembolsoMutation. */}
+              {editingTx.tipo === 'despesa' && (
+                <div className="space-y-3 rounded-lg border p-3 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <Checkbox
+                      id="edit-reembolso"
+                      checked={editReembolsoOn}
+                      onCheckedChange={(v) => {
+                        const on = !!v;
+                        setEditReembolsoOn(on);
+                        if (on && !editReembolsoValor && editingTx.valor) {
+                          setEditReembolsoValor(String(editingTx.valor));
+                        }
+                      }}
+                      className="mt-0.5 shrink-0"
+                    />
+                    <Label htmlFor="edit-reembolso" className="cursor-pointer text-sm font-medium">
+                      Outra pessoa paga (parte ou total) — cria receita
+                    </Label>
+                  </div>
+                  {editReembolsoOn && (
+                    <div className="space-y-2">
+                      <div className="grid grid-cols-2 gap-2">
+                        <div className="space-y-1 min-w-0">
+                          <Label className="text-xs text-muted-foreground">Pessoa</Label>
+                          <Input
+                            value={editReembolsoPessoa}
+                            onChange={(e) => setEditReembolsoPessoa(e.target.value)}
+                            placeholder="Ex: Maiara"
+                          />
+                        </div>
+                        <div className="space-y-1 min-w-0">
+                          <Label className="text-xs text-muted-foreground">
+                            Valor (de {formatCurrency(Number(editingTx.valor))})
+                          </Label>
+                          <Input
+                            type="number"
+                            step="0.01"
+                            min="0.01"
+                            max={editingTx.valor}
+                            value={editReembolsoValor}
+                            onChange={(e) => setEditReembolsoValor(e.target.value)}
+                            placeholder="0,00"
+                          />
+                        </div>
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-xs text-muted-foreground">Receber em</Label>
+                        <Select value={editContaReembolsoId} onValueChange={setEditContaReembolsoId}>
+                          <SelectTrigger><SelectValue placeholder="Conta" /></SelectTrigger>
+                          <SelectContent>
+                            {contas?.filter((c: any) => c.tipo === 'debito').map((c: any) => (
+                              <SelectItem key={c.id} value={c.id}>{c.nome}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      {editingTx.reembolso_transacao_id ? (
+                        <p className="text-xs text-amber-600">
+                          ⚠️ Já existe uma receita de reembolso vinculada. Salvar VAI substituir pelos valores acima.
+                        </p>
+                      ) : null}
+                    </div>
+                  )}
+                </div>
+              )}
+
               <div className="flex items-start justify-between gap-3 rounded-lg border p-3 min-w-0">
                 <div className="min-w-0 flex-1">
                   <p className="text-sm font-medium">Aprender padrão?</p>

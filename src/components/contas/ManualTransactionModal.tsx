@@ -12,6 +12,7 @@ import { useQueryClient, useQuery } from '@tanstack/react-query';
 import { generateHash } from '@/lib/csv-parser';
 import { autoCategorizarTransacao } from '@/lib/auto-categorize';
 import { toLocalIso } from '@/lib/format';
+import { criarReembolsoVinculado } from '@/lib/reembolso';
 
 interface Props {
   open: boolean;
@@ -43,6 +44,12 @@ export function ManualTransactionModal({
   const [recorrente, setRecorrente] = useState(false);
   const [meses, setMeses] = useState('12');
   const [submitting, setSubmitting] = useState(false);
+  // Reembolso por outra pessoa — só faz sentido quando tipo='despesa'.
+  // Quando ligado, criamos uma receita vinculada com categoria='Reembolsos'.
+  const [reembolsoOn, setReembolsoOn] = useState(false);
+  const [reembolsoPessoa, setReembolsoPessoa] = useState('');
+  const [reembolsoValor, setReembolsoValor] = useState('');
+  const [contaReembolsoId, setContaReembolsoId] = useState('');
 
   const pessoaNome = user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'Titular';
 
@@ -117,8 +124,47 @@ export function ManualTransactionModal({
         });
       }
 
-      const { error } = await supabase.from('transacoes').insert(rows);
+      // Insert e retorna os IDs criados (precisamos do ID pra vincular o reembolso
+      // só na 1ª transação da série recorrente; o resto não tem reembolso).
+      const { data: inseridas, error } = await supabase
+        .from('transacoes')
+        .insert(rows)
+        .select('id, data, descricao');
       if (error) throw error;
+
+      // Reembolso só pra despesa não recorrente (recorrentes geralmente são
+      // assinaturas/contas fixas; reembolso pontual fica fora desse caminho).
+      let reembolsoCriado = false;
+      if (
+        reembolsoOn &&
+        tipo === 'despesa' &&
+        !recorrente &&
+        reembolsoPessoa.trim() &&
+        Number(reembolsoValor) > 0 &&
+        contaReembolsoId &&
+        inseridas?.[0]?.id
+      ) {
+        try {
+          await criarReembolsoVinculado({
+            userId: user.id,
+            despesaId: inseridas[0].id,
+            despesaDescricao: descricao,
+            despesaData: inseridas[0].data,
+            despesaConta: selectedContaId,
+            contaReceitaId: contaReembolsoId,
+            pessoa: reembolsoPessoa.trim(),
+            valor: Number(reembolsoValor),
+            pessoaTitular: pessoaNome,
+          });
+          reembolsoCriado = true;
+        } catch (e: any) {
+          toast({
+            title: 'Despesa salva, mas o reembolso falhou',
+            description: e?.message?.slice(0, 200),
+            variant: 'destructive',
+          });
+        }
+      }
 
       queryClient.invalidateQueries({ queryKey: ['transacoes'] });
       queryClient.invalidateQueries({ queryKey: ['dashboard'] });
@@ -130,6 +176,8 @@ export function ManualTransactionModal({
       toast({
         title: recorrente
           ? `${mesesNum} lançamentos recorrentes adicionados`
+          : reembolsoCriado
+          ? 'Lançamento + reembolso criados'
           : 'Lançamento adicionado',
       });
 
@@ -140,6 +188,9 @@ export function ManualTransactionModal({
       setEssencial(false);
       setRecorrente(false);
       setMeses('12');
+      setReembolsoOn(false);
+      setReembolsoPessoa('');
+      setReembolsoValor('');
       onOpenChange(false);
     } catch (err) {
       console.error(err);
@@ -264,6 +315,75 @@ export function ManualTransactionModal({
               </div>
             )}
           </div>
+
+          {/* Reembolso por outra pessoa — só faz sentido em despesa. Quando
+              ligado, cria automaticamente uma receita vinculada com categoria
+              'Reembolsos' pra refletir o dinheiro que vai voltar. */}
+          {tipo === 'despesa' && !recorrente && (
+            <div className="space-y-3 rounded-lg border p-3">
+              <div className="flex items-center gap-2">
+                <Checkbox
+                  id="reembolso"
+                  checked={reembolsoOn}
+                  onCheckedChange={(v) => {
+                    const on = !!v;
+                    setReembolsoOn(on);
+                    if (on && !reembolsoValor && valor) setReembolsoValor(valor);
+                    if (on && !contaReembolsoId) {
+                      // default = primeira conta de débito
+                      const debito = contas?.find(c => c.tipo === 'debito');
+                      if (debito) setContaReembolsoId(debito.id);
+                    }
+                  }}
+                />
+                <Label htmlFor="reembolso" className="cursor-pointer text-sm font-medium">
+                  Outra pessoa paga (parte ou total) — cria receita
+                </Label>
+              </div>
+              {reembolsoOn && (
+                <div className="space-y-3">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1">
+                      <Label className="text-xs text-muted-foreground">Pessoa</Label>
+                      <Input
+                        value={reembolsoPessoa}
+                        onChange={(e) => setReembolsoPessoa(e.target.value)}
+                        placeholder="Ex: Maiara"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs text-muted-foreground">
+                        Valor a receber {valor && `(de ${Number(valor).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })})`}
+                      </Label>
+                      <Input
+                        type="number"
+                        step="0.01"
+                        min="0.01"
+                        max={valor || undefined}
+                        value={reembolsoValor}
+                        onChange={(e) => setReembolsoValor(e.target.value)}
+                        placeholder="0,00"
+                      />
+                    </div>
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs text-muted-foreground">Receber em qual conta?</Label>
+                    <Select value={contaReembolsoId} onValueChange={setContaReembolsoId}>
+                      <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
+                      <SelectContent>
+                        {contas?.filter(c => c.tipo === 'debito').map(c => (
+                          <SelectItem key={c.id} value={c.id}>{c.nome}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Vai criar duas transações: a despesa acima e uma receita "Reembolso de {reembolsoPessoa || '...'} - {descricao || '...'}" na conta escolhida.
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
 
           <Button
             className="w-full"
