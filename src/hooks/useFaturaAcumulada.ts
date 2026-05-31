@@ -50,14 +50,26 @@ export function useFaturaAcumulada(cardIds: string[], billingMonth: string) {
       // Fetch ALL transactions for these cards (including ignorar_dashboard
       // since fatura payments are marked as internal transfers but still
       // need to be counted for card balance calculation).
-      // Pagina além do limite de 1000 do PostgREST: este é o histórico ALL-TIME
-      // do cartão (necessário pro rollover de saldoAnterior), logo é justamente a
-      // query com maior chance de estourar 1000 linhas e truncar o saldo devido.
-      const allTxs = await fetchAllRows<CardTxRow>(() => supabase
-        .from('transacoes')
-        .select('conta_id, tipo, valor, descricao, data, mes_competencia')
-        .eq('user_id', user!.id)
-        .in('conta_id', cardIds));
+      // Pagina manualmente pra não depender de fetchAllRows (que estava
+      // travando — investigando) e pra ter controle determinístico via order(id).
+      const allTxs: CardTxRow[] = [];
+      const PAGE = 1000;
+      let from = 0;
+      while (true) {
+        const { data, error } = await supabase
+          .from('transacoes')
+          .select('conta_id, tipo, valor, descricao, data, mes_competencia')
+          .eq('user_id', user!.id)
+          .in('conta_id', cardIds)
+          .order('id')
+          .range(from, from + PAGE - 1);
+        if (error) throw error;
+        if (!data || data.length === 0) break;
+        allTxs.push(...data);
+        if (data.length < PAGE) break;
+        from += PAGE;
+        if (from > 50_000) break; // safety stop
+      }
 
       const result: Record<string, FaturaAcumulada> = {};
 
