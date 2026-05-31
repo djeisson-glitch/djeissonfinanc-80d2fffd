@@ -29,12 +29,21 @@ export function PaymentModal({ open, onOpenChange, contaId, contaNome, faturaTot
   const [mode, setMode] = useState<'total' | 'parcial'>('total');
   const [valorPago, setValorPago] = useState(0);
   const [parcelas, setParcelas] = useState(2);
+  const [valorParcelaCustom, setValorParcelaCustom] = useState<string>(''); // string pra permitir vazio
   const [submitting, setSubmitting] = useState(false);
   const [contaOrigem, setContaOrigem] = useState<string>('');
 
   const pessoaNome = user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'Titular';
   const restante = useMemo(() => Math.max(0, faturaTotal - valorPago), [faturaTotal, valorPago]);
-  const valorParcela = useMemo(() => parcelas > 0 ? restante / parcelas : 0, [restante, parcelas]);
+  // Valor da parcela: usa o que o user digitou (pra embutir juros do parcelamento do
+  // cartão). Quando vazio, cai no rateio simples (restante / N) só pra orientar.
+  const valorParcelaAuto = useMemo(() => parcelas > 0 ? restante / parcelas : 0, [restante, parcelas]);
+  const valorParcela = useMemo(() => {
+    const v = parseFloat(valorParcelaCustom);
+    return !isNaN(v) && v > 0 ? v : valorParcelaAuto;
+  }, [valorParcelaCustom, valorParcelaAuto]);
+  const totalParcelado = useMemo(() => valorParcela * parcelas, [valorParcela, parcelas]);
+  const juros = useMemo(() => totalParcelado - restante, [totalParcelado, restante]);
 
   // Fetch debit accounts for payment origin selection
   const { data: contasDebito } = useQuery({
@@ -242,20 +251,45 @@ export function PaymentModal({ open, onOpenChange, contaId, contaNome, faturaTot
               <div className="p-2 rounded bg-muted text-sm">
                 Restante: <strong className="text-destructive">{formatCurrency(restante)}</strong>
               </div>
-              <div className="space-y-2">
-                <Label>Parcelar em quantas vezes?</Label>
-                <Select value={String(parcelas)} onValueChange={(v) => setParcelas(Number(v))}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {Array.from({ length: 11 }, (_, i) => i + 2).map(n => (
-                      <SelectItem key={n} value={String(n)}>{n}x</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+              <div className="grid grid-cols-2 gap-2">
+                <div className="space-y-2">
+                  <Label>Parcelar em</Label>
+                  <Select value={String(parcelas)} onValueChange={(v) => setParcelas(Number(v))}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {Array.from({ length: 23 }, (_, i) => i + 2).map(n => (
+                        <SelectItem key={n} value={String(n)}>{n}x</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label>Valor de cada parcela (R$)</Label>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    min={0}
+                    placeholder={valorParcelaAuto.toFixed(2)}
+                    value={valorParcelaCustom}
+                    onChange={(e) => setValorParcelaCustom(e.target.value)}
+                  />
+                </div>
               </div>
               {restante > 0 && (
-                <div className="p-2 rounded bg-accent/10 border border-accent/20 text-sm text-center">
-                  {parcelas}x de <strong>{formatCurrency(valorParcela)}</strong>
+                <div className="p-2 rounded bg-accent/10 border border-accent/20 text-sm text-center space-y-0.5">
+                  <div>
+                    {parcelas}x de <strong>{formatCurrency(valorParcela)}</strong> = <strong>{formatCurrency(totalParcelado)}</strong>
+                  </div>
+                  {juros > 0.01 && (
+                    <div className="text-xs text-muted-foreground">
+                      Juros embutidos: <strong className="text-warning">{formatCurrency(juros)}</strong>
+                    </div>
+                  )}
+                  {juros < -0.01 && (
+                    <div className="text-xs text-muted-foreground">
+                      Desconto: <strong className="text-success">{formatCurrency(-juros)}</strong>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
