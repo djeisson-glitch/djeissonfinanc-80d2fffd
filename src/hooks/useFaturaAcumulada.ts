@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
-import { isFaturaPayment, isDevolution, isSaldoAnteriorFatura, isFaturaTotalMarker, isConciliacaoPayment } from '@/lib/csv-parser';
+import { isFaturaPayment, isDevolution, isSaldoAnteriorFatura, isFaturaTotalMarker, isConciliacaoPayment, isCreditoParcelamento } from '@/lib/csv-parser';
 import { fetchAllRows } from '@/lib/supabase-fetch';
 
 interface CardTxRow {
@@ -90,9 +90,10 @@ export function useFaturaAcumulada(cardIds: string[], billingMonth: string) {
       const result: Record<string, FaturaAcumulada> = {};
 
       for (const cardId of cardIds) {
-        dbg(`card-${cardId.slice(0, 4)}-start`);
+        const short = cardId.slice(0, 4);
+        dbg(`card-${short}-start`);
         const cardTxs = (allTxs || []).filter(t => t.conta_id === cardId);
-        dbg(`card-${cardId.slice(0, 4)}-cardTxs:${cardTxs.length}`);
+        dbg(`card-${short}-cardTxs:${cardTxs.length}`);
 
         // Group transactions by billing period
         // Use mes_competencia when available, fall back to YYYY-MM from data
@@ -102,44 +103,54 @@ export function useFaturaAcumulada(cardIds: string[], billingMonth: string) {
         // onde a acumulação por mês conta o saldo carregado em dobro).
         const totalInformado: Record<string, number> = {};
 
-        for (const t of cardTxs) {
-          // Marcador do total informado: não é despesa — guarda pra sobrescrever.
-          if (isFaturaTotalMarker(t.descricao)) {
-            totalInformado[t.mes_competencia || t.data.substring(0, 7)] = Number(t.valor);
-            continue;
-          }
-          // "Saldo anterior da fatura" é artefato de rollover — este hook já
-          // acumula o saldo dos meses anteriores (saldoAnterior abaixo), então
-          // contar essa linha como despesa duplicaria o mês anterior inteiro.
-          if (isSaldoAnteriorFatura(t.descricao)) continue;
+        try {
+          let __i = 0;
+          for (const t of cardTxs) {
+            if (__i % 100 === 0) dbg(`card-${short}-iter:${__i}`);
+            __i++;
+            // Marcador do total informado: não é despesa — guarda pra sobrescrever.
+            if (isFaturaTotalMarker(t.descricao)) {
+              totalInformado[t.mes_competencia || t.data.substring(0, 7)] = Number(t.valor);
+              continue;
+            }
+            // "Saldo anterior da fatura" é artefato de rollover — este hook já
+            // acumula o saldo dos meses anteriores (saldoAnterior abaixo), então
+            // contar essa linha como despesa duplicaria o mês anterior inteiro.
+            if (isSaldoAnteriorFatura(t.descricao)) continue;
 
-          const periodo = t.mes_competencia || t.data.substring(0, 7);
-          if (!byPeriod[periodo]) byPeriod[periodo] = { despesas: 0, pagamentos: 0, conciliado: 0 };
+            const periodo = t.mes_competencia || t.data.substring(0, 7);
+            if (!byPeriod[periodo]) byPeriod[periodo] = { despesas: 0, pagamentos: 0, conciliado: 0 };
 
-          if (t.tipo === 'despesa') {
-            byPeriod[periodo].despesas += Number(t.valor);
-          }
+            if (t.tipo === 'despesa') {
+              byPeriod[periodo].despesas += Number(t.valor);
+            }
 
-          // Detect payments (receita que abatem a fatura). "Crédito por
-          // parcelamento" é abatimento INTERNO não-caixa do parcelamento — não
-          // conta como pagamento (senão reduz o "A pagar" sem ter saído dinheiro).
-          if (isFaturaPayment(t.descricao) && !isCreditoParcelamento(t.descricao)) {
-            byPeriod[periodo].pagamentos += Math.abs(Number(t.valor));
-            // Pagamento EXPLÍCITO (conciliação/"Pagar fatura") — é o único que
-            // abate quando há "Total informado", pois o marcador já é líquido.
-            if (isConciliacaoPayment(t.descricao)) {
-              byPeriod[periodo].conciliado += Math.abs(Number(t.valor));
+            // Detect payments (receita que abatem a fatura). "Crédito por
+            // parcelamento" é abatimento INTERNO não-caixa do parcelamento — não
+            // conta como pagamento (senão reduz o "A pagar" sem ter saído dinheiro).
+            if (isFaturaPayment(t.descricao) && !isCreditoParcelamento(t.descricao)) {
+              byPeriod[periodo].pagamentos += Math.abs(Number(t.valor));
+              // Pagamento EXPLÍCITO (conciliação/"Pagar fatura") — é o único que
+              // abate quando há "Total informado", pois o marcador já é líquido.
+              if (isConciliacaoPayment(t.descricao)) {
+                byPeriod[periodo].conciliado += Math.abs(Number(t.valor));
+              }
+            }
+
+            // Devolutions reduce despesas (valor is always stored positive; use abs for safety)
+            if (isDevolution(t.descricao) && t.tipo === 'receita') {
+              byPeriod[periodo].despesas -= Math.abs(Number(t.valor));
             }
           }
-
-          // Devolutions reduce despesas (valor is always stored positive; use abs for safety)
-          if (isDevolution(t.descricao) && t.tipo === 'receita') {
-            byPeriod[periodo].despesas -= Math.abs(Number(t.valor));
-          }
+          dbg(`card-${short}-mainloop-done:${__i}`);
+        } catch (e: any) {
+          dbg(`card-${short}-MAINLOOP-ERROR:${String(e?.message || e).slice(0, 120)}`);
+          throw e;
         }
 
         // Sort periods chronologically
         const sortedPeriods = Object.keys(byPeriod).sort();
+        dbg(`card-${short}-sorted:${sortedPeriods.length}`);
 
         // Calculate running balance up to (but not including) current billing month
         let saldoAnterior = 0;
