@@ -291,6 +291,7 @@ export function PaymentModal({ open, onOpenChange, contaId, contaNome, faturaTot
                 <Label>Valor pago agora (R$)</Label>
                 <Input
                   type="number"
+                  step="0.01"
                   min={0}
                   max={faturaTotal}
                   value={valorPago || ''}
