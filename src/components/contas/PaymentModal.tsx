@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { formatCurrency } from '@/lib/format';
+import { formatCurrency, getMonthName } from '@/lib/format';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
@@ -26,7 +26,7 @@ export function PaymentModal({ open, onOpenChange, contaId, contaNome, faturaTot
   const { user } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const [mode, setMode] = useState<'total' | 'parcial_parcelar' | 'parcial_acumular'>('total');
+  const [mode, setMode] = useState<'total' | 'parcial_parcelar' | 'parcial_acumular' | 'parcial_parcelado_emissor'>('total');
   const [valorPago, setValorPago] = useState(0);
   const [parcelas, setParcelas] = useState(2);
   const [valorParcelaCustom, setValorParcelaCustom] = useState<string>(''); // string pra permitir vazio
@@ -140,21 +140,23 @@ export function PaymentModal({ open, onOpenChange, contaId, contaNome, faturaTot
         }
       }
 
-      // If partial + parcelar, create future installments for remaining (linked to the same grupo_parcela)
-      if (mode === 'parcial_parcelar' && restante > 0 && parcelas > 0 && grupo_parcela) {
-        // ABATIMENTO DA FATURA ATUAL: ao parcelar, o emissor considera a
-        // fatura corrente como FECHADA — o restante vira dívida futura
-        // (parcelas). Pra refletir isso, lança uma "receita" no cartão no
-        // mês atual no valor do restante, com descrição "Pag Fat Deb Cc -
-        // {Cartão} (parcelado em Nx)" — bate o regex isConciliacaoPayment
-        // e abate o total a pagar da fatura. Não tem contrapartida na CC
-        // (não saiu dinheiro real — é só rearranjo contábil).
-        const abatHash = generateHash(baseDate, `Pag Fat Deb Cc - ${contaNome} (parcelado)`, restante, pessoaNome) + '_abat';
+      // ABATIMENTO DA FATURA ATUAL pra modos que zeram o saldo do mês:
+      // - parcial_parcelar: cria ainda as N parcelas futuras (gestão manual).
+      // - parcial_parcelado_emissor: emissor gera parcelas no extrato seguinte,
+      //   então NÃO criamos parcelas no app (evita duplicar com o que vier do
+      //   "Crédito por parcelamento" + "Parcela N de M" do extrato MP/Nubank).
+      // Em ambos a fatura corrente fica como Paga (abatimento contábil).
+      const criaAbatimento = (mode === 'parcial_parcelar' || mode === 'parcial_parcelado_emissor') && restante > 0;
+      if (criaAbatimento) {
+        const sufixo = mode === 'parcial_parcelar'
+          ? `(parcelado em ${parcelas}x)`
+          : `(parcelado pelo emissor)`;
+        const abatHash = generateHash(baseDate, `Pag Fat Deb Cc - ${contaNome} ${sufixo}`, restante, pessoaNome) + '_abat';
         await supabase.from('transacoes').insert({
           user_id: user.id,
           conta_id: contaId,
           data: baseDate,
-          descricao: `Pag Fat Deb Cc - ${contaNome} (parcelado em ${parcelas}x)`,
+          descricao: `Pag Fat Deb Cc - ${contaNome} ${sufixo}`,
           valor: restante,
           categoria: 'Parcelamento Fatura',
           tipo: 'receita',
@@ -165,7 +167,11 @@ export function PaymentModal({ open, onOpenChange, contaId, contaNome, faturaTot
           ignorar_dashboard: true,
           grupo_parcela,
         });
+      }
 
+      // SÓ no modo parcial_parcelar (gestão manual): cria as N parcelas futuras
+      // no cartão de crédito, agrupadas pelo mesmo grupo_parcela.
+      if (mode === 'parcial_parcelar' && restante > 0 && parcelas > 0 && grupo_parcela) {
         const installments = [];
         for (let i = 1; i <= parcelas; i++) {
           const d = new Date(year, month + i, 1);
@@ -204,6 +210,7 @@ export function PaymentModal({ open, onOpenChange, contaId, contaNome, faturaTot
         total: 'Pagamento total registrado',
         parcial_parcelar: 'Pagamento parcial + parcelamento registrado',
         parcial_acumular: 'Pagamento parcial registrado — restante acumula na próxima fatura',
+        parcial_parcelado_emissor: 'Pagamento parcial registrado — parcelas virão no próximo extrato',
       } as const;
       toast({
         title: titleByMode[mode],
@@ -270,9 +277,15 @@ export function PaymentModal({ open, onOpenChange, contaId, contaNome, faturaTot
                 Pagar parcial + acumular restante na próxima fatura
               </Label>
             </div>
+            <div className="flex items-center space-x-2 p-3 rounded-lg border cursor-pointer hover:bg-muted/50" onClick={() => setMode('parcial_parcelado_emissor')}>
+              <RadioGroupItem value="parcial_parcelado_emissor" id="parcial_parcelado_emissor" />
+              <Label htmlFor="parcial_parcelado_emissor" className="cursor-pointer flex-1">
+                Pagar parcial + parcelado pelo emissor (MP/Nubank)
+              </Label>
+            </div>
           </RadioGroup>
 
-          {(mode === 'parcial_parcelar' || mode === 'parcial_acumular') && (
+          {(mode === 'parcial_parcelar' || mode === 'parcial_acumular' || mode === 'parcial_parcelado_emissor') && (
             <div className="space-y-3 p-3 rounded-lg border bg-muted/30">
               <div className="space-y-2">
                 <Label>Valor pago agora (R$)</Label>
@@ -342,13 +355,23 @@ export function PaymentModal({ open, onOpenChange, contaId, contaNome, faturaTot
                   no marcador da fatura quando você importar o próximo extrato.
                 </div>
               )}
+
+              {mode === 'parcial_parcelado_emissor' && restante > 0 && (
+                <div className="p-2 rounded bg-accent/10 border border-accent/20 text-xs text-muted-foreground">
+                  O restante de <strong className="text-foreground">{formatCurrency(restante)}</strong> vai
+                  ser <strong>parcelado pelo emissor</strong> nas próximas faturas. O app vai marcar
+                  a fatura atual como Paga (abatimento contábil), mas <strong>não</strong> cria as parcelas —
+                  elas virão automaticamente quando você importar o próximo extrato como
+                  "Parcela da fatura de {getMonthName(month).toLowerCase()}/{year}".
+                </div>
+              )}
             </div>
           )}
 
           <Button
             className="w-full"
             type="submit"
-            disabled={submitting || ((mode === 'parcial_parcelar' || mode === 'parcial_acumular') && (valorPago <= 0 || valorPago >= faturaTotal)) || (!effectiveContaOrigem && (contasDebito?.length || 0) > 0)}
+            disabled={submitting || ((mode === 'parcial_parcelar' || mode === 'parcial_acumular' || mode === 'parcial_parcelado_emissor') && (valorPago <= 0 || valorPago >= faturaTotal)) || (!effectiveContaOrigem && (contasDebito?.length || 0) > 0)}
           >
             {submitting ? 'Registrando...' : 'Confirmar Pagamento'}
           </Button>
