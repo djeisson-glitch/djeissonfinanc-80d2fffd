@@ -90,17 +90,22 @@ export default function DashboardPage() {
   const creditCards = contas?.filter(c => c.tipo === 'credito') || [];
   const cardIds = creditCards.map(c => c.id);
 
-  const { data: faturaAcumulada } = useFaturaAcumulada(cardIds, billingMonth);
+  const faturaQuery = useFaturaAcumulada(cardIds, billingMonth);
+  const faturaAcumulada = faturaQuery.data;
 
   // TEMP DEBUG — vou remover assim que confirmar a causa.
-  // Aparece na tela (não no console) pra não depender de filtro/cache do devtools.
   const debugInfo = JSON.stringify({
     billingMonth,
     cardIds: cardIds.length,
+    isFetching: faturaQuery.isFetching,
+    isLoading: faturaQuery.isLoading,
+    isError: faturaQuery.isError,
+    error: faturaQuery.error ? String(faturaQuery.error) : null,
+    status: faturaQuery.status,
     cards: creditCards.map(c => ({ nome: c.nome, id: c.id.slice(0, 8) })),
     faturaAcumuladaResult: faturaAcumulada ? Object.entries(faturaAcumulada).map(([id, f]: any) => ({
       id: id.slice(0, 8),
-      informado_via_valorFatura: f.valorFatura,
+      valorFatura: f.valorFatura,
       despesasMes: f.despesasMes,
       pagamentosMes: f.pagamentosMes,
       totalAPagar: f.totalAPagar,
