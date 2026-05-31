@@ -118,17 +118,20 @@ export default function TransacoesPage() {
 
   const updateMutation = useMutation({
     mutationFn: async (tx: { id: string; categoria: string; categoria_id: string | null; essencial: boolean; ignorar_dashboard: boolean }) => {
-      await supabase.from('transacoes').update({
+      const { error: upErr } = await supabase.from('transacoes').update({
         categoria: tx.categoria,
         categoria_id: tx.categoria_id,
         essencial: tx.essencial,
         ignorar_dashboard: tx.ignorar_dashboard,
       }).eq('id', tx.id);
+      // Antes o error era ignorado e o toast de sucesso aparecia mesmo após
+      // RLS/FK/rede falhar — usuário achava que salvou e não salvou nada.
+      if (upErr) throw upErr;
 
       let savedPattern: string | null = null;
       if (learnPattern && editingTx) {
         savedPattern = editingTx.descricao;
-        await supabase.from('regras_categorizacao').insert({
+        const { error: ruleErr } = await supabase.from('regras_categorizacao').insert({
           user_id: user!.id,
           padrao: editingTx.descricao,
           categoria: tx.categoria,
@@ -136,12 +139,21 @@ export default function TransacoesPage() {
           essencial: tx.essencial,
           aprendido_auto: false,
         });
+        // Falha aqui não é fatal — a categoria foi salva, só a "regra aprendida"
+        // não. Loggamos pra debug mas mantemos sucesso.
+        if (ruleErr) console.warn('Regra de aprendizado não persistida:', ruleErr.message);
       }
       return { savedPattern, categoria: tx.categoria, categoria_id: tx.categoria_id, essencial: tx.essencial };
     },
+    onError: (e: any) => toast({
+      title: 'Erro ao atualizar transação',
+      description: e?.message?.slice(0, 200),
+      variant: 'destructive',
+    }),
     onSuccess: async (result) => {
       queryClient.invalidateQueries({ queryKey: ['transacoes'] });
       queryClient.invalidateQueries({ queryKey: ['dashboard'] });
+      queryClient.invalidateQueries({ queryKey: ['fatura-acumulada'] });
       const closedTxId = editingTx?.id;
       setEditingTx(null);
       toast({ title: 'Transação atualizada' });
@@ -189,7 +201,8 @@ export default function TransacoesPage() {
         // old categoria_id would linger and disagree with the new categoria string.
         categoria_id: recatCategoria.id ?? null,
       };
-      await supabase.from('transacoes').update(updateData).in('id', ids);
+      const { error: bulkErr } = await supabase.from('transacoes').update(updateData).in('id', ids);
+      if (bulkErr) throw bulkErr;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['transacoes'] });
@@ -198,17 +211,45 @@ export default function TransacoesPage() {
       setRecatOpen(false);
       setRecatTransactions([]);
     },
+    onError: (e: any) => toast({
+      title: 'Erro ao recategorizar em massa',
+      description: e?.message?.slice(0, 200),
+      variant: 'destructive',
+    }),
   });
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
-      await supabase.from('transacoes').delete().eq('id', id);
+      // Antes de apagar a despesa, se ela tem reembolso vinculado, apaga a
+      // receita correspondente — senão a receita órfã fica somando no Dashboard
+      // como receita real. O FK self-ref SET NULL não cobre esse caso (só
+      // limparia a coluna da despesa, mas a despesa já não existe mais).
+      const { data: tx, error: fetchErr } = await supabase
+        .from('transacoes')
+        .select('reembolso_transacao_id')
+        .eq('id', id)
+        .maybeSingle();
+      if (fetchErr) throw fetchErr;
+      if (tx?.reembolso_transacao_id) {
+        await supabase
+          .from('transacoes')
+          .delete()
+          .eq('id', tx.reembolso_transacao_id)
+          .eq('user_id', user!.id);
+      }
+      const { error: delErr } = await supabase.from('transacoes').delete().eq('id', id);
+      if (delErr) throw delErr;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['transacoes'] });
       queryClient.invalidateQueries({ queryKey: ['dashboard'] });
       toast({ title: 'Transação excluída' });
     },
+    onError: (e: any) => toast({
+      title: 'Erro ao excluir transação',
+      description: e?.message?.slice(0, 200),
+      variant: 'destructive',
+    }),
   });
 
   // Quando abrir o editor, sincroniza os estados de reembolso com a transação.

@@ -125,7 +125,15 @@ export default function ConfiguracoesPage() {
         <TabsList>
           <TabsTrigger value="geral">Geral</TabsTrigger>
           <TabsTrigger value="historico">Histórico de Importações</TabsTrigger>
-          <TabsTrigger value="debug">Debug</TabsTrigger>
+          {/* Debug panel tem ações destrutivas em massa (recategorizar bulk,
+              apagar bulk, migrate-categorias). Em produção fica escondido por
+              default; pra liberar, abrir com ?debug=1 ou setar localStorage.
+              Em dev mode (Vite serve), sempre aparece pra facilitar trabalho. */}
+          {(import.meta.env.DEV ||
+            new URLSearchParams(window.location.search).get('debug') === '1' ||
+            localStorage.getItem('enable_debug_tab') === '1') && (
+            <TabsTrigger value="debug">Debug</TabsTrigger>
+          )}
         </TabsList>
 
         <TabsContent value="geral" className="space-y-6">

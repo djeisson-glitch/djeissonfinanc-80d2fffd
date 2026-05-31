@@ -123,6 +123,27 @@ export default function ContasPage() {
     },
   });
 
+  // Count de transações da conta editada — alimenta o aviso de exclusão.
+  // Não usa cache (precisa estar fresco a cada open do dialog).
+  const { data: countDelete } = useQuery({
+    queryKey: ['contas-count-delete', editConta?.id],
+    queryFn: async () => {
+      if (!editConta) return null;
+      const { count, error } = await supabase
+        .from('transacoes')
+        .select('id', { count: 'exact', head: true })
+        .eq('user_id', user!.id)
+        .eq('conta_id', editConta.id);
+      if (error) {
+        console.warn('Erro contando transações:', error.message);
+        return null;
+      }
+      return count ?? 0;
+    },
+    enabled: !!editConta && !!user,
+    staleTime: 0,
+  });
+
   const deleteMutation = useMutation({
     mutationFn: async () => {
       if (!editConta) return;
@@ -379,8 +400,14 @@ export default function ContasPage() {
               <ConfirmDelete
                 onConfirm={() => deleteMutation.mutate()}
                 title={`Excluir "${editConta.nome}"?`}
-                description="A conta/cartão e TODAS as transações ligadas a ela serão apagadas permanentemente. Esta ação não pode ser desfeita."
-                confirmLabel="Excluir conta"
+                description={
+                  countDelete === null
+                    ? 'A conta/cartão e TODAS as transações ligadas a ela serão apagadas. Esta ação não pode ser desfeita.'
+                    : countDelete === 0
+                    ? 'A conta não tem transações vinculadas. Será apagada apenas a conta.'
+                    : `Esta conta tem ${countDelete.toLocaleString('pt-BR')} transação${countDelete === 1 ? '' : 'ões'} vinculada${countDelete === 1 ? '' : 's'} que TAMBÉM serão apagadas. Esta ação não pode ser desfeita — considere editar o nome em vez de excluir, ou exportar via CSV antes.`
+                }
+                confirmLabel={countDelete && countDelete > 50 ? `Excluir conta + ${countDelete.toLocaleString('pt-BR')} transações` : 'Excluir conta'}
                 trigger={
                   <Button type="button" variant="outline" className="w-full text-destructive hover:text-destructive" disabled={deleteMutation.isPending}>
                     <Trash2 className="mr-2 h-4 w-4" />

@@ -89,8 +89,18 @@ export function FloatingActionButton() {
       const origemNome = allContas.find(c => c.id === transferOrigem)?.nome || '';
       const destinoNome = allContas.find(c => c.id === transferDestino)?.nome || '';
 
-      // Saída da origem
-      await supabase.from('transacoes').insert({
+      // Hash precisa de seed único por timestamp pra NÃO colidir se o usuário
+      // fizer duas transferências idênticas (mesma origem→destino, mesmo valor)
+      // no mesmo dia. Antes só `_out`/`_in` sufixavam, mas o seed do hash era
+      // idêntico → 2ª transferência batia UNIQUE silenciosamente.
+      const txTimestamp = Date.now();
+      const seedBase = `${origemNome}->${destinoNome}_${txTimestamp}`;
+
+      // Transferência entre contas próprias: SEMPRE marcar ignorar_dashboard=true.
+      // É movimento neutro (o dinheiro só muda de lugar, não entra/sai do
+      // patrimônio do usuário). Sem isso, o Dashboard somava +valor receita e
+      // +valor despesa fantasmas em todos os totais/KPIs.
+      const { error: outErr } = await supabase.from('transacoes').insert({
         user_id: user.id,
         conta_id: transferOrigem,
         data,
@@ -100,12 +110,13 @@ export function FloatingActionButton() {
         tipo: 'despesa',
         categoria: 'Transferência entre contas',
         essencial: false,
-        hash_transacao: generateHash(data, `Transferência ${origemNome} -> ${destinoNome}`, valor, pessoa) + '_out',
+        ignorar_dashboard: true,
+        hash_transacao: generateHash(data, seedBase, valor, pessoa) + '_out',
         pessoa,
       });
+      if (outErr) throw outErr;
 
-      // Entrada no destino
-      await supabase.from('transacoes').insert({
+      const { error: inErr } = await supabase.from('transacoes').insert({
         user_id: user.id,
         conta_id: transferDestino,
         data,
@@ -115,9 +126,11 @@ export function FloatingActionButton() {
         tipo: 'receita',
         categoria: 'Transferência entre contas',
         essencial: false,
-        hash_transacao: generateHash(data, `Transferência ${origemNome} -> ${destinoNome}`, valor, pessoa) + '_in',
+        ignorar_dashboard: true,
+        hash_transacao: generateHash(data, seedBase, valor, pessoa) + '_in',
         pessoa,
       });
+      if (inErr) throw inErr;
 
       queryClient.invalidateQueries({ queryKey: ['transacoes'] });
       queryClient.invalidateQueries({ queryKey: ['dashboard'] });

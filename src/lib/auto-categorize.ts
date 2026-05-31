@@ -144,6 +144,32 @@ const RULES: CategoriaRule[] = [
 ];
 
 /**
+ * Identifica PIX/transferência entre contas próprias ou cônjuges (Maiara ↔
+ * Djeisson) pelos identificadores conhecidos (nome completo OU CPF/CNPJ).
+ * Quem detecta isso deve TAMBÉM setar `ignorar_dashboard=true` na transação:
+ * o `autoCategorizarTransacao` cuida só da categoria, ele não pode mexer no
+ * resto da row. Mantém a lista alinhada com a regra "Transferência entre
+ * contas" do RULES abaixo.
+ */
+const TRANSFERENCIA_INTERNA_PATTERNS = [
+  'MAIARA PEREIRA MARTINS',
+  'MAIARA P MARTINS',
+  'MAIARA MARTINS',
+  'DJEISSON ALAN MAUSS',
+  'DJÊISSON ALAN MAUSS',
+  'DJEISSON A MAUSS',
+  '54447569000129',
+  '54.447.569',
+  '04409382012',
+  '03885096005',
+];
+
+export function isTransferenciaInterna(descricao: string): boolean {
+  const upper = (descricao || '').toUpperCase();
+  return TRANSFERENCIA_INTERNA_PATTERNS.some((p) => upper.includes(p));
+}
+
+/**
  * Normalize description for matching (same logic as dedup but without truncation).
  */
 function normalizeForMatch(desc: string): string {

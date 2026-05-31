@@ -40,10 +40,18 @@ export interface MonthFlow {
 export function buildMonthlyFlow(
   transactions: TransactionRecord[],
   monthsBack = 12,
+  todayIso?: string,
 ): MonthFlow[] {
+  // Cutoff: tudo após hoje é PROJEÇÃO (parcelas futuras de empréstimo já
+  // gravadas no banco, salários recorrentes do seed, etc.). No fluxo "realizado"
+  // de Análises, isso distorce KPIs porque o app trata como "já aconteceu".
+  // Análises passa useTodayIso(); se não passar, mantém o comportamento antigo.
+  const cutoff = todayIso || null;
+
   const byMonth: Record<string, { receita: number; despesa: number }> = {};
   for (const t of transactions) {
     if (t.ignorar_dashboard) continue;
+    if (cutoff && t.data > cutoff) continue;
     const k = monthKey(t);
     if (!byMonth[k]) byMonth[k] = { receita: 0, despesa: 0 };
     if (t.tipo === 'receita') byMonth[k].receita += Number(t.valor);
@@ -113,7 +121,12 @@ export interface MonthlyKpis {
 export function computeMonthlyKpis(
   transactions: TransactionRecord[],
   targetMonth: string,
+  todayIso?: string,
 ): MonthlyKpis {
+  // KPIs do mês corrente devem refletir o REALIZADO, não o que ainda nem aconteceu.
+  // Sem este filtro, parcela datada pra dia 31 entra como "já gastei" no dia 15,
+  // virando "Sobra do mês -R$200" em vermelho injustificadamente.
+  const cutoff = todayIso || null;
   let receita = 0,
     despesa = 0,
     essencial = 0,
@@ -122,6 +135,7 @@ export function computeMonthlyKpis(
   for (const t of transactions) {
     if (t.ignorar_dashboard) continue;
     if (monthKey(t) !== targetMonth) continue;
+    if (cutoff && t.data > cutoff) continue;
     if (t.tipo === 'receita') receita += Number(t.valor);
     else if (t.tipo === 'despesa') {
       despesa += Number(t.valor);

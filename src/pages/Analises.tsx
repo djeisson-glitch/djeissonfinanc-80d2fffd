@@ -122,15 +122,18 @@ export default function AnalisesPage() {
   // ---------------------------------------------------------------------
   // Memos pesados — fluxo 12m, kpis mês, composição, padrões, health
   // ---------------------------------------------------------------------
+  // Passamos todayIso pra filtrar parcelas/recorrentes FUTURAS gravadas no
+  // banco — KPIs/charts de Análises devem refletir o REALIZADO, não projeção
+  // (que tem página própria em Projeções).
   const flow12 = useMemo(
-    () => (allTransactions ? buildMonthlyFlow(allTransactions, 12) : []),
-    [allTransactions],
+    () => (allTransactions ? buildMonthlyFlow(allTransactions, 12, todayIso) : []),
+    [allTransactions, todayIso],
   );
   const periodCompare = useMemo(() => comparePeriods(flow12, 3), [flow12]);
 
   const kpisMes = useMemo(
-    () => (allTransactions ? computeMonthlyKpis(allTransactions, billingMonth) : null),
-    [allTransactions, billingMonth],
+    () => (allTransactions ? computeMonthlyKpis(allTransactions, billingMonth, todayIso) : null),
+    [allTransactions, billingMonth, todayIso],
   );
 
   const composition = useMemo(

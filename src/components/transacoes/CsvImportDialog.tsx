@@ -13,12 +13,14 @@ import {
   isFaturaPayment,
   isCreditoParcelamento,
   isSaldoAnteriorFatura,
+  // (importado mais abaixo via auto-categorize) — usado pra marcar PIX entre
+  // cônjuges como transferência interna logo no import.
   FATURA_TOTAL_MARKER,
   type SkippedLine,
   type ClassifiedTransaction,
   type CsvLineLogEntry,
 } from "@/lib/csv-parser";
-import { autoCategorizarTransacao } from "@/lib/auto-categorize";
+import { autoCategorizarTransacao, isTransferenciaInterna } from "@/lib/auto-categorize";
 import { parsePdfFile, extractPdfText } from "@/lib/pdf-parser";
 import { parseOFX } from "@/lib/ofx-parser";
 import {
@@ -681,7 +683,14 @@ export function CsvImportDialog({ open, onOpenChange }: Props) {
         // marca ignorar_dashboard pra não inflar despesa do mês em Dashboard/
         // Análises/Planejamento. A fatura acumulada já o ignora explicitamente.
         // SEMPRE booleano (nunca undefined): a coluna é NOT NULL no banco.
-        ignorar_dashboard: isSaldoAnteriorFatura(t.descricao),
+        // Marca como ignorar_dashboard:
+        // 1) "Saldo anterior da fatura" — artefato de rollover (já era).
+        // 2) PIX/transfer entre cônjuges (ex: "Transferência enviada pelo Pix
+        //    - MAIARA PEREIRA MARTINS") — movimento neutro entre os 2, NÃO é
+        //    receita/despesa real. Sem esta linha, todo PIX entre vocês contava
+        //    nos dois lados do fluxo.
+        ignorar_dashboard:
+          isSaldoAnteriorFatura(t.descricao) || isTransferenciaInterna(t.descricao),
         _isOriginal: true,
       });
     }

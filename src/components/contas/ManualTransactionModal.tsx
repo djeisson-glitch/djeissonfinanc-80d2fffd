@@ -10,7 +10,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
 import { useQueryClient, useQuery } from '@tanstack/react-query';
 import { generateHash } from '@/lib/csv-parser';
-import { autoCategorizarTransacao } from '@/lib/auto-categorize';
+import { autoCategorizarTransacao, isTransferenciaInterna } from '@/lib/auto-categorize';
 import { toLocalIso } from '@/lib/format';
 import { criarReembolsoVinculado } from '@/lib/reembolso';
 
@@ -106,6 +106,12 @@ export function ManualTransactionModal({
           : `${descricao}_${valorNum}_${isoDate}`;
         const hash = generateHash(isoDate, descricao, valorNum, pessoaNome) + '_manual_' + hashSeed.substring(0, 12);
 
+        // Transferência interna (PIX entre cônjuges, entre contas próprias) NÃO
+        // pode contar como receita/despesa real — vira "ruído" no Dashboard.
+        // O auto-categorize já marca a categoria certa; aqui completamos com a
+        // flag que ele não tem como setar.
+        const ehTransferencia = isTransferenciaInterna(descricao);
+
         rows.push({
           user_id: user.id,
           conta_id: selectedContaId,
@@ -120,6 +126,7 @@ export function ManualTransactionModal({
           pessoa: pessoaNome,
           mes_competencia: mesComp,
           grupo_parcela: grupoRec,
+          ignorar_dashboard: ehTransferencia,
           observacoes: recorrente ? `Recorrente ${i + 1}/${mesesNum}` : null,
         });
       }
