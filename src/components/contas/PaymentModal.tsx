@@ -142,6 +142,30 @@ export function PaymentModal({ open, onOpenChange, contaId, contaNome, faturaTot
 
       // If partial, create future installments for remaining (linked to the same grupo_parcela)
       if (mode === 'parcial' && restante > 0 && parcelas > 0 && grupo_parcela) {
+        // ABATIMENTO DA FATURA ATUAL: ao parcelar, o emissor considera a
+        // fatura corrente como FECHADA — o restante vira dívida futura
+        // (parcelas). Pra refletir isso, lança uma "receita" no cartão no
+        // mês atual no valor do restante, com descrição "Pag Fat Deb Cc -
+        // {Cartão} (parcelado em Nx)" — bate o regex isConciliacaoPayment
+        // e abate o total a pagar da fatura. Não tem contrapartida na CC
+        // (não saiu dinheiro real — é só rearranjo contábil).
+        const abatHash = generateHash(baseDate, `Pag Fat Deb Cc - ${contaNome} (parcelado)`, restante, pessoaNome) + '_abat';
+        await supabase.from('transacoes').insert({
+          user_id: user.id,
+          conta_id: contaId,
+          data: baseDate,
+          descricao: `Pag Fat Deb Cc - ${contaNome} (parcelado em ${parcelas}x)`,
+          valor: restante,
+          categoria: 'Parcelamento Fatura',
+          tipo: 'receita',
+          essencial: true,
+          hash_transacao: abatHash,
+          pessoa: pessoaNome,
+          mes_competencia: billingPeriod,
+          ignorar_dashboard: true,
+          grupo_parcela,
+        });
+
         const installments = [];
         for (let i = 1; i <= parcelas; i++) {
           const d = new Date(year, month + i, 1);
