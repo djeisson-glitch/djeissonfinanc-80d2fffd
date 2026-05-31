@@ -137,6 +137,26 @@ export function useFaturaAcumulada(cardIds: string[], billingMonth: string) {
         // marcador já é o líquido do extrato (e elas caem na competência errada).
         // Sem marcador, cai na acumulação antiga (saldoAnterior + mês − pago).
         const informado = totalInformado[billingMonth];
+
+        // DEBUG temporário: dump por card pra investigar marker não pego.
+        // Remover após confirmar a causa em https://djeissonfinanc.vercel.app.
+        if (typeof window !== 'undefined' && (window as any).__DEBUG_FATURA) {
+          console.log(`[fatura ${cardId.slice(0, 8)}] billingMonth=${billingMonth}`, {
+            informado,
+            totalInformadoKeys: Object.keys(totalInformado),
+            totalInformadoFull: totalInformado,
+            currentPeriod,
+            saldoAnterior,
+            markerCount: cardTxs.filter(t => isFaturaTotalMarker(t.descricao)).length,
+            markersList: cardTxs.filter(t => isFaturaTotalMarker(t.descricao)).map(t => ({
+              mes: t.mes_competencia,
+              data: t.data,
+              valor: t.valor,
+              valorAsNumber: Number(t.valor),
+            })),
+          });
+        }
+
         const totalAPagar = informado != null
           ? Math.max(0, informado - currentPeriod.conciliado)
           : saldoAnterior + currentPeriod.despesas - currentPeriod.pagamentos;
