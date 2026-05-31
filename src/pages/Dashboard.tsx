@@ -92,6 +92,21 @@ export default function DashboardPage() {
 
   const { data: faturaAcumulada } = useFaturaAcumulada(cardIds, billingMonth);
 
+  // TEMP DEBUG — vou remover assim que confirmar a causa.
+  // Aparece na tela (não no console) pra não depender de filtro/cache do devtools.
+  const debugInfo = JSON.stringify({
+    billingMonth,
+    cardIds: cardIds.length,
+    cards: creditCards.map(c => ({ nome: c.nome, id: c.id.slice(0, 8) })),
+    faturaAcumuladaResult: faturaAcumulada ? Object.entries(faturaAcumulada).map(([id, f]: any) => ({
+      id: id.slice(0, 8),
+      informado_via_valorFatura: f.valorFatura,
+      despesasMes: f.despesasMes,
+      pagamentosMes: f.pagamentosMes,
+      totalAPagar: f.totalAPagar,
+    })) : null,
+  }, null, 2);
+
   const { data: parcelasAno } = useQuery({
     queryKey: ['dashboard', 'parcelas-ano', user?.id, year],
     queryFn: async () => {
@@ -266,6 +281,14 @@ export default function DashboardPage() {
           <MonthSelector month={month} year={year} onChange={(m, y) => { setMonth(m); setYear(y); }} />
         </div>
       </div>
+
+      {/* TEMP DEBUG — banner visível pra diagnosticar marker não pego */}
+      <Card className="border-amber-300 bg-amber-50/50 dark:bg-amber-950/20">
+        <CardContent className="p-3">
+          <p className="text-xs font-medium text-amber-700 dark:text-amber-300 mb-1">DEBUG TEMPORÁRIO — marker da fatura</p>
+          <pre className="text-[10px] font-mono whitespace-pre-wrap break-all text-foreground/80">{debugInfo}</pre>
+        </CardContent>
+      </Card>
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <Card className="cursor-pointer hover:bg-muted/50 transition-colors" onClick={() => navigate('/transacoes?tipo=receita')}>
