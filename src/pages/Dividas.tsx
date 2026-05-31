@@ -68,17 +68,24 @@ interface ContratoMeta {
 // disponível, taxaAno = "Taxa de Juros Anual % a.a." (não a "Efetiva" — a
 // efetiva inclui IOF embutido e usa juros compostos diferente).
 //
+// 5 dos 6 contratos são "Crédito Pessoal Sem Consignação" com taxas entre
+// 58-130% a.a. — basicamente cheque especial. Único exceção é o C5A9200110
+// (aquisição de veículos, 21,84%). Insight relevante pra o plano de saída.
+//
 // localStorage override 'loan_taxas_overrides' permite o user editar inline
 // quando o PDF do contrato chegar — sem precisar redeploy.
 const CONTRATO_META: Record<string, ContratoMeta> = {
-  // DDC sicredi_1779671452.pdf — aquisição de bens/veículos
-  C5A9200110:   { nome: 'Sicredi C5A9200110', color: '#3b82f6', taxaAno: 21.84, parcelaTotal: 48 },
-  C5A9304161:   { nome: 'Sicredi C5A9304161', color: '#8b5cf6', parcelaTotal: 36 },
-  C5A9304811:   { nome: 'Sicredi C5A9304811', color: '#06b6d4', parcelaTotal: 30 },
+  // DDC sicredi_1779671452.pdf — aquisição de veículos (única taxa decente)
+  C5A9200110:   { nome: 'Sicredi C5A9200110 (veículos)', color: '#3b82f6', taxaAno: 21.84, parcelaTotal: 48 },
+  // DDC sicredi_1780189349.pdf — crédito pessoal
+  C5A9304161:   { nome: 'Sicredi C5A9304161', color: '#8b5cf6', taxaAno: 58.56, parcelaTotal: 36 },
+  // DDC sicredi_1780189318.pdf — crédito pessoal
+  C5A9304811:   { nome: 'Sicredi C5A9304811', color: '#06b6d4', taxaAno: 61.08, parcelaTotal: 30 },
   MP1240412639: { nome: 'Mercado Pago #1240412639', color: '#f59e0b', taxaAno: 130, parcelaTotal: 24 },
-  // DDC sicredi_1779671521.pdf — crédito pessoal sem consignação (CARO!)
+  // DDC sicredi_1779671521.pdf — crédito pessoal (vence 06/2026)
   C5A9203519:   { nome: 'Sicredi C5A9203519', color: '#10b981', taxaAno: 58.80, parcelaTotal: 12 },
-  C5A9304498:   { nome: 'Sicredi C5A9304498', color: '#ec4899', parcelaTotal: 12 },
+  // DDC sicredi_1780189375.pdf — crédito pessoal (vence 08/2026)
+  C5A9304498:   { nome: 'Sicredi C5A9304498', color: '#ec4899', taxaAno: 61.44, parcelaTotal: 12 },
 };
 
 // Lê overrides do localStorage e aplica em CONTRATO_META on-the-fly. Útil pra
