@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useTodayIso } from '@/hooks/useTodayIso';
+import { useTransacoes12m } from '@/hooks/useTransacoes12m';
 import { fetchAllRows } from '@/lib/supabase-fetch';
 import { useFontesReceita } from '@/hooks/useFontesReceita';
 import { MonthSelector } from '@/components/MonthSelector';
@@ -69,26 +70,9 @@ export default function AnalisesPage() {
   });
   const reserva = config?.reserva_minima || 2000;
 
-  // Últimos 12 meses — base pra todos os gráficos/insights/Claude.
-  const { data: allTransactions, isLoading } = useQuery({
-    queryKey: ['analises', 'all-transacoes', user?.id],
-    queryFn: async () => {
-      const oneYearAgo = new Date();
-      oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
-      const startDate = `${oneYearAgo.getFullYear()}-${String(oneYearAgo.getMonth() + 1).padStart(2, '0')}-01`;
-      const data = await fetchAllRows<TransactionRecord>(() =>
-        supabase
-          .from('transacoes')
-          .select(
-            'data, mes_competencia, descricao, valor, tipo, categoria, categoria_id, parcela_atual, parcela_total, grupo_parcela, ignorar_dashboard, essencial, conta_id',
-          )
-          .eq('user_id', user!.id)
-          .gte('data', startDate),
-      );
-      return data;
-    },
-    enabled: !!user,
-  });
+  // Últimos 12 meses — usa hook compartilhado com Projeções/Planejamento/Dívidas
+  // pra evitar refetch ao trocar de tab (cache 2min).
+  const { data: allTransactions, isLoading } = useTransacoes12m();
 
   // Saldo atual — visão de bolso.
   const { data: saldoAtual } = useQuery({
@@ -216,8 +200,11 @@ export default function AnalisesPage() {
       topCategories: composition.slice(0, 6).map((s) => ({ cat: s.categoria, total: s.valor })),
       parcelasAtivas: kpisMes?.parcelasMes,
       commitmentAvg: commitment?.resumo.mediaComprometimento,
+      // Envia também os 12 meses completos pra Claude conseguir responder
+      // perguntas como "quanto sobrou em fev?" sem cair em "não tenho esse dado".
+      monthlyFlow: flow12.map((f) => ({ mes: f.label, receita: f.receita, despesa: f.despesa, sobra: f.sobra })),
     }),
-    [receitaBase, saldoAtual, kpisMes, health, composition, commitment],
+    [receitaBase, saldoAtual, kpisMes, health, composition, commitment, flow12],
   );
 
   if (isLoading || !allTransactions) {

@@ -397,12 +397,12 @@ export default function ConciliacaoPage() {
                     </span>
                     {match && <Badge variant="secondary" className="shrink-0">match automático</Badge>}
                   </div>
-                  <div className="flex flex-wrap items-center gap-2">
+                  <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-center gap-2">
                     <Select
                       value={escolha.cardId}
                       onValueChange={(v) => setSel((s) => ({ ...s, [pay.id]: { cardId: v, period: (conc.periodsByCard[v] || [])[0] || '' } }))}
                     >
-                      <SelectTrigger className="h-8 w-[160px]"><SelectValue placeholder="Cartão" /></SelectTrigger>
+                      <SelectTrigger className="h-8 w-full sm:w-[160px]"><SelectValue placeholder="Cartão" /></SelectTrigger>
                       <SelectContent>
                         {conc.cards.map((c) => <SelectItem key={c.id} value={c.id}>{c.nome}</SelectItem>)}
                       </SelectContent>
@@ -412,7 +412,7 @@ export default function ConciliacaoPage() {
                       onValueChange={(v) => setSel((s) => ({ ...s, [pay.id]: { cardId: escolha.cardId, period: v } }))}
                       disabled={!escolha.cardId}
                     >
-                      <SelectTrigger className="h-8 w-[130px]"><SelectValue placeholder="Fatura (mês)" /></SelectTrigger>
+                      <SelectTrigger className="h-8 w-full sm:w-[130px]"><SelectValue placeholder="Fatura (mês)" /></SelectTrigger>
                       <SelectContent>
                         {periods.map((p) => <SelectItem key={p} value={p}>{compLabel(p)}</SelectItem>)}
                       </SelectContent>

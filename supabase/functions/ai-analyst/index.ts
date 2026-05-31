@@ -139,14 +139,18 @@ COMPROMETIMENTO MENSAL COM PARCELAS: ${pct(ctx.commitmentAvg)}%`;
 
   if (mode === "analises_ask") {
     const cats = (ctx.topCategories || []) as Array<any>;
+    const flow = (ctx.monthlyFlow || []) as Array<any>;
     return `RESUMO FINANCEIRO DO USUÁRIO:
 - Receita base mensal: R$ ${brl(ctx.receitaBase)}
 - Saldo atual: R$ ${brl(ctx.saldoAtual)}
-- Despesa mês corrente: R$ ${brl(ctx.despesaMes)}
-- Receita mês corrente: R$ ${brl(ctx.receitaMes)}
+- Despesa mês corrente (selecionado): R$ ${brl(ctx.despesaMes)}
+- Receita mês corrente (selecionado): R$ ${brl(ctx.receitaMes)}
 - Score saúde: ${ctx.healthScore ?? "—"}/100
-- Top categorias: ${cats.slice(0, 6).map((c: any) => `${c.cat} R$ ${brl(c.total)}`).join(", ") || "—"}
+- Top categorias do mês: ${cats.slice(0, 6).map((c: any) => `${c.cat} R$ ${brl(c.total)}`).join(", ") || "—"}
 - Parcelas ativas: ${ctx.parcelasAtivas ?? 0}, comprometimento ${pct(ctx.commitmentAvg)}%
+
+FLUXO MENSAL (${flow.length} meses):
+${flow.map((f: any) => `- ${f.mes}: receita R$ ${brl(f.receita)} / despesa R$ ${brl(f.despesa)} / sobra R$ ${brl(f.sobra)}`).join("\n") || "—"}
 
 PERGUNTA DO USUÁRIO: ${ctx.question ?? "(vazia)"}`;
   }

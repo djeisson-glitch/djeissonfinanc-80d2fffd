@@ -24,3 +24,9 @@ dist-ssr
 *.sw?
 .vercel
 supabase/.temp/
+
+# Harness files de import em massa (rodam contra DB real via service_role;
+# não vão pro repo pra não vazar lógica de testes específicos do user).
+src/test/*.write.test.ts
+src/test/real-data.validation.test.ts
+src/test/repro-*.test.ts

@@ -118,6 +118,18 @@ export default function ProjecoesPage() {
 
   const { receitaBase } = useFontesReceita();
 
+  // Lê reserva mínima das Configurações pra passar pro Claude (antes ficava
+  // hardcoded 2000 e Claude analisava contra o número errado).
+  const { data: config } = useQuery({
+    queryKey: ['config', user?.id],
+    queryFn: async () => {
+      const { data } = await supabase.from('configuracoes').select('reserva_minima').eq('user_id', user!.id).maybeSingle();
+      return data;
+    },
+    enabled: !!user,
+  });
+  const reservaMinima = Number(config?.reserva_minima) || 2000;
+
   const projections = useMemo(() => {
     if (!transactions) return [];
     const manualOvr = (overrides || []).map(o => ({
@@ -241,7 +253,7 @@ export default function ProjecoesPage() {
               ? projections.slice(0, 6).reduce((s, p) => s + p.totalDespesas, 0) / Math.min(6, projections.length)
               : 0,
           saldoInicial: chartData[0]?.acumulado || 0,
-          reservaMinima: 2000,
+          reservaMinima,
           projecaoMensal: chartData.slice(0, 12).map((c) => ({
             mes: c.mes,
             saldoLivre: c.saldo,
