@@ -1,18 +1,24 @@
 import { useMemo, useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
+import { useTodayIso } from '@/hooks/useTodayIso';
+import { useToast } from '@/hooks/use-toast';
 import { formatCurrency, getMonthName } from '@/lib/format';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Separator } from '@/components/ui/separator';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
-import { PenLine, AlertTriangle, Calendar, Tag, Layers, ChevronDown, ChevronUp } from 'lucide-react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { PenLine, AlertTriangle, Calendar, Tag, Layers, ChevronDown, ChevronUp, CheckCircle2 } from 'lucide-react';
 import { getCategoriaColor } from '@/types/database.types';
 import { ManualTransactionModal } from '@/components/contas/ManualTransactionModal';
 import { useFaturaAcumulada } from '@/hooks/useFaturaAcumulada';
-import { isDevolution } from '@/lib/csv-parser';
+import { isDevolution, generateHash } from '@/lib/csv-parser';
 
 interface Props {
   open: boolean;
@@ -27,10 +33,17 @@ interface Props {
 
 export function FaturaDrawer({ open, onOpenChange, cardId, cardName, start, end, month, year }: Props) {
   const { user } = useAuth();
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const todayIso = useTodayIso();
   const billingPeriod = `${year}-${String(month + 1).padStart(2, '0')}`;
   const [manualTxOpen, setManualTxOpen] = useState(false);
   const [groupBy, setGroupBy] = useState<'data' | 'categoria' | 'parcelamento'>('data');
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
+  const [pagamentoOpen, setPagamentoOpen] = useState(false);
+  const [pagContaId, setPagContaId] = useState<string>('');
+  const [pagData, setPagData] = useState<string>(todayIso);
+  const [pagValor, setPagValor] = useState<string>('');
 
   const toggleGroup = (key: string) => {
     setExpandedGroups(prev => {
@@ -75,6 +88,71 @@ export function FaturaDrawer({ open, onOpenChange, cardId, cardName, start, end,
     },
     enabled: open && !!user,
   });
+
+  // Contas de débito (CC) pra escolher de onde sai o pagamento da fatura.
+  const { data: contasDebito } = useQuery({
+    queryKey: ['contas-debito', user?.id],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('contas')
+        .select('id, nome')
+        .eq('user_id', user!.id)
+        .eq('tipo', 'debito')
+        .order('nome');
+      return data || [];
+    },
+    enabled: open && !!user,
+  });
+
+  // Mutation: cria a transação de baixa da fatura na conta corrente escolhida.
+  // Descrição "Pag Fat Deb Cc - {Card}" — sufixo com nome do cartão é o que o
+  // regex `isConciliacaoPayment` exige (diferencia do lado interno do extrato
+  // do próprio cartão, que vem sem sufixo). Marcamos como ignorar_dashboard
+  // pra não dobrar despesa (a fatura JÁ aparece como despesa via cartão).
+  const baixaMutation = useMutation({
+    mutationFn: async ({ contaId, data, valor }: { contaId: string; data: string; valor: number }) => {
+      const descricao = `Pag Fat Deb Cc - ${cardName}`;
+      const hash = generateHash(data, descricao, valor, '') + '_baixa_' + cardId.slice(0, 8);
+      const { error } = await supabase.from('transacoes').insert({
+        user_id: user!.id,
+        conta_id: contaId,
+        data,
+        descricao,
+        descricao_normalizada: descricao.toUpperCase().replace(/[^A-Z0-9 ]/g, '').trim(),
+        valor,
+        tipo: 'despesa',
+        categoria: 'Operação bancária',
+        essencial: true,
+        hash_transacao: hash,
+        pessoa: '',
+        mes_competencia: billingPeriod,
+        ignorar_dashboard: true,
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast({ title: 'Fatura marcada como paga' });
+      queryClient.invalidateQueries({ queryKey: ['fatura-acumulada'] });
+      queryClient.invalidateQueries({ queryKey: ['fatura-detail'] });
+      queryClient.invalidateQueries({ queryKey: ['transacoes'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] });
+      setPagamentoOpen(false);
+    },
+    onError: (e: any) => {
+      toast({ title: 'Erro ao registrar baixa', description: String(e?.message || e), variant: 'destructive' });
+    },
+  });
+
+  const abrirBaixa = () => {
+    const sugerido = (acumulado?.totalAPagar || acumulado?.valorFatura || 0);
+    setPagValor(sugerido.toFixed(2));
+    setPagData(todayIso);
+    // Pre-seleciona a primeira conta débito (geralmente a CC principal).
+    if (!pagContaId && contasDebito && contasDebito.length > 0) {
+      setPagContaId(contasDebito[0].id);
+    }
+    setPagamentoOpen(true);
+  };
 
   const despesas = transacoes?.filter(t => t.tipo === 'despesa') || [];
   const estornos = transacoes?.filter(t => t.tipo === 'receita' && isDevolution(t.descricao)) || [];
@@ -192,6 +270,15 @@ export function FaturaDrawer({ open, onOpenChange, cardId, cardName, start, end,
                     {formatCurrency(Math.max(0, acumulado.totalAPagar))}
                   </span>
                 </div>
+                {acumulado.totalAPagar > 0 && (
+                  <Button
+                    size="sm"
+                    className="w-full mt-2 text-xs"
+                    onClick={abrirBaixa}
+                  >
+                    <CheckCircle2 className="h-3.5 w-3.5 mr-1" /> Marcar como paga
+                  </Button>
+                )}
               </CardContent>
             </Card>
           )}
@@ -365,6 +452,68 @@ export function FaturaDrawer({ open, onOpenChange, cardId, cardName, start, end,
           contaTipo="credito"
           defaultMesCompetencia={billingPeriod}
         />
+
+        <Dialog open={pagamentoOpen} onOpenChange={setPagamentoOpen}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle>Marcar fatura como paga</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-3 pt-2">
+              <p className="text-xs text-muted-foreground">
+                Lança a baixa na sua conta corrente como "Pag Fat Deb Cc - {cardName}".
+                A fatura do cartão fica como conciliada (não duplica despesa).
+              </p>
+              <div className="space-y-1">
+                <Label htmlFor="conta-pag" className="text-xs">Conta de débito</Label>
+                <Select value={pagContaId} onValueChange={setPagContaId}>
+                  <SelectTrigger id="conta-pag">
+                    <SelectValue placeholder="Escolha a conta" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {(contasDebito || []).map(c => (
+                      <SelectItem key={c.id} value={c.id}>{c.nome}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <Label htmlFor="data-pag" className="text-xs">Data do pagamento</Label>
+                  <Input
+                    id="data-pag"
+                    type="date"
+                    value={pagData}
+                    onChange={(e) => setPagData(e.target.value)}
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label htmlFor="valor-pag" className="text-xs">Valor (R$)</Label>
+                  <Input
+                    id="valor-pag"
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={pagValor}
+                    onChange={(e) => setPagValor(e.target.value)}
+                  />
+                </div>
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setPagamentoOpen(false)}>Cancelar</Button>
+              <Button
+                disabled={!pagContaId || !pagData || !pagValor || Number(pagValor) <= 0 || baixaMutation.isPending}
+                onClick={() => baixaMutation.mutate({
+                  contaId: pagContaId,
+                  data: pagData,
+                  valor: Number(pagValor),
+                })}
+              >
+                {baixaMutation.isPending ? 'Salvando...' : 'Confirmar baixa'}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </SheetContent>
     </Sheet>
   );
