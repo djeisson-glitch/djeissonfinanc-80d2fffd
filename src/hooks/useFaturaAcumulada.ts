@@ -78,10 +78,17 @@ export function useFaturaAcumulada(cardIds: string[], billingMonth: string) {
       }
       if (typeof window !== 'undefined') (window as any).__FATURA_DEBUG_STEPS.push(`total-rows:${allTxs.length}`);
 
+      const dbg = (s: string) => {
+        if (typeof window !== 'undefined') (window as any).__FATURA_DEBUG_STEPS.push(s);
+      };
+
+      dbg('before-result-init');
       const result: Record<string, FaturaAcumulada> = {};
 
       for (const cardId of cardIds) {
+        dbg(`card-${cardId.slice(0, 4)}-start`);
         const cardTxs = (allTxs || []).filter(t => t.conta_id === cardId);
+        dbg(`card-${cardId.slice(0, 4)}-cardTxs:${cardTxs.length}`);
 
         // Group transactions by billing period
         // Use mes_competencia when available, fall back to YYYY-MM from data
@@ -157,20 +164,7 @@ export function useFaturaAcumulada(cardIds: string[], billingMonth: string) {
         // Sem marcador, cai na acumulação antiga (saldoAnterior + mês − pago).
         const informado = totalInformado[billingMonth];
 
-        // DEBUG TEMPORÁRIO (loga sempre em produção até confirmar a causa).
-        // Usa console.error pra garantir que aparece mesmo com filtros default.
-        console.error(`[FATURA_DEBUG ${cardId.slice(0, 8)}]`, JSON.stringify({
-          billingMonth,
-          informado: informado ?? null,
-          tipo_informado: typeof informado,
-          chavesMarker: Object.keys(totalInformado),
-          markersBrutos: cardTxs
-            .filter(t => isFaturaTotalMarker(t.descricao))
-            .map(t => ({ mes: t.mes_competencia, data: t.data, valor: t.valor, valorNum: Number(t.valor) })),
-          totalCardTxs: cardTxs.length,
-          currentPeriodDespesas: currentPeriod.despesas,
-          currentPeriodPagamentos: currentPeriod.pagamentos,
-        }));
+        dbg(`card-${cardId.slice(0, 4)}-pre-totalAPagar:informado=${informado ?? 'null'}`);
 
         const totalAPagar = informado != null
           ? Math.max(0, informado - currentPeriod.conciliado)
@@ -189,8 +183,10 @@ export function useFaturaAcumulada(cardIds: string[], billingMonth: string) {
           // tem pagamentos, escondendo o valor original).
           valorFatura: informado != null ? informado : currentPeriod.despesas,
         };
+        dbg(`card-${cardId.slice(0, 4)}-end`);
       }
 
+      dbg('before-return');
       return result;
     },
     enabled: !!user && cardIds.length > 0,
