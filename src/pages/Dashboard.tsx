@@ -103,6 +103,7 @@ export default function DashboardPage() {
     error: faturaQuery.error ? String(faturaQuery.error) : null,
     status: faturaQuery.status,
     debugSteps: typeof window !== 'undefined' ? (window as any).__FATURA_DEBUG_STEPS || ['(nada)'] : '(server)',
+    invocations: typeof window !== 'undefined' ? (window as any).__FATURA_INVOCATIONS : '(server)',
     cards: creditCards.map(c => ({ nome: c.nome, id: c.id.slice(0, 8) })),
     faturaAcumuladaResult: faturaAcumulada ? Object.entries(faturaAcumulada).map(([id, f]: any) => ({
       id: id.slice(0, 8),

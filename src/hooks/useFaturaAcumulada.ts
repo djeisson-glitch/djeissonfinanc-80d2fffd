@@ -46,7 +46,11 @@ export function useFaturaAcumulada(cardIds: string[], billingMonth: string) {
     queryKey: ['fatura-acumulada', user?.id, cardIds.join(','), billingMonth],
     queryFn: async () => {
       if (typeof window !== 'undefined') {
-        (window as any).__FATURA_DEBUG_STEPS = ['queryFn:start'];
+        const w = window as any;
+        w.__FATURA_INVOCATIONS = (w.__FATURA_INVOCATIONS || 0) + 1;
+        // NÃO resetar steps — manter histórico de todas invocações
+        if (!w.__FATURA_DEBUG_STEPS) w.__FATURA_DEBUG_STEPS = [];
+        w.__FATURA_DEBUG_STEPS.push(`queryFn#${w.__FATURA_INVOCATIONS}:start@${new Date().toISOString().slice(11, 19)}`);
       }
       if (cardIds.length === 0) return {} as Record<string, FaturaAcumulada>;
 
