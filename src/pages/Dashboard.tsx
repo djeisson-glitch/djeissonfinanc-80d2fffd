@@ -300,8 +300,22 @@ export default function DashboardPage() {
             </p>
             <p className="text-xs text-muted-foreground">
               {(saldoAnterior || 0) >= 0 ? '+' : ''}{formatCurrency(saldoAnterior || 0)} anterior
-              {totalAPagar > 0 && ` · ${formatCurrency(totalAPagar)} a pagar`}
-              {totalAReceber > 0 && ` · ${formatCurrency(totalAReceber)} a receber`}
+              {/* "A pagar / a receber" linkam pra página dedicada de gestão. Antes
+                  o número aparecia mas o user não tinha onde clicar pra gerenciar. */}
+              {(totalAPagar > 0 || totalAReceber > 0) && (
+                <>
+                  {' · '}
+                  <button
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); navigate('/a-pagar-receber'); }}
+                    className="underline-offset-2 hover:underline text-foreground/70"
+                  >
+                    {totalAPagar > 0 && `${formatCurrency(totalAPagar)} a pagar`}
+                    {totalAPagar > 0 && totalAReceber > 0 && ' · '}
+                    {totalAReceber > 0 && `${formatCurrency(totalAReceber)} a receber`}
+                  </button>
+                </>
+              )}
             </p>
           </CardContent>
         </Card>

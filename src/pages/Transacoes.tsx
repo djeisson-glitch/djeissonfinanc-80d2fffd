@@ -18,6 +18,7 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { useToast } from '@/hooks/use-toast';
 import { Pencil, Trash2, Search, Download, Copy, EyeOff, Filter, ChevronDown, ChevronUp, Layers, CreditCard, Tag, Calendar } from 'lucide-react';
+import { ConfirmDelete } from '@/components/ConfirmDelete';
 import { Checkbox } from '@/components/ui/checkbox';
 import { exportCSV, copyToClipboard } from '@/lib/export';
 import { MonthSelector } from '@/components/MonthSelector';
@@ -554,11 +555,18 @@ export default function TransacoesPage() {
       <div className="flex gap-2">
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input placeholder="Buscar transação..." value={search} onChange={e => setSearch(e.target.value)} className="pl-9" />
+          <Input
+            placeholder="Buscar transação..."
+            aria-label="Buscar transação"
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            className="pl-9"
+          />
         </div>
         <Button
           variant={hasActiveFilters ? 'default' : 'outline'}
           size="icon"
+          aria-label={showFilters ? 'Ocultar filtros' : 'Mostrar filtros'}
           onClick={() => setShowFilters(!showFilters)}
         >
           <Filter className="h-4 w-4" />
@@ -1054,22 +1062,39 @@ export default function TransacoesPage() {
                 <Switch checked={learnPattern} onCheckedChange={setLearnPattern} className="shrink-0" />
               </div>
               <div className="flex gap-2">
-                <Button className="flex-1" type="submit">
-                  Salvar
-                </Button>
                 <Button
-                  type="button"
-                  variant="destructive"
-                  size="icon"
-                  onClick={() => {
-                    if (window.confirm(`Excluir "${editingTx.descricao}"?`)) {
-                      deleteMutation.mutate(editingTx.id);
-                      setEditingTx(null);
-                    }
-                  }}
+                  className="flex-1"
+                  type="submit"
+                  disabled={updateMutation.isPending || reembolsoMutation.isPending}
                 >
-                  <Trash2 className="h-4 w-4" />
+                  {updateMutation.isPending ? 'Salvando…' : 'Salvar'}
                 </Button>
+                {/* Trocado window.confirm por ConfirmDelete (shadcn AlertDialog):
+                    consistente com o resto do app, dark mode OK, melhor em mobile.
+                    Se a despesa tem reembolso, o trigger do DB apaga a receita
+                    pareada automaticamente — aviso explícito pro user saber. */}
+                <ConfirmDelete
+                  onConfirm={() => {
+                    deleteMutation.mutate(editingTx.id);
+                    setEditingTx(null);
+                  }}
+                  title={`Excluir "${editingTx.descricao}"?`}
+                  description={
+                    editingTx.reembolso_transacao_id
+                      ? 'A receita de reembolso vinculada também será removida automaticamente.'
+                      : 'Esta transação será removida permanentemente.'
+                  }
+                  trigger={
+                    <Button
+                      type="button"
+                      variant="destructive"
+                      size="icon"
+                      aria-label="Excluir transação"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  }
+                />
               </div>
             </form>
           )}

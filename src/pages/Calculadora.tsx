@@ -257,9 +257,19 @@ export default function CalculadoraPage() {
                       {new Date(sim.updated_at).toLocaleDateString('pt-BR')}
                     </span>
                   </button>
+                  {/* Confirmação simples antes de excluir — sem dialog porque
+                      o item já vive dentro de DropdownMenuItem (foco compete).
+                      Aceitável: o sim.nome aparece no prompt pro user saber o que
+                      tá apagando. */}
                   <button
                     className="text-destructive hover:text-destructive/80 p-1"
-                    onClick={(e) => { e.stopPropagation(); handleDelete(sim.id); }}
+                    aria-label={`Excluir simulação ${sim.nome}`}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (confirm(`Excluir simulação "${sim.nome}"? Esta ação não pode ser desfeita.`)) {
+                        handleDelete(sim.id);
+                      }
+                    }}
                   >
                     <Trash2 className="h-3.5 w-3.5" />
                   </button>

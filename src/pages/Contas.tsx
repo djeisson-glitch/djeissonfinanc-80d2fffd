@@ -11,6 +11,7 @@ import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
+import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/hooks/use-toast';
 import { useState } from 'react';
 import { Plus, CreditCard, Banknote, DollarSign, CalendarDays, PenLine, Trash2 } from 'lucide-react';
@@ -54,7 +55,7 @@ export default function ContasPage() {
   const [month, setMonth] = useState(now.getMonth());
   const [year, setYear] = useState(now.getFullYear());
 
-  const { data: contas } = useQuery({
+  const { data: contas, isLoading: contasLoading } = useQuery({
     queryKey: ['contas', user?.id],
     queryFn: async () => {
       const { data } = await supabase.from('contas').select('*').eq('user_id', user!.id);
@@ -215,6 +216,17 @@ export default function ContasPage() {
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+        {/* Skeleton enquanto carrega — antes a página abria com "R$ 0,00" em todo
+            cartão (flash alarmante: parece que zerou tudo). */}
+        {contasLoading && !contas && (
+          [1, 2, 3].map((i) => (
+            <Card key={`skel-${i}`}><CardContent className="p-4 space-y-3">
+              <Skeleton className="h-5 w-32" />
+              <Skeleton className="h-8 w-40" />
+              <Skeleton className="h-4 w-24" />
+            </CardContent></Card>
+          ))
+        )}
         {contas?.map(conta => {
           const saldoAtual = (conta.saldo_inicial || 0) + (saldos?.[conta.id] || 0);
           const isCredito = conta.tipo === 'credito';

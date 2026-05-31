@@ -11,6 +11,7 @@ import {
   BarChart3,
   Landmark,
   ListChecks,
+  CalendarClock,
 } from 'lucide-react';
 import { NavLink } from '@/components/NavLink';
 import { useLocation } from 'react-router-dom';
@@ -35,6 +36,7 @@ const items = [
   { title: 'Projeções', url: '/projecoes', icon: TrendingUp },
   { title: 'Planejamento', url: '/planejamento', icon: ClipboardList },
   { title: 'Análises', url: '/analises', icon: BarChart3 },
+  { title: 'A pagar/receber', url: '/a-pagar-receber', icon: CalendarClock },
   { title: 'Dívidas', url: '/dividas', icon: Landmark },
   { title: 'Conciliação', url: '/conciliacao', icon: ListChecks },
   { title: 'Categorias', url: '/categorias', icon: FolderOpen },
