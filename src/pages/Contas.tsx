@@ -471,13 +471,16 @@ export default function ContasPage() {
                 onConfirm={() => deleteMutation.mutate()}
                 title={`Excluir "${editConta.nome}"?`}
                 description={
-                  countDelete === null
+                  // == null cobre null E undefined — o useQuery retorna
+                  // undefined enquanto a query nao respondeu, daí o crash
+                  // anterior com `=== null` chamando toLocaleString em undefined.
+                  countDelete == null
                     ? 'A conta/cartão e TODAS as transações ligadas a ela serão apagadas. Esta ação não pode ser desfeita.'
                     : countDelete === 0
                     ? 'A conta não tem transações vinculadas. Será apagada apenas a conta.'
                     : `Esta conta tem ${countDelete.toLocaleString('pt-BR')} transação${countDelete === 1 ? '' : 'ões'} vinculada${countDelete === 1 ? '' : 's'} que TAMBÉM serão apagadas. Esta ação não pode ser desfeita — considere editar o nome em vez de excluir, ou exportar via CSV antes.`
                 }
-                confirmLabel={countDelete && countDelete > 50 ? `Excluir conta + ${countDelete.toLocaleString('pt-BR')} transações` : 'Excluir conta'}
+                confirmLabel={countDelete != null && countDelete > 50 ? `Excluir conta + ${countDelete.toLocaleString('pt-BR')} transações` : 'Excluir conta'}
                 trigger={
                   <Button type="button" variant="outline" className="w-full text-destructive hover:text-destructive" disabled={deleteMutation.isPending}>
                     <Trash2 className="mr-2 h-4 w-4" />
