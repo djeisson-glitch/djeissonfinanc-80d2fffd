@@ -111,62 +111,92 @@ export function useFaturaAcumulada(cardIds: string[], billingMonth: string) {
           }
         }
 
-        // Sort periods chronologically
-        const sortedPeriods = Object.keys(byPeriod).sort();
+        // Sort periods chronologically — inclui também o billingMonth pra
+        // garantir histórico completo mesmo quando o mês corrente não tem
+        // movimentação ainda.
+        const todosPeriodos = new Set<string>([...Object.keys(byPeriod), ...Object.keys(totalInformado)]);
+        const sortedPeriods = Array.from(todosPeriodos).sort();
 
-        // Calculate running balance up to (but not including) current billing month
+        // ── REGRA DEFINITIVA DA FATURA ────────────────────────────────────
+        // O marcador do extrato é CUMULATIVO: já inclui saldo rolado +
+        // juros + parcelamentos dos meses anteriores embutidos no número.
+        // Pra evitar duplicação e ainda projetar meses sem extrato:
+        //
+        //   1. Procura o ÚLTIMO mês <= billingMonth que tem marcador (M).
+        //   2. Se acharmos M E M == billingMonth: o marcador do próprio
+        //      mês corrente já é a fatura líquida — saldoAnterior = 0,
+        //      valorFatura = marker, totalAPagar = marker − conciliado_M.
+        //   3. Se acharmos M < billingMonth: saldoAnterior parte do
+        //      marker_M − conciliado_M, e a gente SOMA mês a mês as
+        //      despesas brutas dos meses ENTRE M (exclusive) e billingMonth
+        //      (exclusive), abatidas das conciliações de cada um.
+        //   4. Se NÃO tem marker em nenhum mês <= billingMonth: cai no
+        //      cálculo bruto — soma despesas − conciliações de todos os
+        //      meses anteriores.
+        // Isso garante: marker substitui histórico, nunca soma POR CIMA.
+        const getFatura = (p: string) => totalInformado[p] != null
+          ? totalInformado[p]
+          : (byPeriod[p]?.despesas || 0);
+        const getConciliado = (p: string) => byPeriod[p]?.conciliado || 0;
+        const getPagamentos = (p: string) => byPeriod[p]?.pagamentos || 0;
+        const getDespesas = (p: string) => byPeriod[p]?.despesas || 0;
+
+        // Último mês ≤ billingMonth com marcador.
+        const ultimoMarker = sortedPeriods
+          .filter(p => p <= billingMonth && totalInformado[p] != null)
+          .pop();
+
         let saldoAnterior = 0;
-        const historico: FaturaMes[] = [];
-
-        for (const periodo of sortedPeriods) {
-          const { despesas, pagamentos } = byPeriod[periodo];
-          // Fatura do período = marcador do extrato quando há (líquido já com
-          // saldo rolado + juros embutidos do MP rotativo), senão soma bruta.
-          const temMarker = totalInformado[periodo] != null;
-          const faturaPeriodo = temMarker ? totalInformado[periodo] : despesas;
-          const saldo = faturaPeriodo - pagamentos;
-
-          historico.push({ periodo, despesas: faturaPeriodo, pagamentos, saldo });
-
-          if (periodo < billingMonth) {
-            // Marcador é CUMULATIVO: ele já reflete o saldo rolado dos meses
-            // anteriores embutido no número (MP rotativo coloca tudo no marker
-            // do mês). Se a gente somasse os meses anteriores POR CIMA do
-            // marker, contaria em dobro o que rolou. Então quando há marker
-            // num mês passado, ele substitui o acumulado (RESET).
-            // Sem marker: soma normal (mês isolado).
-            // Floor POR MÊS: sobrepagamento não vira crédito.
-            saldoAnterior = temMarker
-              ? Math.max(0, saldo)
-              : saldoAnterior + Math.max(0, saldo);
+        if (ultimoMarker && ultimoMarker < billingMonth) {
+          // Parte do saldo do último marker (já cumulativo até aquele mês)
+          // − conciliações posteriores ao fechamento daquele mês.
+          saldoAnterior = Math.max(0, totalInformado[ultimoMarker] - getConciliado(ultimoMarker));
+          // Soma meses ENTRE ultimoMarker (exclusive) e billingMonth (exclusive).
+          for (const periodo of sortedPeriods) {
+            if (periodo <= ultimoMarker) continue;
+            if (periodo >= billingMonth) break;
+            saldoAnterior += Math.max(0, getDespesas(periodo) - getConciliado(periodo));
+          }
+        } else if (!ultimoMarker) {
+          // Sem nenhum marker até o billingMonth → soma tudo bruto.
+          for (const periodo of sortedPeriods) {
+            if (periodo >= billingMonth) break;
+            saldoAnterior += Math.max(0, getDespesas(periodo) - getConciliado(periodo));
           }
         }
+        // (se ultimoMarker === billingMonth, saldoAnterior = 0 — marker do
+        //  mês corrente é a fatura líquida)
 
+        // Histórico (pra UI mostrar meses anteriores): usa fatura efetiva
+        // de cada mês (marker quando há, bruto caso contrário) e os pagamentos
+        // contabilizados daquele mês.
+        const historico: FaturaMes[] = sortedPeriods.map(periodo => {
+          const fatura = getFatura(periodo);
+          const pag = getPagamentos(periodo);
+          return { periodo, despesas: fatura, pagamentos: pag, saldo: fatura - pag };
+        });
+
+        const informado = totalInformado[billingMonth];
         const currentPeriod = byPeriod[billingMonth] || { despesas: 0, pagamentos: 0, conciliado: 0 };
 
-        // Se o extrato informou o "Total a pagar" deste período, ele MANDA: o
-        // a pagar = total informado − pagamentos CONCILIADOS (explícitos). As
-        // linhas de pagamento internas do extrato são ignoradas aqui porque o
-        // marcador já é o líquido do extrato (e elas caem na competência errada).
-        // Sem marcador, cai na acumulação antiga (saldoAnterior + mês − pago).
-        const informado = totalInformado[billingMonth];
-
+        // Total a pagar do mês corrente:
+        // - Com marker: marker − conciliações (marker já cobre saldo anterior).
+        // - Sem marker: saldoAnterior + despesas brutas − conciliações.
         const totalAPagar = informado != null
           ? Math.max(0, informado - currentPeriod.conciliado)
-          : saldoAnterior + currentPeriod.despesas - currentPeriod.pagamentos;
+          : saldoAnterior + currentPeriod.despesas - currentPeriod.conciliado;
 
         result[cardId] = {
           saldoAnterior: informado != null ? 0 : saldoAnterior,
           despesasMes: currentPeriod.despesas,
-          pagamentosMes: currentPeriod.pagamentos,
+          pagamentosMes: currentPeriod.conciliado, // só conciliado abate
           totalAPagar,
           historico: historico.filter(h => h.periodo <= billingMonth),
-          // "Valor da fatura" do período = marcador quando houver (Sicredi
-          // Black, Nubank, MP têm o "Total a pagar (informado pelo extrato)");
-          // senão usa o bruto somado. Mantém o número visível na UI mesmo
-          // quando a fatura já foi paga (despesasMes seria 0 em mês onde só
-          // tem pagamentos, escondendo o valor original).
-          valorFatura: informado != null ? informado : currentPeriod.despesas,
+          // Valor da fatura do mês corrente: marker manda quando há;
+          // senão saldoAnterior + despesas brutas (projeção do mês sem extrato).
+          valorFatura: informado != null
+            ? informado
+            : saldoAnterior + currentPeriod.despesas,
         };
       }
 
