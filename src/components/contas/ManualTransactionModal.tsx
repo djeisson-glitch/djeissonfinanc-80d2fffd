@@ -282,7 +282,7 @@ export function ManualTransactionModal({
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-3 gap-3">
             <div className="space-y-2">
               <Label>Valor (R$)</Label>
               <Input
@@ -304,135 +304,140 @@ export function ManualTransactionModal({
                 </SelectContent>
               </Select>
             </div>
+            <div className="space-y-2">
+              <Label>Data{isCredito ? ' da compra' : ''}</Label>
+              <Input
+                type="date"
+                value={data}
+                onChange={e => setData(e.target.value)}
+              />
+            </div>
           </div>
 
-          <div className="space-y-2">
-            <Label>Data{isCredito ? ' da compra' : ''}</Label>
-            <Input
-              type="date"
-              value={data}
-              onChange={e => setData(e.target.value)}
-            />
-          </div>
-
-          {defaultMesCompetencia && (
-            <p className="text-xs text-muted-foreground">
-              Competência: {defaultMesCompetencia}
-            </p>
-          )}
-
-          <div className="flex items-center gap-2">
-            <Checkbox
-              id="essencial"
-              checked={essencial}
-              onCheckedChange={(v) => setEssencial(!!v)}
-            />
-            <Label htmlFor="essencial" className="cursor-pointer text-sm font-normal">
-              Marcar como essencial
-            </Label>
-          </div>
-
-          <div className="space-y-3 rounded-lg border p-3">
+          <div className="flex items-center justify-between gap-3 flex-wrap">
             <div className="flex items-center gap-2">
               <Checkbox
-                id="recorrente"
-                checked={recorrente}
-                onCheckedChange={(v) => {
-                  const on = !!v;
-                  setRecorrente(on);
-                  if (on) setParcelado(false);
-                }}
-                disabled={parcelado}
+                id="essencial"
+                checked={essencial}
+                onCheckedChange={(v) => setEssencial(!!v)}
               />
-              <Label htmlFor="recorrente" className="cursor-pointer text-sm font-medium">
-                Repetir todos os meses
+              <Label htmlFor="essencial" className="cursor-pointer text-sm font-normal">
+                Marcar como essencial
               </Label>
             </div>
-            {recorrente && (
-              <div className="space-y-2">
-                <Label className="text-xs text-muted-foreground">Por quantos meses?</Label>
-                <Input
-                  type="number"
-                  min="1"
-                  max="60"
-                  value={meses}
-                  onChange={e => setMeses(e.target.value)}
-                  placeholder="12"
-                />
-                <p className="text-xs text-muted-foreground">
-                  Serão criados {Math.max(1, Math.min(60, parseInt(meses) || 1))} lançamentos
-                  iguais, um por mês a partir da data informada.
-                </p>
-              </div>
+            {defaultMesCompetencia && (
+              <p className="text-xs text-muted-foreground">
+                Competência: <strong>{defaultMesCompetencia}</strong>
+              </p>
             )}
           </div>
 
-          {/* Compra parcelada — só faz sentido em cartão de crédito.
-              Lança a parcela atual (X de Y) + projeta as Y-X parcelas
-              restantes automaticamente nos meses seguintes. */}
-          {isCredito && (
+          {/* Recorrente + Compra parcelada lado a lado quando AMBOS estão
+              fechados (em cartão). Quando um expande, ocupa a linha inteira
+              pra os campos internos respirarem. */}
+          <div className={`grid gap-3 ${isCredito && !recorrente && !parcelado ? 'grid-cols-2' : 'grid-cols-1'}`}>
             <div className="space-y-3 rounded-lg border p-3">
               <div className="flex items-center gap-2">
                 <Checkbox
-                  id="parcelado"
-                  checked={parcelado}
+                  id="recorrente"
+                  checked={recorrente}
                   onCheckedChange={(v) => {
                     const on = !!v;
-                    setParcelado(on);
-                    if (on) setRecorrente(false);
+                    setRecorrente(on);
+                    if (on) setParcelado(false);
                   }}
-                  disabled={recorrente}
+                  disabled={parcelado}
                 />
-                <Label htmlFor="parcelado" className="cursor-pointer text-sm font-medium">
-                  Compra parcelada
+                <Label htmlFor="recorrente" className="cursor-pointer text-sm font-medium">
+                  Repetir todos os meses
                 </Label>
               </div>
-              {parcelado && (
-                <div className="space-y-3">
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="space-y-1">
-                      <Label className="text-xs text-muted-foreground">Parcela atual</Label>
-                      <Input
-                        type="number"
-                        min="1"
-                        max={parcelaTotal || undefined}
-                        value={parcelaAtual}
-                        onChange={e => setParcelaAtual(e.target.value)}
-                        placeholder="6"
-                      />
-                    </div>
-                    <div className="space-y-1">
-                      <Label className="text-xs text-muted-foreground">Total de parcelas</Label>
-                      <Input
-                        type="number"
-                        min={parcelaAtual || '1'}
-                        value={parcelaTotal}
-                        onChange={e => setParcelaTotal(e.target.value)}
-                        placeholder="12"
-                      />
-                    </div>
-                  </div>
-                  {(() => {
-                    const a = Math.max(1, parseInt(parcelaAtual) || 1);
-                    const t = Math.max(a, parseInt(parcelaTotal) || a);
-                    const restantes = t - a;
-                    const v = Number(valor) || 0;
-                    return (
-                      <p className="text-xs text-muted-foreground">
-                        Lança a parcela <strong>{a}/{t}</strong> em {data}
-                        {restantes > 0 && (
-                          <> + projeta <strong>{restantes}</strong> parcela{restantes === 1 ? '' : 's'} ({a + 1}/{t} até {t}/{t}) nos meses seguintes</>
-                        )}.
-                        {v > 0 && t > a && (
-                          <> Total restante a pagar: <strong>{(v * (restantes + 1)).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</strong>.</>
-                        )}
-                      </p>
-                    );
-                  })()}
+              {recorrente && (
+                <div className="space-y-2">
+                  <Label className="text-xs text-muted-foreground">Por quantos meses?</Label>
+                  <Input
+                    type="number"
+                    min="1"
+                    max="60"
+                    value={meses}
+                    onChange={e => setMeses(e.target.value)}
+                    placeholder="12"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Serão criados {Math.max(1, Math.min(60, parseInt(meses) || 1))} lançamentos
+                    iguais, um por mês a partir da data informada.
+                  </p>
                 </div>
               )}
             </div>
-          )}
+
+            {/* Compra parcelada — só faz sentido em cartão de crédito.
+                Lança a parcela atual (X de Y) + projeta as Y-X parcelas
+                restantes automaticamente nos meses seguintes. */}
+            {isCredito && (
+              <div className="space-y-3 rounded-lg border p-3">
+                <div className="flex items-center gap-2">
+                  <Checkbox
+                    id="parcelado"
+                    checked={parcelado}
+                    onCheckedChange={(v) => {
+                      const on = !!v;
+                      setParcelado(on);
+                      if (on) setRecorrente(false);
+                    }}
+                    disabled={recorrente}
+                  />
+                  <Label htmlFor="parcelado" className="cursor-pointer text-sm font-medium">
+                    Compra parcelada
+                  </Label>
+                </div>
+                {parcelado && (
+                  <div className="space-y-3">
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="space-y-1">
+                        <Label className="text-xs text-muted-foreground">Parcela atual</Label>
+                        <Input
+                          type="number"
+                          min="1"
+                          max={parcelaTotal || undefined}
+                          value={parcelaAtual}
+                          onChange={e => setParcelaAtual(e.target.value)}
+                          placeholder="6"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-xs text-muted-foreground">Total de parcelas</Label>
+                        <Input
+                          type="number"
+                          min={parcelaAtual || '1'}
+                          value={parcelaTotal}
+                          onChange={e => setParcelaTotal(e.target.value)}
+                          placeholder="12"
+                        />
+                      </div>
+                    </div>
+                    {(() => {
+                      const a = Math.max(1, parseInt(parcelaAtual) || 1);
+                      const t = Math.max(a, parseInt(parcelaTotal) || a);
+                      const restantes = t - a;
+                      const v = Number(valor) || 0;
+                      return (
+                        <p className="text-xs text-muted-foreground">
+                          Lança a parcela <strong>{a}/{t}</strong> em {data}
+                          {restantes > 0 && (
+                            <> + projeta <strong>{restantes}</strong> parcela{restantes === 1 ? '' : 's'} ({a + 1}/{t} até {t}/{t}) nos meses seguintes</>
+                          )}.
+                          {v > 0 && t > a && (
+                            <> Total restante a pagar: <strong>{(v * (restantes + 1)).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</strong>.</>
+                          )}
+                        </p>
+                      );
+                    })()}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
 
           {/* Reembolso por outra pessoa — só faz sentido em despesa. Quando
               ligado, cria automaticamente uma receita vinculada com categoria
