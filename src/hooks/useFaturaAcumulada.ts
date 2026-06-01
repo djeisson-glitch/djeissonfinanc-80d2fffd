@@ -210,10 +210,12 @@ export function useFaturaAcumulada(cardIds: string[], billingMonth: string) {
             : currentPeriod.conciliado,
           totalAPagar,
           historico: historico.filter(h => h.periodo <= billingMonth),
-          // Valor da fatura: marker manda; senão projeta (saldoAnterior + bruto).
+          // Valor da fatura do MÊS isolado: marker quando há (já inclui tudo);
+          // senão só despesas brutas do mês — saldoAnterior é exibido em
+          // separado pra não dar impressão que o mês sozinho gerou o total.
           valorFatura: informado != null
             ? informado
-            : saldoAnterior + currentPeriod.despesas,
+            : currentPeriod.despesas,
         };
       }
 
