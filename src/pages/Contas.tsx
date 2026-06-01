@@ -150,11 +150,24 @@ export default function ContasPage() {
   const wipeTransacoesMutation = useMutation({
     mutationFn: async () => {
       if (!editConta) return;
-      // PASSO 1: zera reembolso_transacao_id em TODAS as transações que
-      // referenciam linhas que estamos prestes a deletar. A FK tem
-      // ON DELETE SET NULL; sem essa limpeza prévia, o Postgres tenta
-      // setar NULL numa linha que JÁ está marcada pra deletar (mesma
-      // operação) e joga "tuple to be deleted was already modified".
+      // Há um trigger BEFORE DELETE (tg_reembolso_cascade_delete) que:
+      //   Caso A: ao deletar despesa que tem reembolso_transacao_id, deleta a
+      //           receita pareada
+      //   Caso B: ao deletar receita, limpa campos reembolso_* da despesa que
+      //           apontava pra ela
+      // Em mass delete, esses cascades batem em linhas que JÁ estão na fila
+      // de delete → "tuple to be deleted was already modified".
+      //
+      // Fix: pré-limpar TODOS os vínculos de reembolso ANTES do delete.
+      // (1) zera reembolso_transacao_id NAS linhas do batch (mata Caso A)
+      // (2) zera reembolso_transacao_id em linhas FORA do batch que
+      //     referenciam linhas do batch (mata Caso B + a FK SET NULL).
+      await supabase
+        .from('transacoes')
+        .update({ reembolso_transacao_id: null, reembolso_pessoa: null, reembolso_valor: null })
+        .eq('user_id', user!.id)
+        .eq('conta_id', editConta.id);
+
       const { data: idsParaApagar } = await supabase
         .from('transacoes')
         .select('id')
@@ -164,11 +177,11 @@ export default function ContasPage() {
       if (ids.length > 0) {
         await supabase
           .from('transacoes')
-          .update({ reembolso_transacao_id: null })
+          .update({ reembolso_transacao_id: null, reembolso_pessoa: null, reembolso_valor: null })
           .eq('user_id', user!.id)
           .in('reembolso_transacao_id', ids);
       }
-      // PASSO 2: agora apaga sem conflito de cascade.
+      // PASSO 3: agora apaga sem conflito de cascade.
       const { error } = await supabase
         .from('transacoes')
         .delete()
@@ -198,8 +211,13 @@ export default function ContasPage() {
       if (!editConta) return;
       // Apaga as transações da conta primeiro (evita órfãs / violação de FK),
       // depois a própria conta. Ação destrutiva — protegida por ConfirmDelete.
-      // Mesma proteção contra "tuple already modified" do wipeTransacoesMutation:
-      // limpa reembolso_transacao_id antes do mass delete.
+      // Mesma proteção do wipeTransacoesMutation contra trigger de reembolso.
+      await supabase
+        .from('transacoes')
+        .update({ reembolso_transacao_id: null, reembolso_pessoa: null, reembolso_valor: null })
+        .eq('user_id', user!.id)
+        .eq('conta_id', editConta.id);
+
       const { data: idsParaApagar } = await supabase
         .from('transacoes')
         .select('id')
@@ -209,7 +227,7 @@ export default function ContasPage() {
       if (ids.length > 0) {
         await supabase
           .from('transacoes')
-          .update({ reembolso_transacao_id: null })
+          .update({ reembolso_transacao_id: null, reembolso_pessoa: null, reembolso_valor: null })
           .eq('user_id', user!.id)
           .in('reembolso_transacao_id', ids);
       }
