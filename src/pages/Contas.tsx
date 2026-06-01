@@ -220,16 +220,28 @@ export default function ContasPage() {
   };
 
   const openEdit = (conta: any) => {
-    setEditConta(conta);
-    setNome(conta.nome);
-    setTipo(conta.tipo);
-    setSaldoInicial(conta.saldo_inicial);
-    setDataAbertura(conta.data_abertura ? new Date(conta.data_abertura + 'T00:00:00') : new Date(2026, 0, 1));
-    setBanco(conta.banco || '');
-    setCodigoBanco(conta.codigo_banco || '');
-    setAgencia(conta.agencia || '');
-    setNumeroConta(conta.numero_conta || '');
-    setDialogOpen(true);
+    try {
+      setEditConta(conta);
+      setNome(conta.nome || '');
+      setTipo(conta.tipo || 'debito');
+      setSaldoInicial(Number(conta.saldo_inicial) || 0);
+      // Guard contra data inválida: se o parse retornar Invalid Date, o
+      // format() do date-fns joga erro e quebra o render (tela branca).
+      let parsedDate: Date = new Date();
+      if (conta.data_abertura) {
+        const candidate = new Date(conta.data_abertura + 'T00:00:00');
+        if (!isNaN(candidate.getTime())) parsedDate = candidate;
+      }
+      setDataAbertura(parsedDate);
+      setBanco(conta.banco || '');
+      setCodigoBanco(conta.codigo_banco || '');
+      setAgencia(conta.agencia || '');
+      setNumeroConta(conta.numero_conta || '');
+      setDialogOpen(true);
+    } catch (err: any) {
+      console.error('Erro ao abrir edit:', err, conta);
+      toast({ title: 'Erro ao abrir conta', description: String(err?.message || err).slice(0, 200), variant: 'destructive' });
+    }
   };
 
   return (

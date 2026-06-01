@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useNavigate, Outlet } from 'react-router-dom';
+import { useLocation, useNavigate, Outlet } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { AppSidebar } from '@/components/layout/AppSidebar';
@@ -7,10 +7,12 @@ import { AppHeader } from '@/components/layout/AppHeader';
 import { SidebarProvider } from '@/components/ui/sidebar';
 import { Skeleton } from '@/components/ui/skeleton';
 import { FloatingActionButton } from '@/components/layout/FloatingActionButton';
+import { ErrorBoundary } from '@/components/ErrorBoundary';
 
 export default function AppLayout() {
   const { user, loading: authLoading } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
   const [checkingOnboarding, setCheckingOnboarding] = useState(true);
 
   useEffect(() => {
@@ -55,7 +57,12 @@ export default function AppLayout() {
         <div className="flex-1 flex flex-col min-w-0">
           <AppHeader />
           <main className="flex-1 p-4 md:p-6 overflow-auto">
-            <Outlet />
+            {/* ErrorBoundary com key={pathname} reseta o erro a cada
+                troca de rota — assim um erro numa página não trava o
+                resto do app. */}
+            <ErrorBoundary key={location.pathname}>
+              <Outlet />
+            </ErrorBoundary>
           </main>
         </div>
         <FloatingActionButton />
