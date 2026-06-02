@@ -137,11 +137,12 @@ export default function DashboardPage() {
       let total = debitAccounts.reduce((s, c) => s + (c.saldo_inicial || 0), 0);
       const debitIds = debitAccounts.map(c => c.id);
       if (debitIds.length) {
-        // Single query across all debit accounts (no N+1). Include ALL transactions
-        // up to today for accurate balance (fatura payments are internal transfers
-        // but still move the bank balance). Future-dated entries are excluded.
-        const txs = await fetchAllRows<{ valor: number; tipo: string }>(() => supabase.from('transacoes').select('valor, tipo').in('conta_id', debitIds).eq('user_id', user!.id).eq('pago', true).neq('categoria', 'Saldo Inicial').lte('data', todayIso));
+        // Filtro pago=false client-side: resiliente se a coluna ainda não
+        // existe no banco (migration pendente). Server-side eq('pago', true)
+        // retornaria 0 linhas e zeraria o saldo silenciosamente.
+        const txs = await fetchAllRows<{ valor: number; tipo: string; pago?: boolean }>(() => supabase.from('transacoes').select('valor, tipo, pago').in('conta_id', debitIds).eq('user_id', user!.id).neq('categoria', 'Saldo Inicial').lte('data', todayIso));
         for (const t of txs) {
+          if (t.pago === false) continue; // pendente não conta
           total += t.tipo === 'receita' ? Number(t.valor) : -Number(t.valor);
         }
       }
@@ -165,15 +166,15 @@ export default function DashboardPage() {
       }, 0);
       const debitIds = debitAccounts.map(c => c.id);
       if (debitIds.length) {
-        const txs = await fetchAllRows<{ valor: number; tipo: string }>(() => supabase
+        const txs = await fetchAllRows<{ valor: number; tipo: string; pago?: boolean }>(() => supabase
           .from('transacoes')
-          .select('valor, tipo')
+          .select('valor, tipo, pago')
           .in('conta_id', debitIds)
           .eq('user_id', user!.id)
-          .eq('pago', true)
           .neq('categoria', 'Saldo Inicial')
           .lt('data', start));
         for (const t of txs) {
+          if (t.pago === false) continue;
           total += t.tipo === 'receita' ? Number(t.valor) : -Number(t.valor);
         }
       }

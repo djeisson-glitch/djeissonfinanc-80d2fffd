@@ -238,6 +238,8 @@ export function CsvImportDialog({ open, onOpenChange }: Props) {
       }
       queryClient.invalidateQueries({ queryKey: ["transacoes"] });
       queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+      queryClient.invalidateQueries({ queryKey: ["saldos"] });
+      queryClient.invalidateQueries({ queryKey: ["fatura-acumulada"] });
       queryClient.invalidateQueries({ queryKey: ["dividas-future"] });
       queryClient.invalidateQueries({ queryKey: ["dividas-parcelamentos"] });
       toast({ title: `${rows.length} parcelas do empréstimo ${loanDoc.contratoKey} lançadas` });
@@ -1116,6 +1118,8 @@ export function CsvImportDialog({ open, onOpenChange }: Props) {
       setDateCorrectMode(false);
       queryClient.invalidateQueries({ queryKey: ["transacoes"] });
       queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+      queryClient.invalidateQueries({ queryKey: ["saldos"] });
+      queryClient.invalidateQueries({ queryKey: ["fatura-acumulada"] });
     } catch (err) {
       console.error(err);
       toast({ title: "Erro ao corrigir datas", variant: "destructive" });
@@ -1430,6 +1434,8 @@ export function CsvImportDialog({ open, onOpenChange }: Props) {
 
       queryClient.invalidateQueries({ queryKey: ["transacoes"] });
       queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+      queryClient.invalidateQueries({ queryKey: ["saldos"] });
+      queryClient.invalidateQueries({ queryKey: ["fatura-acumulada"] });
     } catch (err) {
       console.error(err);
       toast({ title: "Erro ao importar duplicatas", variant: "destructive" });

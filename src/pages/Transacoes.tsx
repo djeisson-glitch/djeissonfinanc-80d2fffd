@@ -233,7 +233,9 @@ export default function TransacoesPage() {
     onSuccess: async (result) => {
       queryClient.invalidateQueries({ queryKey: ['transacoes'] });
       queryClient.invalidateQueries({ queryKey: ['dashboard'] });
+      queryClient.invalidateQueries({ queryKey: ['saldos'] });
       queryClient.invalidateQueries({ queryKey: ['fatura-acumulada'] });
+      queryClient.invalidateQueries({ queryKey: ['contas'] });
       const closedTxId = editingTx?.id;
       setEditingTx(null);
       toast({ title: 'Transação atualizada' });
@@ -287,6 +289,8 @@ export default function TransacoesPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['transacoes'] });
       queryClient.invalidateQueries({ queryKey: ['dashboard'] });
+      queryClient.invalidateQueries({ queryKey: ['saldos'] });
+      queryClient.invalidateQueries({ queryKey: ['fatura-acumulada'] });
       toast({ title: `${recatTransactions.length} transações recategorizadas para "${recatCategoria.nome}"` });
       setRecatOpen(false);
       setRecatTransactions([]);
@@ -321,8 +325,13 @@ export default function TransacoesPage() {
       if (delErr) throw delErr;
     },
     onSuccess: () => {
+      // Invalidar TUDO que depende de transações pra evitar tela estagnada
+      // após excluir. Saldos e faturas também recalculam.
       queryClient.invalidateQueries({ queryKey: ['transacoes'] });
       queryClient.invalidateQueries({ queryKey: ['dashboard'] });
+      queryClient.invalidateQueries({ queryKey: ['saldos'] });
+      queryClient.invalidateQueries({ queryKey: ['fatura-acumulada'] });
+      queryClient.invalidateQueries({ queryKey: ['contas'] });
       toast({ title: 'Transação excluída' });
     },
     onError: (e: any) => toast({
@@ -382,6 +391,9 @@ export default function TransacoesPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['transacoes'] });
       queryClient.invalidateQueries({ queryKey: ['dashboard'] });
+      queryClient.invalidateQueries({ queryKey: ['saldos'] });
+      queryClient.invalidateQueries({ queryKey: ['fatura-acumulada'] });
+      queryClient.invalidateQueries({ queryKey: ['contas'] });
     },
     onError: (e: any) => {
       toast({ title: 'Erro no reembolso', description: e?.message?.slice(0, 200), variant: 'destructive' });

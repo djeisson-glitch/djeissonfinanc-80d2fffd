@@ -66,20 +66,21 @@ export default function ContasPage() {
   const { data: saldos } = useQuery({
     queryKey: ['saldos', user?.id, todayIso],
     queryFn: async () => {
-      // Saldo REAL: só transações pago=true (modelo Mobills). Pendentes
-      // ficam como projeção, não afetam saldo atual da conta. Continuamos
-      // incluindo ignorar_dashboard (pagamento de fatura/transferência
-      // interna afeta saldo da conta mesmo sendo invisível no Dashboard).
-      const data = await fetchAllRows<{ conta_id: string; tipo: string; valor: number }>(() => supabase
+      // Filtro de pago é client-side pra ser resiliente: funciona se a coluna
+      // pago ainda não existe no banco (default true via migration) ou se
+      // existe. Server-side filter quebraria silenciosamente até migration
+      // rodar — saldo zera porque a query retorna vazio.
+      const data = await fetchAllRows<{ conta_id: string; tipo: string; valor: number; pago?: boolean }>(() => supabase
         .from('transacoes')
-        .select('conta_id, tipo, valor')
+        .select('conta_id, tipo, valor, pago')
         .eq('user_id', user!.id)
-        .eq('pago', true)
         .neq('categoria', 'Saldo Inicial')
         .lte('data', todayIso));
 
       const saldoPorConta: Record<string, number> = {};
       data.forEach(t => {
+        // pago === false = pendente, NÃO afeta saldo. Undefined ou true conta.
+        if (t.pago === false) return;
         if (!saldoPorConta[t.conta_id]) saldoPorConta[t.conta_id] = 0;
         if (t.tipo === 'receita') saldoPorConta[t.conta_id] += Number(t.valor);
         else saldoPorConta[t.conta_id] -= Number(t.valor);
