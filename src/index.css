@@ -14,70 +14,70 @@
 
 @layer base {
   :root {
-    /* ── LIGHT — cinza escuro graphite (vibe iOS 18 + macOS Sequoia)
-       Fundo não-branco: cinza profundo. Cards "liquid glass" flutuam
-       por cima com translucidez forte. */
-    --background: 220 12% 18%;
-    --foreground: 220 14% 96%;
+    /* ── Sistema monocromático — cinza puro neutro (zero saturação)
+       Toda a UI em escala de cinza; cor SÓ em accents semânticos
+       (primary, success, destructive, warning) e ainda assim com
+       moderação. Vibe Linear/Vercel/Apple system. */
+    --background: 0 0% 11%;
+    --foreground: 0 0% 96%;
 
-    --card: 220 14% 22%;
-    --card-foreground: 220 14% 96%;
+    --card: 0 0% 16%;
+    --card-foreground: 0 0% 96%;
 
-    --popover: 220 14% 22%;
-    --popover-foreground: 220 14% 96%;
+    --popover: 0 0% 18%;
+    --popover-foreground: 0 0% 96%;
 
-    /* Apple System Blue */
-    --primary: 211 100% 56%;
+    /* Único accent vibrante: System Blue (usar com parcimônia) */
+    --primary: 211 100% 58%;
     --primary-foreground: 0 0% 100%;
 
-    --secondary: 220 14% 26%;
-    --secondary-foreground: 220 14% 96%;
+    --secondary: 0 0% 20%;
+    --secondary-foreground: 0 0% 96%;
 
-    --muted: 220 14% 24%;
-    --muted-foreground: 220 9% 68%;
+    --muted: 0 0% 18%;
+    --muted-foreground: 0 0% 65%;
 
-    --accent: 211 100% 56%;
-    --accent-foreground: 0 0% 100%;
+    --accent: 0 0% 22%;
+    --accent-foreground: 0 0% 96%;
 
-    /* Apple System Red */
-    --destructive: 0 79% 60%;
+    /* System colors mantidos pra estados semânticos */
+    --destructive: 0 75% 58%;
     --destructive-foreground: 0 0% 100%;
 
-    /* Apple System Green */
-    --success: 142 71% 50%;
+    --success: 142 65% 48%;
     --success-foreground: 0 0% 100%;
 
-    /* Apple System Orange */
-    --warning: 28 100% 58%;
+    --warning: 28 95% 56%;
     --warning-foreground: 0 0% 100%;
 
-    --danger: 0 79% 60%;
+    --danger: 0 75% 58%;
     --danger-foreground: 0 0% 100%;
 
-    --border: 220 14% 30%;
-    --input: 220 14% 30%;
-    --ring: 211 100% 56%;
+    --border: 0 0% 22%;
+    --input: 0 0% 22%;
+    --ring: 211 100% 58%;
 
     --radius: 1rem;
 
-    --sidebar-background: 220 12% 14%;
-    --sidebar-foreground: 220 14% 96%;
-    --sidebar-primary: 211 100% 56%;
+    --sidebar-background: 0 0% 8%;
+    --sidebar-foreground: 0 0% 96%;
+    --sidebar-primary: 211 100% 58%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 220 14% 22%;
-    --sidebar-accent-foreground: 220 14% 96%;
-    --sidebar-border: 220 14% 22%;
-    --sidebar-ring: 211 100% 56%;
+    --sidebar-accent: 0 0% 14%;
+    --sidebar-accent-foreground: 0 0% 96%;
+    --sidebar-border: 0 0% 16%;
+    --sidebar-ring: 211 100% 58%;
 
-    /* Liquid glass material — alta translucidez, com highlight no topo */
-    --glass-bg: 220 14% 30% / 0.45;
-    --glass-border: 220 14% 80% / 0.18;
-    --glass-highlight: 0 0% 100% / 0.12;
+    /* Liquid glass — agora completamente acromático */
+    --glass-bg: 0 0% 24% / 0.5;
+    --glass-border: 0 0% 100% / 0.10;
+    --glass-highlight: 0 0% 100% / 0.10;
 
-    /* Mesh gradient stops sutis pro background graphite */
-    --mesh-1: 211 100% 45%;
-    --mesh-2: 280 60% 40%;
-    --mesh-3: 142 50% 35%;
+    /* Mesh gradient acromático — só pequenas variações de luminância
+       (gradient sutil de cinza, NÃO multicolorido) */
+    --mesh-1: 0 0% 25%;
+    --mesh-2: 0 0% 18%;
+    --mesh-3: 0 0% 12%;
   }
 
   .dark {
@@ -128,13 +128,14 @@
     --sidebar-border: 0 0% 14%;
     --sidebar-ring: 211 100% 58%;
 
-    --glass-bg: 0 0% 20% / 0.35;
-    --glass-border: 0 0% 100% / 0.12;
-    --glass-highlight: 0 0% 100% / 0.08;
+    --glass-bg: 0 0% 14% / 0.55;
+    --glass-border: 0 0% 100% / 0.08;
+    --glass-highlight: 0 0% 100% / 0.06;
 
-    --mesh-1: 211 100% 35%;
-    --mesh-2: 280 70% 28%;
-    --mesh-3: 142 50% 25%;
+    /* Mesh acromático no dark — sutis variações de luminância */
+    --mesh-1: 0 0% 14%;
+    --mesh-2: 0 0% 8%;
+    --mesh-3: 0 0% 5%;
   }
 }
 
@@ -152,13 +153,12 @@
     font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text',
       'Inter', system-ui, sans-serif;
     @apply text-foreground antialiased;
-    /* Fundo com mesh gradient sutil — vibe wallpaper macOS Sonoma.
-       Fixed pra não rolar com o conteúdo. */
+    /* Fundo monocromático — gradient sutil de cinza top→bottom,
+       apenas pra dar profundidade. Sem hue. */
     background-color: hsl(var(--background));
     background-image:
-      radial-gradient(at 0% 0%, hsl(var(--mesh-1) / 0.5) 0px, transparent 50%),
-      radial-gradient(at 100% 0%, hsl(var(--mesh-2) / 0.35) 0px, transparent 50%),
-      radial-gradient(at 50% 100%, hsl(var(--mesh-3) / 0.3) 0px, transparent 50%);
+      radial-gradient(ellipse at top, hsl(var(--mesh-1)) 0%, transparent 60%),
+      radial-gradient(ellipse at bottom, hsl(var(--mesh-3)) 0%, transparent 60%);
     background-attachment: fixed;
     background-size: 100% 100%;
     min-height: 100vh;
