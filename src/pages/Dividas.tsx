@@ -796,19 +796,19 @@ export default function DividasPage() {
                           key={String(row.mesFull)}
                           className={`border-b last:border-0 ${
                             isCurrentMonth
-                              ? 'bg-primary/5 font-medium'
+                              ? 'bg-white/5 font-medium'
                               : dropped
-                              ? 'bg-green-50 dark:bg-green-950/20'
+                              ? 'bg-success/10'
                               : ''
                           }`}
                         >
                           <td className="px-4 py-2.5">
-                            {row.mes}
+                            <span className="text-foreground">{row.mes}</span>
                             {isCurrentMonth && (
-                              <span className="ml-2 text-xs text-primary">(atual)</span>
+                              <span className="ml-2 text-xs text-muted-foreground">(atual)</span>
                             )}
                             {dropped && i > 0 && (
-                              <span className="ml-2 text-xs text-green-600">↓ alívio</span>
+                              <span className="ml-2 text-xs text-success">↓ alívio</span>
                             )}
                           </td>
                           {loanContracts.map(c => {

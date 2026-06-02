@@ -28,7 +28,7 @@ export function AnomaliesList({ anomalies, maxItems = 5 }: AnomaliesListProps) {
     <Card>
       <CardHeader className="pb-3">
         <CardTitle className="text-base flex items-center gap-2">
-          <AlertTriangle className="h-4 w-4 text-amber-600" />
+          <AlertTriangle className="h-4 w-4 text-warning" />
           Anomalias
         </CardTitle>
         <CardDescription>Gastos atípicos vs média da própria categoria</CardDescription>
@@ -44,17 +44,17 @@ export function AnomaliesList({ anomalies, maxItems = 5 }: AnomaliesListProps) {
                 type="button"
                 onClick={() => drillTo(a)}
                 aria-label={`Ver ${a.categoria} em ${a.mes}`}
-                className="flex items-start justify-between gap-3 rounded-md border border-amber-200/50 bg-amber-50 dark:bg-amber-950/20 p-2.5 w-full text-left hover:bg-amber-100/70 dark:hover:bg-amber-900/40 transition-colors"
+                className="flex items-start justify-between gap-3 rounded-xl border border-border bg-secondary/50 p-3 w-full text-left hover:bg-secondary transition-colors"
               >
                 <div className="min-w-0">
-                  <div className="text-sm font-medium truncate">{a.categoria}</div>
-                  <div className="text-xs text-muted-foreground">
+                  <div className="text-sm font-medium truncate text-foreground">{a.categoria}</div>
+                  <div className="text-xs text-muted-foreground tabular">
                     {a.mes} • média R$ {a.media.toFixed(0)}
                   </div>
                 </div>
                 <div className="text-right shrink-0">
-                  <div className="text-sm font-semibold">{formatCurrency(a.valor)}</div>
-                  <Badge variant="outline" className="text-xs mt-0.5 border-amber-300">
+                  <div className="text-sm font-semibold tabular text-foreground">{formatCurrency(a.valor)}</div>
+                  <Badge variant="outline" className="text-xs mt-0.5 border-warning/40 text-warning tabular">
                     +{formatCurrency(a.excesso)}
                   </Badge>
                 </div>
