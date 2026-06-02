@@ -23,7 +23,6 @@ import { useCategorias } from '@/hooks/useCategorias';
 import { parseSicrediCSV, normalizeDescription } from '@/lib/csv-parser';
 import { Progress } from '@/components/ui/progress';
 import { formatCurrency } from '@/lib/format';
-import { ConfirmDelete } from '@/components/ConfirmDelete';
 
 export default function ConfiguracoesPage() {
   const { user } = useAuth();
@@ -36,15 +35,6 @@ export default function ConfiguracoesPage() {
     queryFn: async () => {
       const { data } = await supabase.from('configuracoes').select('*').eq('user_id', user!.id).single();
       return data;
-    },
-    enabled: !!user,
-  });
-
-  const { data: regras } = useQuery({
-    queryKey: ['regras', user?.id],
-    queryFn: async () => {
-      const { data } = await supabase.from('regras_categorizacao').select('*').eq('user_id', user!.id).order('created_at', { ascending: false });
-      return data || [];
     },
     enabled: !!user,
   });
@@ -80,16 +70,6 @@ export default function ConfiguracoesPage() {
     },
   });
 
-  const deleteRuleMutation = useMutation({
-    mutationFn: async (id: string) => {
-      await supabase.from('regras_categorizacao').delete().eq('id', id);
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['regras'] });
-      toast({ title: 'Regra excluída' });
-    },
-  });
-
   const handleReset = async () => {
     if (!user || resetConfirm !== 'RESETAR') return;
     setResetting(true);
@@ -97,8 +77,9 @@ export default function ConfiguracoesPage() {
     try {
       // Delete all transactions
       await supabase.from('transacoes').delete().eq('user_id', user.id);
-      // Delete all categorization rules
-      await supabase.from('regras_categorizacao').delete().eq('user_id', user.id);
+      // Limpa resíduos da tabela legada regras_categorizacao (auto-aprendizado
+      // foi removido). Ignora erro silenciosamente — tabela pode ter sumido.
+      try { await supabase.from('regras_categorizacao').delete().eq('user_id', user.id); } catch {}
       // Delete config
       await supabase.from('configuracoes').delete().eq('user_id', user.id);
       // Reset saldo_inicial on all accounts
@@ -167,58 +148,6 @@ export default function ConfiguracoesPage() {
           <Button onClick={() => saveConfigMutation.mutate()}>
             <Save className="mr-2 h-4 w-4" /> Salvar
           </Button>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-lg">Regras de Categorização</CardTitle>
-        </CardHeader>
-        <CardContent className="p-0">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Padrão</TableHead>
-                <TableHead>Categoria</TableHead>
-                <TableHead>Essencial</TableHead>
-                <TableHead>Origem</TableHead>
-                <TableHead className="w-16">Ações</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {regras?.map(r => (
-                <TableRow key={r.id}>
-                  <TableCell className="text-sm">{r.padrao}</TableCell>
-                  <TableCell><Badge variant="outline">{r.categoria}</Badge></TableCell>
-                  <TableCell>{r.essencial ? '✓' : '✗'}</TableCell>
-                  <TableCell>
-                    <Badge variant={r.aprendido_auto ? 'secondary' : 'default'} className="text-xs">
-                      {r.aprendido_auto ? 'Auto' : 'Manual'}
-                    </Badge>
-                  </TableCell>
-                  <TableCell>
-                    <ConfirmDelete
-                      onConfirm={() => deleteRuleMutation.mutate(r.id)}
-                      title="Excluir regra?"
-                      description="A regra de categorização automática será removida. Esta ação não pode ser desfeita."
-                      trigger={
-                        <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive">
-                          <Trash2 className="h-3 w-3" />
-                        </Button>
-                      }
-                    />
-                  </TableCell>
-                </TableRow>
-              ))}
-              {(!regras || regras.length === 0) && (
-                <TableRow>
-                  <TableCell colSpan={5} className="text-center text-muted-foreground py-8">
-                    Nenhuma regra cadastrada
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
         </CardContent>
       </Card>
 
@@ -594,7 +523,6 @@ export default function ConfiguracoesPage() {
               <p className="text-sm font-semibold text-destructive">Será deletado:</p>
               <ul className="text-sm text-muted-foreground space-y-1 ml-4 list-disc">
                 <li>Todas as transações</li>
-                <li>Todas as regras de categorização</li>
                 <li>Configurações (receita mensal, reserva mínima)</li>
                 <li>Saldos iniciais das contas (volta pra R$ 0)</li>
               </ul>

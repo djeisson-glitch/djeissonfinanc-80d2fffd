@@ -24,6 +24,7 @@ import { CardFatura } from '@/components/CardFatura';
 import { fetchAllRows } from '@/lib/supabase-fetch';
 import { calcularSaldoTotal } from '@/lib/saldo';
 import { eRealizada, ePendente } from '@/lib/transacao-filters';
+import { useTransacoesMes } from '@/hooks/useTransacoesMes';
 
 export default function DashboardPage() {
   const { user } = useAuth();
@@ -51,33 +52,12 @@ export default function DashboardPage() {
 
   const billingMonth = `${year}-${String(month + 1).padStart(2, '0')}`;
 
-  const { data: transacoesMes, isLoading } = useQuery({
-    queryKey: ['dashboard', 'transacoes-mes', user?.id, start, end, billingMonth],
-    queryFn: async () => {
-      // Fetch transactions by mes_competencia (credit card billing period) AND by data range
-      // (for debit/cash transactions that don't have mes_competencia).
-      const byCompetencia = await fetchAllRows(() => supabase
-        .from('transacoes')
-        .select('*')
-        .eq('user_id', user!.id)
-        .eq('ignorar_dashboard', false)
-        .eq('mes_competencia', billingMonth));
-
-      const byDate = await fetchAllRows(() => supabase
-        .from('transacoes')
-        .select('*')
-        .eq('user_id', user!.id)
-        .eq('ignorar_dashboard', false)
-        .is('mes_competencia', null)
-        .gte('data', start)
-        .lte('data', end));
-
-      // Merge and deduplicate by id
-      const all = [...byCompetencia, ...byDate];
-      const seen = new Set<string>();
-      return all.filter(t => { if (seen.has(t.id)) return false; seen.add(t.id); return true; });
-    },
-    enabled: !!user,
+  // Transações do mês visíveis no Dashboard (exclui transferência interna e
+  // pagamento de fatura via ignorar_dashboard=false). Único caminho — query
+  // unificada em useTransacoesMes.
+  const { data: transacoesMes, isLoading } = useTransacoesMes(month, year, {
+    apenasVisivelDashboard: true,
+    cachePrefix: 'dashboard',
   });
 
   // Credit card invoice data
@@ -95,31 +75,30 @@ export default function DashboardPage() {
 
   const { data: faturaAcumulada } = useFaturaAcumulada(cardIds, billingMonth);
 
+  // Parcelas do ano todo — query separada porque cobre 12 meses, não cabe no
+  // useTransacoesMes (que é por mês). Mas usa o mesmo padrão de competência+data.
   const { data: parcelasAno } = useQuery({
     queryKey: ['dashboard', 'parcelas-ano', user?.id, year],
     queryFn: async () => {
-      // Use mes_competencia (billing period) when available, falling back to data (purchase date).
-      // For credit card transactions, mes_competencia is the correct field — data is the original
-      // purchase date which can be months/years before the billing period.
-      const withCompetencia = await fetchAllRows(() => supabase
-        .from('transacoes')
-        .select('*')
-        .eq('user_id', user!.id)
-        .eq('ignorar_dashboard', false)
-        .not('parcela_total', 'is', null)
-        .gte('mes_competencia', `${year}-01`)
-        .lte('mes_competencia', `${year}-12`));
-
-      const withoutCompetencia = await fetchAllRows(() => supabase
-        .from('transacoes')
-        .select('*')
-        .eq('user_id', user!.id)
-        .eq('ignorar_dashboard', false)
-        .not('parcela_total', 'is', null)
-        .is('mes_competencia', null)
-        .gte('data', `${year}-01-01`)
-        .lte('data', `${year}-12-31`));
-
+      const [withCompetencia, withoutCompetencia] = await Promise.all([
+        fetchAllRows(() => supabase
+          .from('transacoes')
+          .select('*')
+          .eq('user_id', user!.id)
+          .eq('ignorar_dashboard', false)
+          .not('parcela_total', 'is', null)
+          .gte('mes_competencia', `${year}-01`)
+          .lte('mes_competencia', `${year}-12`)),
+        fetchAllRows(() => supabase
+          .from('transacoes')
+          .select('*')
+          .eq('user_id', user!.id)
+          .eq('ignorar_dashboard', false)
+          .not('parcela_total', 'is', null)
+          .is('mes_competencia', null)
+          .gte('data', `${year}-01-01`)
+          .lte('data', `${year}-12-31`)),
+      ]);
       return [...withCompetencia, ...withoutCompetencia];
     },
     enabled: !!user,
@@ -195,32 +174,18 @@ export default function DashboardPage() {
   const mesAnterior = month === 0
     ? { month: 11, year: year - 1 }
     : { month: month - 1, year };
-  const rangeAnt = getMonthRange(mesAnterior.month, mesAnterior.year);
-  const billingMonthAnt = `${mesAnterior.year}-${String(mesAnterior.month + 1).padStart(2, '0')}`;
-  const { data: totaisMesAnt } = useQuery({
-    queryKey: ['dashboard', 'totais-mes-anterior', user?.id, rangeAnt.start, rangeAnt.end, billingMonthAnt],
-    queryFn: async () => {
-      const byCompetencia = await fetchAllRows<{ tipo: string; valor: number }>(() => supabase
-        .from('transacoes')
-        .select('tipo, valor')
-        .eq('user_id', user!.id)
-        .eq('ignorar_dashboard', false)
-        .eq('mes_competencia', billingMonthAnt));
-      const byDate = await fetchAllRows<{ tipo: string; valor: number }>(() => supabase
-        .from('transacoes')
-        .select('tipo, valor')
-        .eq('user_id', user!.id)
-        .eq('ignorar_dashboard', false)
-        .is('mes_competencia', null)
-        .gte('data', rangeAnt.start)
-        .lte('data', rangeAnt.end));
-      const all = [...byCompetencia, ...byDate];
-      const receitas = all.filter(t => t.tipo === 'receita').reduce((s, t) => s + Number(t.valor), 0);
-      const despesas = all.filter(t => t.tipo === 'despesa').reduce((s, t) => s + Number(t.valor), 0);
-      return { receitas, despesas };
-    },
-    enabled: !!user,
+  // Reusa o mesmo hook centralizado pro mês anterior — mesma regra de
+  // competência aplicada simétrica, sem risco de divergência.
+  const { data: txsMesAnt } = useTransacoesMes(mesAnterior.month, mesAnterior.year, {
+    apenasVisivelDashboard: true,
+    cachePrefix: 'dashboard-anterior',
   });
+  const totaisMesAnt = useMemo(() => {
+    if (!txsMesAnt) return { receitas: 0, despesas: 0 };
+    const receitas = txsMesAnt.filter(t => t.tipo === 'receita' && eRealizada(t)).reduce((s, t) => s + Number(t.valor), 0);
+    const despesas = txsMesAnt.filter(t => t.tipo === 'despesa' && eRealizada(t)).reduce((s, t) => s + Number(t.valor), 0);
+    return { receitas, despesas };
+  }, [txsMesAnt]);
   // Calcula variação % vs mês anterior. Null se não tem base de comparação.
   const variacao = (atual: number, anterior: number): number | null => {
     if (!anterior || anterior === 0) return null;

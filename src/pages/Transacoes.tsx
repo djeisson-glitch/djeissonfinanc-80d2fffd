@@ -22,7 +22,6 @@ import { ConfirmDelete } from '@/components/ConfirmDelete';
 import { Checkbox } from '@/components/ui/checkbox';
 import { exportCSV, copyToClipboard } from '@/lib/export';
 import { MonthSelector } from '@/components/MonthSelector';
-import { RecategorizarModal } from '@/components/transacoes/RecategorizarModal';
 
 export default function TransacoesPage() {
   const { user } = useAuth();
@@ -39,7 +38,6 @@ export default function TransacoesPage() {
   const [filterPessoa, setFilterPessoa] = useState('all');
   const [search, setSearch] = useState('');
   const [editingTx, setEditingTx] = useState<any>(null);
-  const [learnPattern, setLearnPattern] = useState(false);
   // Reembolso no editor — vincula uma RECEITA nova a esta DESPESA marcando que
   // outra pessoa vai pagar parte/total. Estado inicial sai da própria transação
   // (se já tem reembolso vinculado, o toggle vem ligado).
@@ -53,9 +51,6 @@ export default function TransacoesPage() {
   // ou 'all' (histórico inteiro). Útil pra caçar parcelas específicas no histórico.
   const [periodo, setPeriodo] = useState<'mes' | '12m' | 'all'>('mes');
   const [filterPago, setFilterPago] = useState<'all' | 'pago' | 'pendente'>('all');
-  const [recatTransactions, setRecatTransactions] = useState<any[]>([]);
-  const [recatCategoria, setRecatCategoria] = useState<{ nome: string; id: string | null; essencial: boolean }>({ nome: '', id: null, essencial: false });
-  const [recatOpen, setRecatOpen] = useState(false);
   const [groupBy, setGroupBy] = useState<'dia' | 'categoria' | 'parcelamento' | 'cartao'>('dia');
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
 
@@ -198,108 +193,32 @@ export default function TransacoesPage() {
 
   const updateMutation = useMutation({
     mutationFn: async (tx: { id: string; categoria: string; categoria_id: string | null; essencial: boolean; ignorar_dashboard: boolean }) => {
+      // Edição simples e direta — só atualiza esta transação. Sem auto-
+      // aprendizado, sem "aprender padrão", sem bulk-recategorizar similares.
+      // A complexidade anterior gerava bugs ("por que minha despesa virou
+      // Saúde sozinha?") sem ganho real — usuário categoriza uma por uma.
       const { error: upErr } = await supabase.from('transacoes').update({
         categoria: tx.categoria,
         categoria_id: tx.categoria_id,
         essencial: tx.essencial,
         ignorar_dashboard: tx.ignorar_dashboard,
       }).eq('id', tx.id);
-      // Antes o error era ignorado e o toast de sucesso aparecia mesmo após
-      // RLS/FK/rede falhar — usuário achava que salvou e não salvou nada.
       if (upErr) throw upErr;
-
-      let savedPattern: string | null = null;
-      if (learnPattern && editingTx) {
-        savedPattern = editingTx.descricao;
-        const { error: ruleErr } = await supabase.from('regras_categorizacao').insert({
-          user_id: user!.id,
-          padrao: editingTx.descricao,
-          categoria: tx.categoria,
-          categoria_id: tx.categoria_id,
-          essencial: tx.essencial,
-          aprendido_auto: false,
-        });
-        // Falha aqui não é fatal — a categoria foi salva, só a "regra aprendida"
-        // não. Loggamos pra debug mas mantemos sucesso.
-        if (ruleErr) console.warn('Regra de aprendizado não persistida:', ruleErr.message);
-      }
-      return { savedPattern, categoria: tx.categoria, categoria_id: tx.categoria_id, essencial: tx.essencial };
     },
     onError: (e: any) => toast({
       title: 'Erro ao atualizar transação',
       description: e?.message?.slice(0, 200),
       variant: 'destructive',
     }),
-    onSuccess: async (result) => {
-      queryClient.invalidateQueries({ queryKey: ['transacoes'] });
-      queryClient.invalidateQueries({ queryKey: ['dashboard'] });
-      queryClient.invalidateQueries({ queryKey: ['saldos'] });
-      queryClient.invalidateQueries({ queryKey: ['fatura-acumulada'] });
-      queryClient.invalidateQueries({ queryKey: ['contas'] });
-      const closedTxId = editingTx?.id;
-      setEditingTx(null);
-      toast({ title: 'Transação atualizada' });
-
-      if (result?.savedPattern && user) {
-        const pattern = result.savedPattern.toLowerCase();
-        const { data: outrosCat } = await supabase
-          .from('categorias')
-          .select('id')
-          .eq('user_id', user.id)
-          .eq('nome', 'Outros')
-          .is('parent_id', null)
-          .maybeSingle();
-
-        let query = supabase
-          .from('transacoes')
-          .select('id, data, descricao, valor, tipo, pessoa, categoria, categoria_id')
-          .eq('user_id', user.id)
-          .neq('id', closedTxId)
-          .ilike('descricao', `%${pattern}%`);
-
-        if (outrosCat?.id) {
-          query = query.or(`categoria.eq.Outros,categoria_id.eq.${outrosCat.id}`);
-        } else {
-          query = query.eq('categoria', 'Outros');
-        }
-
-        const { data: matching } = await query;
-        if (matching && matching.length > 0) {
-          setRecatTransactions(matching);
-          setRecatCategoria({ nome: result.categoria, id: result.categoria_id, essencial: result.essencial });
-          setRecatOpen(true);
-        }
-      }
-    },
-  });
-
-  const bulkRecategorizeMutation = useMutation({
-    mutationFn: async () => {
-      const ids = recatTransactions.map(t => t.id);
-      const updateData: any = {
-        categoria: recatCategoria.nome,
-        essencial: recatCategoria.essencial,
-        // Always sync categoria_id (null when the target has no id), otherwise the
-        // old categoria_id would linger and disagree with the new categoria string.
-        categoria_id: recatCategoria.id ?? null,
-      };
-      const { error: bulkErr } = await supabase.from('transacoes').update(updateData).in('id', ids);
-      if (bulkErr) throw bulkErr;
-    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['transacoes'] });
       queryClient.invalidateQueries({ queryKey: ['dashboard'] });
       queryClient.invalidateQueries({ queryKey: ['saldos'] });
       queryClient.invalidateQueries({ queryKey: ['fatura-acumulada'] });
-      toast({ title: `${recatTransactions.length} transações recategorizadas para "${recatCategoria.nome}"` });
-      setRecatOpen(false);
-      setRecatTransactions([]);
+      queryClient.invalidateQueries({ queryKey: ['contas'] });
+      setEditingTx(null);
+      toast({ title: 'Transação atualizada' });
     },
-    onError: (e: any) => toast({
-      title: 'Erro ao recategorizar em massa',
-      description: e?.message?.slice(0, 200),
-      variant: 'destructive',
-    }),
   });
 
   const deleteMutation = useMutation({
@@ -1179,13 +1098,6 @@ export default function TransacoesPage() {
                 </div>
               )}
 
-              <div className="flex items-start justify-between gap-3 rounded-lg border p-3 min-w-0">
-                <div className="min-w-0 flex-1">
-                  <p className="text-sm font-medium">Aprender padrão?</p>
-                  <p className="text-xs text-muted-foreground break-words">"{editingTx.descricao}" = "{editingTx.categoria}"</p>
-                </div>
-                <Switch checked={learnPattern} onCheckedChange={setLearnPattern} className="shrink-0" />
-              </div>
               <div className="flex gap-2">
                 <Button
                   className="flex-1"
@@ -1225,15 +1137,6 @@ export default function TransacoesPage() {
           )}
         </DialogContent>
       </Dialog>
-
-      <RecategorizarModal
-        open={recatOpen}
-        onOpenChange={setRecatOpen}
-        transactions={recatTransactions}
-        categoriaNome={recatCategoria.nome}
-        onConfirm={() => bulkRecategorizeMutation.mutate()}
-        loading={bulkRecategorizeMutation.isPending}
-      />
 
     </div>
   );

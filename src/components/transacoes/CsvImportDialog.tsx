@@ -608,7 +608,9 @@ export function CsvImportDialog({ open, onOpenChange }: Props) {
     currentUserId: string,
     resolvedConflicts?: ConflictMatch[],
   ): Promise<PreparedImportPlan> => {
-    const { data: rules } = await supabase.from("regras_categorizacao").select("*").eq("user_id", currentUserId);
+    // Regras de categorização foram removidas — o auto-aprendizado gerava
+    // bugs ("por que essa despesa virou Saúde sozinha?"). Categorização agora
+    // é só dictionary-based (auto-categorize) + manual via editor de transação.
     setProgress(20);
 
     const finalTransactions = applyDueDate(parsedTransactions);
@@ -645,19 +647,13 @@ export function CsvImportDialog({ open, onOpenChange }: Props) {
 
     for (const t of importableTransactions) {
       let categoria = "Outros";
-      let essencial = false;
-      
-      // 1. Check user-defined rules first
-      const matchedRule = rules?.find((r) => t.descricao.toLowerCase().includes(r.padrao.toLowerCase()));
-      if (matchedRule) {
-        categoria = matchedRule.categoria;
-        essencial = matchedRule.essencial;
-      } else {
-        // 2. Fall back to dictionary-based auto-categorization
-        const autoCategoria = autoCategorizarTransacao(t.descricao);
-        if (autoCategoria) {
-          categoria = autoCategoria;
-        }
+      const essencial = false;
+
+      // Dictionary-based auto-categorization (auto-categorize.ts). User
+      // recategoriza manualmente no editor — sem aprendizado automático.
+      const autoCategoria = autoCategorizarTransacao(t.descricao);
+      if (autoCategoria) {
+        categoria = autoCategoria;
       }
 
       const grupo_parcela = t.parcela_atual ? crypto.randomUUID() : null;
@@ -1387,16 +1383,10 @@ export function CsvImportDialog({ open, onOpenChange }: Props) {
     setForceImporting(true);
 
     try {
-      const { data: rules } = await supabase.from("regras_categorizacao").select("*").eq("user_id", user.id);
-
       const txs = items.map((item) => {
-        let categoria = "Outros";
-        let essencial = false;
-        const matchedRule = rules?.find((r) => item.descricao.toLowerCase().includes(r.padrao.toLowerCase()));
-        if (matchedRule) {
-          categoria = matchedRule.categoria;
-          essencial = matchedRule.essencial;
-        }
+        // Auto-categorização via dicionário; user ajusta no editor depois.
+        const categoria = autoCategorizarTransacao(item.descricao) || "Outros";
+        const essencial = false;
 
         return {
           user_id: user.id,
