@@ -11,7 +11,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useQueryClient, useQuery } from '@tanstack/react-query';
 import { generateHash } from '@/lib/csv-parser';
 import { autoCategorizarTransacao, isTransferenciaInterna } from '@/lib/auto-categorize';
-import { toLocalIso } from '@/lib/format';
+import { toLocalIso, getMonthName } from '@/lib/format';
 import { criarReembolsoVinculado } from '@/lib/reembolso';
 import { CompetenciaPicker } from '@/components/CompetenciaPicker';
 
