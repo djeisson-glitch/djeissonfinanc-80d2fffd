@@ -252,6 +252,39 @@
     pointer-events: none;
   }
 
+  /* SPOTLIGHT — efeito de glow que segue o cursor (estilo Vercel/Linear).
+     Usa CSS variables --mx/--my atualizadas via React onMouseMove.
+     O ::after fica invisível até o hover e revela um radial-gradient
+     centrado na posição do mouse. */
+  .spotlight {
+    position: relative;
+    overflow: hidden;
+  }
+  .spotlight::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background: radial-gradient(
+      circle 240px at var(--mx, 50%) var(--my, 50%),
+      hsl(0 0% 100% / 0.08),
+      transparent 50%
+    );
+    opacity: 0;
+    transition: opacity 400ms cubic-bezier(0.4, 0, 0.2, 1);
+    pointer-events: none;
+    z-index: 1;
+  }
+  .spotlight:hover::after {
+    opacity: 1;
+  }
+  /* O conteúdo do card precisa ficar acima do spotlight pra continuar
+     interativo e visível. */
+  .spotlight > * {
+    position: relative;
+    z-index: 2;
+  }
+
   /* Botão de pressão estilo iOS — escala leve no active */
   .tap {
     @apply transition-all duration-150 ease-out;

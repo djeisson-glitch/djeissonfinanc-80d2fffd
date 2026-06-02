@@ -2,18 +2,30 @@ import * as React from "react";
 
 import { cn } from "@/lib/utils";
 
-const Card = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(({ className, ...props }, ref) => (
-  // Liquid glass por padrão — translúcido, backdrop blur, highlight no topo.
-  // Pra override total (ex: card opaco), passar `bg-card` no className anula.
-  <div
-    ref={ref}
-    className={cn(
-      "liquid-glass liquid-glass-shine rounded-2xl text-card-foreground",
-      className,
-    )}
-    {...props}
-  />
-));
+const Card = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(
+  ({ className, onMouseMove, ...props }, ref) => {
+    // Spotlight glow que segue o cursor — atualiza CSS variables --mx/--my
+    // que o pseudo-element ::after usa como centro do radial-gradient.
+    // Funciona em TODO Card automaticamente. Performático (CSS-only render).
+    const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
+      const rect = e.currentTarget.getBoundingClientRect();
+      e.currentTarget.style.setProperty('--mx', `${e.clientX - rect.left}px`);
+      e.currentTarget.style.setProperty('--my', `${e.clientY - rect.top}px`);
+      onMouseMove?.(e);
+    };
+    return (
+      <div
+        ref={ref}
+        onMouseMove={handleMouseMove}
+        className={cn(
+          "liquid-glass liquid-glass-shine spotlight rounded-2xl text-card-foreground",
+          className,
+        )}
+        {...props}
+      />
+    );
+  }
+);
 Card.displayName = "Card";
 
 const CardHeader = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(
