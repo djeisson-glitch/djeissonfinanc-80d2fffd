@@ -15,6 +15,7 @@ import { AlertTriangle, BarChart3, ChevronDown, ChevronUp, CreditCard } from 'lu
 import { MonthSelector } from '@/components/MonthSelector';
 import { ParcelasTimeline } from '@/components/dashboard/ParcelasTimeline';
 import { FaturaDrawer } from '@/components/dashboard/FaturaDrawer';
+import { ProximosVencimentos } from '@/components/dashboard/ProximosVencimentos';
 import { ManualTransactionModal } from '@/components/contas/ManualTransactionModal';
 import { Button } from '@/components/ui/button';
 import { Plus } from 'lucide-react';
@@ -25,6 +26,7 @@ import { fetchAllRows } from '@/lib/supabase-fetch';
 import { calcularSaldoTotal } from '@/lib/saldo';
 import { eRealizada, ePendente } from '@/lib/transacao-filters';
 import { useTransacoesMes } from '@/hooks/useTransacoesMes';
+import { useVencimentos } from '@/hooks/useVencimentos';
 
 export default function DashboardPage() {
   const { user } = useAuth();
@@ -249,6 +251,15 @@ export default function DashboardPage() {
   const totalAPagar = (contasPR || []).filter((c: any) => c.tipo === 'pagar').reduce((s: number, c: any) => s + Number(c.valor), 0);
   const totalAReceber = (contasPR || []).filter((c: any) => c.tipo === 'receber').reduce((s: number, c: any) => s + Number(c.valor), 0);
 
+  // Vencimentos dos próximos 30 dias — usado pra calcular "Disponível pra
+  // gastar hoje". Mesmo hook que alimenta o widget abaixo (React Query
+  // dedup garante 1 round-trip só, não 2).
+  const { impacto: impactoVenc } = useVencimentos(30);
+  // "Disponível pra gastar hoje" = saldo atual − despesas pendentes próximas
+  // + receitas pendentes próximas. Mostra o quanto sobra se TUDO previsto
+  // (pendentes + contas a pagar/receber) rolar nos próximos 30 dias.
+  const disponivelHoje = (saldoAtual || 0) + impactoVenc.impactoLiquido;
+
   // Disponível no mês = saldo anterior + receitas REALIZADAS - despesas REALIZADAS.
   // MESMA definição da página Análises (antes o Dashboard somava a receber e
   // subtraía a pagar, dando um número diferente sob o mesmo rótulo). "A pagar"/"a
@@ -312,16 +323,22 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* HERO — saldo atual em destaque (vibe Agrilo/Apple Wallet) */}
+      {/* HERO — "Disponível pra gastar hoje" como headline (resposta direta à
+          pergunta-âncora). Saldo atual fica em pill secundária. */}
       <Card className="overflow-hidden">
         <CardContent className="p-8 md:p-10">
           <div className="flex flex-wrap items-end justify-between gap-6">
             <div className="space-y-2">
-              <p className="text-sm text-muted-foreground uppercase tracking-wider">Saldo atual</p>
-              <p className={`num-hero text-5xl md:text-7xl ${(saldoAtual || 0) >= 0 ? 'text-primary' : 'text-destructive'}`}>
-                {formatCurrency(saldoAtual || 0)}
+              <p className="text-sm text-muted-foreground uppercase tracking-wider">Disponível pra gastar</p>
+              <p className={`num-hero text-5xl md:text-7xl ${disponivelHoje >= 0 ? 'text-primary' : 'text-destructive'}`}>
+                {formatCurrency(disponivelHoje)}
               </p>
-              <p className="text-sm text-muted-foreground">Todas as suas contas</p>
+              <p className="text-sm text-muted-foreground">
+                Saldo atual de <span className="tabular font-medium text-foreground">{formatCurrency(saldoAtual || 0)}</span>
+                {impactoVenc.impactoLiquido !== 0 && (
+                  <> {impactoVenc.impactoLiquido < 0 ? '−' : '+'} {formatCurrency(Math.abs(impactoVenc.impactoLiquido))} previstos em 30d</>
+                )}
+              </p>
             </div>
             <div className="flex flex-wrap gap-3">
               <button
@@ -416,6 +433,10 @@ export default function DashboardPage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Próximos vencimentos — widget que responde "o que sai/cai nos
+          próximos dias?". Inclui transações pendentes + contas_pagar_receber. */}
+      <ProximosVencimentos saldoAtual={saldoAtual ?? undefined} />
 
       {/* Credit Card Invoices */}
       {creditCards.length > 0 && (
