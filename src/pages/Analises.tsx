@@ -6,6 +6,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useTodayIso } from '@/hooks/useTodayIso';
 import { useTransacoes12m } from '@/hooks/useTransacoes12m';
 import { fetchAllRows } from '@/lib/supabase-fetch';
+import { calcularSaldoTotal } from '@/lib/saldo';
 import { useFontesReceita } from '@/hooks/useFontesReceita';
 import { MonthSelector } from '@/components/MonthSelector';
 import { Card, CardContent } from '@/components/ui/card';
@@ -76,31 +77,29 @@ export default function AnalisesPage() {
   // pra evitar refetch ao trocar de tab (cache 2min).
   const { data: allTransactions, isLoading } = useTransacoes12m();
 
-  // Saldo atual — visão de bolso.
+  // Saldo atual — usa lib/saldo (single source). Antes Análises tinha cálculo
+  // próprio que não filtrava pago=false nem ignorava categoria Saldo Inicial
+  // direito — divergia do Dashboard e da página Contas.
   const { data: saldoAtual } = useQuery({
     queryKey: ['analises', 'saldo-total', user?.id, todayIso],
     queryFn: async () => {
       const { data: contasList } = await supabase
         .from('contas')
-        .select('id, saldo_inicial, tipo')
+        .select('id, saldo_inicial, tipo, data_abertura')
         .eq('user_id', user!.id);
       if (!contasList?.length) return 0;
       const debitAccounts = contasList.filter((c) => c.tipo === 'debito');
-      let total = debitAccounts.reduce((s, c) => s + (c.saldo_inicial || 0), 0);
       const ids = debitAccounts.map((c) => c.id);
-      if (ids.length) {
-        const txs = await fetchAllRows<{ valor: number; tipo: string }>(() =>
-          supabase
-            .from('transacoes')
-            .select('valor, tipo')
-            .in('conta_id', ids)
-            .eq('user_id', user!.id)
-            .neq('categoria', 'Saldo Inicial')
-            .lte('data', todayIso),
-        );
-        for (const t of txs) total += t.tipo === 'receita' ? Number(t.valor) : -Number(t.valor);
-      }
-      return total;
+      if (!ids.length) return debitAccounts.reduce((s, c) => s + (c.saldo_inicial || 0), 0);
+      const txs = await fetchAllRows<{ conta_id: string; valor: number; tipo: string; pago?: boolean; categoria?: string; ignorar_dashboard?: boolean }>(() =>
+        supabase
+          .from('transacoes')
+          .select('conta_id, valor, tipo, pago, categoria, ignorar_dashboard')
+          .in('conta_id', ids)
+          .eq('user_id', user!.id)
+          .lte('data', todayIso),
+      );
+      return calcularSaldoTotal(debitAccounts, txs);
     },
     enabled: !!user,
   });

@@ -24,7 +24,6 @@ const ProjecoesPage = lazy(() => import("@/pages/Projecoes"));
 const PlanejamentoPage = lazy(() => import("@/pages/Planejamento"));
 const AnalisesPage = lazy(() => import("@/pages/Analises"));
 const DividasPage = lazy(() => import("@/pages/Dividas"));
-const ConciliacaoPage = lazy(() => import("@/pages/Conciliacao"));
 const ContasPagarReceberPage = lazy(() => import("@/pages/ContasPagarReceber"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 
@@ -60,7 +59,6 @@ const App = () => (
               <Route path="/planejamento" element={<Suspense fallback={<RouteFallback />}><PlanejamentoPage /></Suspense>} />
               <Route path="/analises" element={<Suspense fallback={<RouteFallback />}><AnalisesPage /></Suspense>} />
               <Route path="/dividas" element={<Suspense fallback={<RouteFallback />}><DividasPage /></Suspense>} />
-              <Route path="/conciliacao" element={<Suspense fallback={<RouteFallback />}><ConciliacaoPage /></Suspense>} />
               <Route path="/a-pagar-receber" element={<Suspense fallback={<RouteFallback />}><ContasPagarReceberPage /></Suspense>} />
             </Route>
             <Route path="*" element={<Suspense fallback={<RouteFallback />}><NotFound /></Suspense>} />

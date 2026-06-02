@@ -10,7 +10,6 @@ import {
   ClipboardList,
   BarChart3,
   Landmark,
-  ListChecks,
   CalendarClock,
 } from 'lucide-react';
 import { NavLink } from '@/components/NavLink';
@@ -38,7 +37,6 @@ const items = [
   { title: 'Análises', url: '/analises', icon: BarChart3 },
   { title: 'A pagar/receber', url: '/a-pagar-receber', icon: CalendarClock },
   { title: 'Dívidas', url: '/dividas', icon: Landmark },
-  { title: 'Conciliação', url: '/conciliacao', icon: ListChecks },
   { title: 'Categorias', url: '/categorias', icon: FolderOpen },
   { title: 'Configurações', url: '/configuracoes', icon: Settings },
 ];
