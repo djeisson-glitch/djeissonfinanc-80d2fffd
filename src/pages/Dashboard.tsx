@@ -251,14 +251,14 @@ export default function DashboardPage() {
   }
 
   return (
-    <div className="space-y-6 animate-fade-in">
+    <div className="space-y-8 animate-fade-in">
       <div className="flex items-center justify-between flex-wrap gap-2">
-        <h1 className="text-2xl font-bold">Dashboard</h1>
+        <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
         <div className="flex items-center gap-2">
           <Button
             size="sm"
             onClick={() => setManualOpen(true)}
-            className="gap-1"
+            className="gap-1.5 rounded-full"
           >
             <Plus className="h-4 w-4" />
             Novo Lançamento
@@ -267,56 +267,81 @@ export default function DashboardPage() {
         </div>
       </div>
 
+      {/* HERO — saldo atual em destaque (vibe Agrilo/Apple Wallet) */}
+      <Card className="overflow-hidden">
+        <CardContent className="p-8 md:p-10">
+          <div className="flex flex-wrap items-end justify-between gap-6">
+            <div className="space-y-2">
+              <p className="text-sm text-muted-foreground uppercase tracking-wider">Saldo atual</p>
+              <p className={`num-hero text-5xl md:text-7xl ${(saldoAtual || 0) >= 0 ? 'text-primary' : 'text-destructive'}`}>
+                {formatCurrency(saldoAtual || 0)}
+              </p>
+              <p className="text-sm text-muted-foreground">Todas as suas contas</p>
+            </div>
+            <div className="flex flex-wrap gap-3">
+              <button
+                onClick={() => navigate('/transacoes?tipo=receita')}
+                className="pill"
+              >
+                <span className="h-2 w-2 rounded-full bg-primary" />
+                <span className="text-xs text-muted-foreground">Receitas</span>
+                <span className="text-sm font-semibold tabular">{formatCurrency(totalReceitas)}</span>
+              </button>
+              <button
+                onClick={() => navigate('/transacoes?tipo=despesa')}
+                className="pill"
+              >
+                <span className="h-2 w-2 rounded-full bg-destructive" />
+                <span className="text-xs text-muted-foreground">Despesas</span>
+                <span className="text-sm font-semibold tabular">{formatCurrency(totalDespesas)}</span>
+              </button>
+              {(totalAPagar > 0 || totalAReceber > 0) && (
+                <button
+                  onClick={() => navigate('/a-pagar-receber')}
+                  className="pill"
+                >
+                  <span className="h-2 w-2 rounded-full bg-warning" />
+                  <span className="text-xs text-muted-foreground">Pendências</span>
+                  <span className="text-sm font-semibold tabular">{formatCurrency(totalAPagar + totalAReceber)}</span>
+                </button>
+              )}
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <Card className="cursor-pointer hover:bg-muted/50 transition-colors" onClick={() => navigate('/transacoes?tipo=receita')}>
-          <CardContent className="p-4">
-            <p className="text-sm text-muted-foreground">Receitas do Mês</p>
-            <p className="text-2xl font-bold text-success">{formatCurrency(totalReceitas)}</p>
-            <p className="text-xs text-muted-foreground">{transacoesMes?.filter(t => t.tipo === 'receita').length || 0} transações</p>
-          </CardContent>
-        </Card>
-        <Card className="cursor-pointer hover:bg-muted/50 transition-colors" onClick={() => navigate('/transacoes?tipo=despesa')}>
-          <CardContent className="p-4">
-            <p className="text-sm text-muted-foreground">Despesas</p>
-            <p className="text-2xl font-bold text-destructive">{formatCurrency(totalDespesas)}</p>
-            <p className="text-xs text-muted-foreground">{percentGasto.toFixed(1)}% da receita</p>
-            <Progress value={Math.min(percentGasto, 100)} className="mt-2" />
+      {/* Métricas secundárias em grid de 3 */}
+      <div className="grid gap-4 md:grid-cols-3">
+        <Card className="cursor-pointer hover:bg-muted/30 transition-colors group" onClick={() => navigate('/transacoes?tipo=despesa')}>
+          <CardContent className="p-6">
+            <p className="text-xs text-muted-foreground uppercase tracking-wider mb-2">Gastos do mês</p>
+            <p className="num-display text-3xl md:text-4xl text-foreground">{formatCurrency(totalDespesas)}</p>
+            <div className="mt-3 space-y-1.5">
+              <div className="flex justify-between text-xs text-muted-foreground">
+                <span>{percentGasto.toFixed(0)}% da receita</span>
+                <span className="tabular">{formatCurrency(totalReceitas)} entr.</span>
+              </div>
+              <Progress value={Math.min(percentGasto, 100)} className="h-1.5" />
+            </div>
           </CardContent>
         </Card>
         <Card>
-          <CardContent className="p-4">
-            <p className="text-sm text-muted-foreground">Saldo Atual</p>
-            <p className={`text-2xl font-bold ${(saldoAtual || 0) >= 0 ? 'text-success' : 'text-destructive'}`}>
-              {formatCurrency(saldoAtual || 0)}
-            </p>
-            <p className="text-xs text-muted-foreground">Todas as contas</p>
-          </CardContent>
-        </Card>
-        <Card className="cursor-pointer hover:bg-muted/50 transition-colors" onClick={() => navigate('/planejamento')}>
-          <CardContent className="p-4">
-            <p className="text-sm text-muted-foreground">Disponível no Mês</p>
-            <p className={`text-2xl font-bold ${disponivel >= 0 ? 'text-success' : 'text-destructive'}`}>
+          <CardContent className="p-6">
+            <p className="text-xs text-muted-foreground uppercase tracking-wider mb-2">Disponível no mês</p>
+            <p className={`num-display text-3xl md:text-4xl ${disponivel >= 0 ? 'text-primary' : 'text-destructive'}`}>
               {formatCurrency(disponivel)}
             </p>
-            <p className="text-xs text-muted-foreground">
-              {(saldoAnterior || 0) >= 0 ? '+' : ''}{formatCurrency(saldoAnterior || 0)} anterior
-              {/* "A pagar / a receber" linkam pra página dedicada de gestão. Antes
-                  o número aparecia mas o user não tinha onde clicar pra gerenciar. */}
-              {(totalAPagar > 0 || totalAReceber > 0) && (
-                <>
-                  {' · '}
-                  <button
-                    type="button"
-                    onClick={(e) => { e.stopPropagation(); navigate('/a-pagar-receber'); }}
-                    className="underline-offset-2 hover:underline text-foreground/70"
-                  >
-                    {totalAPagar > 0 && `${formatCurrency(totalAPagar)} a pagar`}
-                    {totalAPagar > 0 && totalAReceber > 0 && ' · '}
-                    {totalAReceber > 0 && `${formatCurrency(totalAReceber)} a receber`}
-                  </button>
-                </>
-              )}
+            <p className="mt-3 text-xs text-muted-foreground">
+              {(saldoAnterior || 0) >= 0 ? '+' : ''}{formatCurrency(saldoAnterior || 0)} do mês anterior
+            </p>
+          </CardContent>
+        </Card>
+        <Card className="cursor-pointer hover:bg-muted/30 transition-colors" onClick={() => navigate('/transacoes')}>
+          <CardContent className="p-6">
+            <p className="text-xs text-muted-foreground uppercase tracking-wider mb-2">Transações</p>
+            <p className="num-display text-3xl md:text-4xl text-foreground">{transacoesMes?.length || 0}</p>
+            <p className="mt-3 text-xs text-muted-foreground">
+              {transacoesMes?.filter(t => t.tipo === 'receita').length || 0} entradas · {transacoesMes?.filter(t => t.tipo === 'despesa').length || 0} saídas
             </p>
           </CardContent>
         </Card>
