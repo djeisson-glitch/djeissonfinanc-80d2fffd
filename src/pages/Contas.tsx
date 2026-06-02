@@ -334,7 +334,7 @@ export default function ContasPage() {
           const status = isCredito ? getInvoiceStatus(faturaTotal, pagamentoTotal) : null;
 
           return (
-            <Card key={conta.id} className="cursor-pointer hover:shadow-md transition-shadow" onClick={() => openEdit(conta)}>
+            <Card key={conta.id} className="cursor-pointer hover-lift" onClick={() => openEdit(conta)}>
               <CardContent className="p-4">
                 <div className="flex items-center justify-between mb-3">
                   <div className="flex items-center gap-2">

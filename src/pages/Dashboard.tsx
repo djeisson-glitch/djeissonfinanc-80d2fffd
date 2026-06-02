@@ -312,7 +312,7 @@ export default function DashboardPage() {
 
       {/* Métricas secundárias em grid de 3 */}
       <div className="grid gap-4 md:grid-cols-3">
-        <Card className="cursor-pointer hover:bg-muted/30 transition-colors group" onClick={() => navigate('/transacoes?tipo=despesa')}>
+        <Card className="cursor-pointer hover-lift group" onClick={() => navigate('/transacoes?tipo=despesa')}>
           <CardContent className="p-6">
             <p className="text-xs text-muted-foreground uppercase tracking-wider mb-2">Gastos do mês</p>
             <p className="num-display text-3xl md:text-4xl text-foreground">{formatCurrency(totalDespesas)}</p>
@@ -336,7 +336,7 @@ export default function DashboardPage() {
             </p>
           </CardContent>
         </Card>
-        <Card className="cursor-pointer hover:bg-muted/30 transition-colors" onClick={() => navigate('/transacoes')}>
+        <Card className="cursor-pointer hover-lift" onClick={() => navigate('/transacoes')}>
           <CardContent className="p-6">
             <p className="text-xs text-muted-foreground uppercase tracking-wider mb-2">Transações</p>
             <p className="num-display text-3xl md:text-4xl text-foreground">{transacoesMes?.length || 0}</p>
@@ -374,7 +374,7 @@ export default function DashboardPage() {
                   : { label: 'Em aberto', emoji: '🔴', color: '#ef4444' };
 
             return (
-              <Card key={card.id} className="cursor-pointer hover:bg-muted/50 transition-colors" onClick={() => setFaturaDrawer({ open: true, cardId: card.id, cardName: card.nome })}>
+              <Card key={card.id} className="cursor-pointer hover-lift" onClick={() => setFaturaDrawer({ open: true, cardId: card.id, cardName: card.nome })}>
                 <CardContent className="p-4">
                   <div className="flex items-center gap-2 mb-2">
                     <CreditCard className="h-4 w-4 text-muted-foreground" />

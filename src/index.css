@@ -14,16 +14,16 @@
 
 @layer base {
   :root {
-    /* ── Sistema monocromático preto + accent neon (Agrilo/Orion style)
-       Fundo preto puro. Cards um tom acima pra hierarquia. Accent ÚNICO
-       (verde lima neon) reservado pra dados protagonistas. */
-    --background: 0 0% 4%;
+    /* ── Sistema monocromático cinza escuro respirável + accent neon
+       Foi preto puro — pesado. Subiu pra cinza grafite (HSL 0 0% 11%).
+       Cards um pouco acima (16%) pra contraste suave. */
+    --background: 0 0% 11%;
     --foreground: 0 0% 98%;
 
-    --card: 0 0% 8%;
+    --card: 0 0% 16%;
     --card-foreground: 0 0% 98%;
 
-    --popover: 0 0% 10%;
+    --popover: 0 0% 18%;
     --popover-foreground: 0 0% 98%;
 
     /* Primary = accent neon (verde lima vibrante) — protagonista visual,
@@ -31,76 +31,76 @@
     --primary: 75 100% 60%;
     --primary-foreground: 0 0% 5%;
 
-    --secondary: 0 0% 12%;
+    --secondary: 0 0% 20%;
     --secondary-foreground: 0 0% 98%;
 
-    --muted: 0 0% 10%;
-    --muted-foreground: 0 0% 58%;
+    --muted: 0 0% 18%;
+    --muted-foreground: 0 0% 65%;
 
     --accent: 75 100% 60%;
-    --accent-foreground: 0 0% 5%;
+    --accent-foreground: 0 0% 8%;
 
     --destructive: 0 75% 60%;
     --destructive-foreground: 0 0% 100%;
 
     --success: 75 100% 55%;
-    --success-foreground: 0 0% 5%;
+    --success-foreground: 0 0% 8%;
 
     --warning: 38 100% 58%;
-    --warning-foreground: 0 0% 5%;
+    --warning-foreground: 0 0% 8%;
 
     --danger: 0 75% 60%;
     --danger-foreground: 0 0% 100%;
 
-    --border: 0 0% 14%;
-    --input: 0 0% 14%;
+    --border: 0 0% 22%;
+    --input: 0 0% 22%;
     --ring: 75 100% 60%;
 
     /* Cantos generosos — vibe Agrilo (rounded-3xl padrão) */
     --radius: 1.5rem;
 
-    --sidebar-background: 0 0% 3%;
+    --sidebar-background: 0 0% 8%;
     --sidebar-foreground: 0 0% 98%;
     --sidebar-primary: 75 100% 60%;
-    --sidebar-primary-foreground: 0 0% 5%;
-    --sidebar-accent: 0 0% 10%;
+    --sidebar-primary-foreground: 0 0% 8%;
+    --sidebar-accent: 0 0% 16%;
     --sidebar-accent-foreground: 0 0% 98%;
-    --sidebar-border: 0 0% 12%;
+    --sidebar-border: 0 0% 18%;
     --sidebar-ring: 75 100% 60%;
 
-    /* Liquid glass sobre fundo preto — quase sem transparência mas com blur */
-    --glass-bg: 0 0% 12% / 0.6;
-    --glass-border: 0 0% 100% / 0.06;
-    --glass-highlight: 0 0% 100% / 0.05;
+    /* Liquid glass sobre cinza escuro — translucido com blur */
+    --glass-bg: 0 0% 20% / 0.55;
+    --glass-border: 0 0% 100% / 0.08;
+    --glass-highlight: 0 0% 100% / 0.06;
 
-    /* Mesh: variações ultra sutis de preto/cinza pra dar profundidade */
-    --mesh-1: 0 0% 10%;
-    --mesh-2: 0 0% 6%;
-    --mesh-3: 0 0% 3%;
+    /* Mesh: variações sutis de cinza pra dar profundidade */
+    --mesh-1: 0 0% 16%;
+    --mesh-2: 0 0% 12%;
+    --mesh-3: 0 0% 9%;
   }
 
   .dark {
-    /* ── DARK = root (sistema sempre preto). Mantido por compat. */
-    --background: 0 0% 4%;
+    /* ── DARK = root (sistema cinza grafite). Mantido por compat. */
+    --background: 0 0% 11%;
     --foreground: 0 0% 98%;
 
-    --card: 0 0% 8%;
+    --card: 0 0% 16%;
     --card-foreground: 0 0% 98%;
 
-    --popover: 0 0% 10%;
+    --popover: 0 0% 18%;
     --popover-foreground: 0 0% 98%;
 
     --primary: 75 100% 60%;
-    --primary-foreground: 0 0% 5%;
+    --primary-foreground: 0 0% 8%;
 
-    --secondary: 0 0% 12%;
+    --secondary: 0 0% 20%;
     --secondary-foreground: 0 0% 98%;
 
-    --muted: 0 0% 10%;
-    --muted-foreground: 0 0% 58%;
+    --muted: 0 0% 18%;
+    --muted-foreground: 0 0% 65%;
 
     --accent: 75 100% 60%;
-    --accent-foreground: 0 0% 5%;
+    --accent-foreground: 0 0% 8%;
 
     --destructive: 0 75% 60%;
     --destructive-foreground: 0 0% 100%;
@@ -152,8 +152,6 @@
     font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text',
       'Inter', system-ui, sans-serif;
     @apply text-foreground antialiased;
-    /* Fundo monocromático — gradient sutil de cinza top→bottom,
-       apenas pra dar profundidade. Sem hue. */
     background-color: hsl(var(--background));
     background-image:
       radial-gradient(ellipse at top, hsl(var(--mesh-1)) 0%, transparent 60%),
@@ -164,6 +162,26 @@
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     letter-spacing: -0.01em;
+  }
+
+  /* Microanimações globais — todo elemento interativo tem transição.
+     Curva Apple-ish. Mantém duração curta (150-200ms) pra não cansar. */
+  button,
+  a,
+  [role="button"],
+  [data-radix-collection-item] {
+    transition: transform 200ms cubic-bezier(0.4, 0, 0.2, 1),
+                background-color 200ms cubic-bezier(0.4, 0, 0.2, 1),
+                border-color 200ms cubic-bezier(0.4, 0, 0.2, 1),
+                color 200ms cubic-bezier(0.4, 0, 0.2, 1),
+                box-shadow 200ms cubic-bezier(0.4, 0, 0.2, 1),
+                opacity 200ms cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  /* Tap scale estilo iOS — botões "afundam" sutilmente quando pressionados */
+  button:active,
+  [role="button"]:active {
+    transform: scale(0.97);
   }
 
   /* Headers com letter-spacing apertado (estilo SF Pro Display) */
@@ -280,7 +298,7 @@
       0 0 40px hsl(var(--primary) / 0.1);
   }
 
-  /* Pill horizontal estilo imagem 4 — capsula com avatar+texto+meta */
+  /* Pill horizontal — capsula com avatar+texto+meta */
   .pill {
     display: inline-flex;
     align-items: center;
@@ -291,12 +309,60 @@
     border: 1px solid hsl(var(--border));
     backdrop-filter: blur(8px);
     -webkit-backdrop-filter: blur(8px);
-    transition: all 150ms ease-out;
+    transition: all 200ms cubic-bezier(0.4, 0, 0.2, 1);
   }
   .pill:hover {
     background-color: hsl(var(--secondary));
     border-color: hsl(var(--border) / 1.5);
+    transform: translateY(-1px);
   }
+  .pill:active {
+    transform: translateY(0) scale(0.98);
+  }
+
+  /* Card hoverable — lift sutil ao passar o mouse.
+     Aplique a className="hover-lift" em Card pra ativar. */
+  .hover-lift {
+    transition: transform 250ms cubic-bezier(0.4, 0, 0.2, 1),
+                box-shadow 250ms cubic-bezier(0.4, 0, 0.2, 1),
+                border-color 250ms cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  .hover-lift:hover {
+    transform: translateY(-2px);
+    border-color: hsl(var(--border) / 1.5);
+  }
+  .hover-lift:active {
+    transform: translateY(0) scale(0.99);
+  }
+}
+
+@layer utilities {
+  /* Animação de entrada de página — fade + slide-up sutil. Aplicar em
+     containers raiz das páginas via class="page-enter". */
+  .page-enter {
+    animation: page-enter 350ms cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  @keyframes page-enter {
+    from {
+      opacity: 0;
+      transform: translateY(8px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  /* Animação de entrada em sequência (stagger) — para grids de cards. */
+  .stagger-enter > * {
+    animation: page-enter 400ms cubic-bezier(0.4, 0, 0.2, 1) backwards;
+  }
+  .stagger-enter > *:nth-child(1) { animation-delay: 0ms; }
+  .stagger-enter > *:nth-child(2) { animation-delay: 60ms; }
+  .stagger-enter > *:nth-child(3) { animation-delay: 120ms; }
+  .stagger-enter > *:nth-child(4) { animation-delay: 180ms; }
+  .stagger-enter > *:nth-child(5) { animation-delay: 240ms; }
+  .stagger-enter > *:nth-child(6) { animation-delay: 300ms; }
 }
 
 @layer utilities {

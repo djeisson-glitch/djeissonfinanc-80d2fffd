@@ -58,10 +58,12 @@ export default function AppLayout() {
           <AppHeader />
           <main className="flex-1 p-4 md:p-6 overflow-auto">
             {/* ErrorBoundary com key={pathname} reseta o erro a cada
-                troca de rota — assim um erro numa página não trava o
-                resto do app. */}
+                troca de rota. key também dispara a animação page-enter
+                ao mudar de rota (React re-cria o nó). */}
             <ErrorBoundary key={location.pathname}>
-              <Outlet />
+              <div className="page-enter">
+                <Outlet />
+              </div>
             </ErrorBoundary>
           </main>
         </div>
