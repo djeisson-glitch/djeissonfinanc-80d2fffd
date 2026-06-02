@@ -50,6 +50,15 @@ export function ManualTransactionModal({
   const [parcelado, setParcelado] = useState(false);
   const [parcelaAtual, setParcelaAtual] = useState('1');
   const [parcelaTotal, setParcelaTotal] = useState('12');
+  // Mês de competência da fatura (YYYY-MM). Default = passa por prop ou mês corrente.
+  // SEMPRE manda quando é cartão de crédito — substitui o cálculo baseado em
+  // data da compra (que tipicamente não é o mês da fatura).
+  const defaultCompYM = (() => {
+    if (defaultMesCompetencia) return defaultMesCompetencia;
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+  })();
+  const [mesCompetencia, setMesCompetencia] = useState<string>(defaultCompYM);
   const [submitting, setSubmitting] = useState(false);
   // Reembolso por outra pessoa — só faz sentido quando tipo='despesa'.
   // Quando ligado, criamos uma receita vinculada com categoria='Reembolsos'.
@@ -113,10 +122,16 @@ export function ManualTransactionModal({
         const d = new Date(baseDate);
         d.setMonth(d.getMonth() + i);
         const isoDate = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+        // mes_competencia pra cartão: parte do mês escolhido pelo user (não
+        // da data da compra) e incrementa i meses. Assim "Parcela 1/4 da
+        // fatura de janeiro" cai em janeiro, 2/4 em fev, etc — mesmo que a
+        // compra tenha sido em 12/12 do ano anterior.
         const mesComp = isCredito
-          ? (defaultMesCompetencia && i === 0
-              ? defaultMesCompetencia
-              : `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`)
+          ? (() => {
+              const [y, m] = mesCompetencia.split('-').map(Number);
+              const dt = new Date(y, m - 1 + i, 1);
+              return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}`;
+            })()
           : null;
 
         // Número da parcela: i=0 → pAtual, i=1 → pAtual+1, etc.
@@ -234,6 +249,7 @@ export function ManualTransactionModal({
       setParcelado(false);
       setParcelaAtual('1');
       setParcelaTotal('12');
+      setMesCompetencia(defaultCompYM);
       setReembolsoOn(false);
       setReembolsoPessoa('');
       setReembolsoValor('');
@@ -314,22 +330,33 @@ export function ManualTransactionModal({
             </div>
           </div>
 
-          <div className="flex items-center justify-between gap-3 flex-wrap">
-            <div className="flex items-center gap-2">
-              <Checkbox
-                id="essencial"
-                checked={essencial}
-                onCheckedChange={(v) => setEssencial(!!v)}
+          {/* Quando é cartão de crédito: campo pra escolher em qual fatura
+              (mês de competência) o lançamento vai cair. SOBRESCREVE a data
+              da compra pra fins de "em qual fatura aparece". Util pra parcelas
+              de compras antigas que estão caindo em faturas futuras. */}
+          {isCredito && (
+            <div className="space-y-2">
+              <Label>Competência da fatura</Label>
+              <Input
+                type="month"
+                value={mesCompetencia}
+                onChange={e => setMesCompetencia(e.target.value)}
               />
-              <Label htmlFor="essencial" className="cursor-pointer text-sm font-normal">
-                Marcar como essencial
-              </Label>
-            </div>
-            {defaultMesCompetencia && (
               <p className="text-xs text-muted-foreground">
-                Competência: <strong>{defaultMesCompetencia}</strong>
+                A 1ª parcela cai nessa fatura. Parcelas seguintes incrementam mês a mês a partir daqui.
               </p>
-            )}
+            </div>
+          )}
+
+          <div className="flex items-center gap-2">
+            <Checkbox
+              id="essencial"
+              checked={essencial}
+              onCheckedChange={(v) => setEssencial(!!v)}
+            />
+            <Label htmlFor="essencial" className="cursor-pointer text-sm font-normal">
+              Marcar como essencial
+            </Label>
           </div>
 
           {/* Recorrente + Compra parcelada lado a lado quando AMBOS estão
@@ -423,7 +450,7 @@ export function ManualTransactionModal({
                       const v = Number(valor) || 0;
                       return (
                         <p className="text-xs text-muted-foreground">
-                          Lança a parcela <strong>{a}/{t}</strong> em {data}
+                          Lança a parcela <strong>{a}/{t}</strong> na fatura de <strong>{mesCompetencia}</strong>
                           {restantes > 0 && (
                             <> + projeta <strong>{restantes}</strong> parcela{restantes === 1 ? '' : 's'} ({a + 1}/{t} até {t}/{t}) nos meses seguintes</>
                           )}.
