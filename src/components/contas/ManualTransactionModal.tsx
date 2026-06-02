@@ -13,6 +13,7 @@ import { generateHash } from '@/lib/csv-parser';
 import { autoCategorizarTransacao, isTransferenciaInterna } from '@/lib/auto-categorize';
 import { toLocalIso } from '@/lib/format';
 import { criarReembolsoVinculado } from '@/lib/reembolso';
+import { CompetenciaPicker } from '@/components/CompetenciaPicker';
 
 interface Props {
   open: boolean;
@@ -337,13 +338,9 @@ export function ManualTransactionModal({
           {isCredito && (
             <div className="space-y-2">
               <Label>Competência da fatura</Label>
-              <Input
-                type="month"
-                value={mesCompetencia}
-                onChange={e => setMesCompetencia(e.target.value)}
-              />
+              <CompetenciaPicker value={mesCompetencia} onChange={setMesCompetencia} />
               <p className="text-xs text-muted-foreground">
-                A 1ª parcela cai nessa fatura. Parcelas seguintes incrementam mês a mês a partir daqui.
+                A 1ª parcela cai nessa fatura. Use as setas pra navegar mês a mês ou clique no nome pra abrir o seletor.
               </p>
             </div>
           )}
@@ -450,7 +447,7 @@ export function ManualTransactionModal({
                       const v = Number(valor) || 0;
                       return (
                         <p className="text-xs text-muted-foreground">
-                          Lança a parcela <strong>{a}/{t}</strong> na fatura de <strong>{mesCompetencia}</strong>
+                          Lança a parcela <strong>{a}/{t}</strong> na fatura de <strong>{(() => { const [y, m] = mesCompetencia.split('-').map(Number); return `${getMonthName(m - 1)}/${y}`; })()}</strong>
                           {restantes > 0 && (
                             <> + projeta <strong>{restantes}</strong> parcela{restantes === 1 ? '' : 's'} ({a + 1}/{t} até {t}/{t}) nos meses seguintes</>
                           )}.
