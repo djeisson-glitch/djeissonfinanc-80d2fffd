@@ -41,6 +41,11 @@ export interface CriarReembolsoArgs {
  *   - despesa NÃO tem reembolso prévio (idempotência — quem quer trocar deve
  *     chamar `removerReembolso` antes)
  *   - valor do reembolso ≤ valor da despesa
+ *
+ * IMPORTANTE: a receita criada nasce com `pago=false` (pendente). Reembolso é
+ * promessa da outra pessoa pagar — quando ela transferir, o usuário marca a
+ * receita como "Já recebi" no editor e ela vira receita realizada que entra
+ * no saldo. Antes nascia paga e inflava o saldo prematuramente.
  */
 export async function criarReembolsoVinculado(args: CriarReembolsoArgs): Promise<string> {
   const { data, error } = await supabase.rpc('criar_reembolso', {
@@ -49,6 +54,7 @@ export async function criarReembolsoVinculado(args: CriarReembolsoArgs): Promise
     p_pessoa: args.pessoa,
     p_valor: args.valor,
     p_pessoa_titular: args.pessoaTitular,
+    p_pago: false, // sempre nasce pendente — confirma com toggle no editor
   });
 
   if (error) {

@@ -257,7 +257,14 @@ export default function DashboardPage() {
   // receber" continuam como contexto informativo no subtítulo, mas não entram no
   // headline — "disponível" é o que já se realizou, não a projeção de fim de mês.
   const disponivel = (saldoAnterior || 0) + totalReceitas - totalDespesas;
-  const percentGasto = totalReceitas > 0 ? (totalDespesas / totalReceitas) * 100 : (totalDespesas > 0 ? 100 : 0);
+  // Totais REAIS pro mês: somando realizado + previsto. O card "Gastos do mês"
+  // tem que enxergar o que JÁ pagou + o que VAI pagar (parcelas futuras,
+  // contas pendentes). Antes mostrava só realizado e escondia compromisso.
+  const totalDespesasComPrev = totalDespesas + totalDespesasPendentes;
+  const totalReceitasComPrev = totalReceitas + totalReceitasPendentes;
+  const percentGasto = totalReceitasComPrev > 0
+    ? (totalDespesasComPrev / totalReceitasComPrev) * 100
+    : (totalDespesasComPrev > 0 ? 100 : 0);
 
   const categorias = transacoesMes
     ?.filter(t => t.tipo === 'despesa')
@@ -413,11 +420,16 @@ export default function DashboardPage() {
         <Card className="cursor-pointer hover-lift group" onClick={() => navigate('/transacoes?tipo=despesa')}>
           <CardContent className="p-6">
             <p className="text-xs text-muted-foreground uppercase tracking-wider mb-2">Gastos do mês</p>
-            <p className="num-display text-3xl md:text-4xl text-foreground">{formatCurrency(totalDespesas)}</p>
+            <p className="num-display text-3xl md:text-4xl text-foreground">{formatCurrency(totalDespesasComPrev)}</p>
+            {totalDespesasPendentes > 0 && (
+              <p className="text-[11px] text-muted-foreground tabular mt-1">
+                {formatCurrency(totalDespesas)} pago · +{formatCurrency(totalDespesasPendentes)} previsto
+              </p>
+            )}
             <div className="mt-3 space-y-1.5">
               <div className="flex justify-between text-xs text-muted-foreground">
                 <span>{percentGasto.toFixed(0)}% da receita</span>
-                <span className="tabular">{formatCurrency(totalReceitas)} entr.</span>
+                <span className="tabular">{formatCurrency(totalReceitasComPrev)} entr.</span>
               </div>
               <Progress value={Math.min(percentGasto, 100)} className="h-1.5" />
             </div>
