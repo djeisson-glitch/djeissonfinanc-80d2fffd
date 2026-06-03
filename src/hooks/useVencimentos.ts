@@ -31,7 +31,7 @@ export function useVencimentos(ateNDias = 30) {
   }, [todayIso]);
 
   // Pendentes em transações. Filtra pago=false client-side pra resiliência.
-  const { data: txsPendentes } = useQuery({
+  const { data: txsPendentes, isLoading: loadingTxs, isError: errorTxs } = useQuery({
     queryKey: ['vencimentos', 'transacoes', user?.id, inicioRange, fimRange],
     queryFn: async () => {
       const data = await fetchAllRows<{ id: string; descricao: string; valor: number; tipo: string; data: string; categoria: string | null; pago: boolean | null }>(
@@ -47,17 +47,18 @@ export function useVencimentos(ateNDias = 30) {
     enabled: !!user,
   });
 
-  const { data: cprPendentes } = useQuery({
+  const { data: cprPendentes, isLoading: loadingCpr, isError: errorCpr } = useQuery({
     queryKey: ['vencimentos', 'cpr', user?.id, inicioRange, fimRange],
     queryFn: async () => {
-      const { data } = await supabase
+      // fetchAllRows pra evitar truncar em 1000 linhas se user tiver muitos
+      // boletos/assinaturas geradas em batch.
+      return await fetchAllRows<{ id: string; descricao: string; valor: number; tipo: string; data_vencimento: string | null; categoria: string | null; pago: boolean }>(() => supabase
         .from('contas_pagar_receber')
         .select('id, descricao, valor, tipo, data_vencimento, categoria, pago')
         .eq('user_id', user!.id)
         .eq('pago', false)
         .gte('data_vencimento', inicioRange)
-        .lte('data_vencimento', fimRange);
-      return data || [];
+        .lte('data_vencimento', fimRange));
     },
     enabled: !!user,
   });
@@ -69,5 +70,13 @@ export function useVencimentos(ateNDias = 30) {
 
   const impacto = useMemo(() => calcularImpactoVencimentos(vencimentos), [vencimentos]);
 
-  return { vencimentos, impacto, isLoading: !txsPendentes || !cprPendentes };
+  return {
+    vencimentos,
+    impacto,
+    // Loading real: alguma query ainda em flight.
+    isLoading: loadingTxs || loadingCpr,
+    // Erro real: alguma query falhou. Componentes podem mostrar fallback
+    // em vez de fingir que tá tudo em dia.
+    isError: errorTxs || errorCpr,
+  };
 }

@@ -5,7 +5,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useTodayIso } from '@/hooks/useTodayIso';
 import { getMonthRange, formatCurrency, getMonthName } from '@/lib/format';
-import { CATEGORIAS_CONFIG, getCategoriaColor } from '@/types/database.types';
+import { getCategoriaColor } from '@/types/database.types';
 import { useCategorias } from '@/hooks/useCategorias';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -31,7 +31,7 @@ import { useVencimentos } from '@/hooks/useVencimentos';
 export default function DashboardPage() {
   const { user } = useAuth();
   const navigate = useNavigate();
-  const { getParentForCategoria, getCategoriaById, getColor: getCatColor } = useCategorias();
+  const { getParentForCategoria } = useCategorias();
   const now = new Date();
   const [month, setMonth] = useState(now.getMonth());
   const [year, setYear] = useState(now.getFullYear());
@@ -115,10 +115,13 @@ export default function DashboardPage() {
     queryKey: ['dashboard', 'saldo-total', user?.id, todayIso],
     queryFn: async () => {
       const { data: contasList } = await supabase.from('contas').select('id, saldo_inicial, tipo, data_abertura').eq('user_id', user!.id);
-      if (!contasList?.length) return 0;
+      if (!contasList?.length) return null; // user sem nenhuma conta — Hero mostra guidance
       const debitAccounts = contasList.filter(c => c.tipo === 'debito');
+      // Sem conta débito = não dá pra calcular "saldo bancário". Retorna null
+      // pra Hero exibir CTA "Cadastre uma conta corrente" em vez de R$ 0,00
+      // (que engana quem só tem cartões cadastrados).
+      if (!debitAccounts.length) return null;
       const debitIds = debitAccounts.map(c => c.id);
-      if (!debitIds.length) return debitAccounts.reduce((s, c) => s + (c.saldo_inicial || 0), 0);
       const txs = await fetchAllRows<{ conta_id: string; valor: number; tipo: string; pago?: boolean; categoria?: string; ignorar_dashboard?: boolean }>(() => supabase
         .from('transacoes')
         .select('conta_id, valor, tipo, pago, categoria, ignorar_dashboard')
@@ -256,9 +259,10 @@ export default function DashboardPage() {
   // dedup garante 1 round-trip só, não 2).
   const { impacto: impactoVenc } = useVencimentos(30);
   // "Disponível pra gastar hoje" = saldo atual − despesas pendentes próximas
-  // + receitas pendentes próximas. Mostra o quanto sobra se TUDO previsto
-  // (pendentes + contas a pagar/receber) rolar nos próximos 30 dias.
-  const disponivelHoje = (saldoAtual || 0) + impactoVenc.impactoLiquido;
+  // + receitas pendentes próximas. Quando saldoAtual é null (sem conta
+  // débito) NÃO calcula — Hero mostra CTA em vez disso.
+  const disponivelHoje = saldoAtual != null ? saldoAtual + impactoVenc.impactoLiquido : null;
+  const semContaDebito = saldoAtual === null;
 
   // Disponível no mês = saldo anterior + receitas REALIZADAS - despesas REALIZADAS.
   // MESMA definição da página Análises (antes o Dashboard somava a receber e
@@ -324,21 +328,41 @@ export default function DashboardPage() {
       </div>
 
       {/* HERO — "Disponível pra gastar hoje" como headline (resposta direta à
-          pergunta-âncora). Saldo atual fica em pill secundária. */}
+          pergunta-âncora). Saldo atual fica em pill secundária.
+          Se user não cadastrou conta corrente, mostra CTA em vez de R$ 0,00. */}
       <Card className="overflow-hidden">
         <CardContent className="p-8 md:p-10">
           <div className="flex flex-wrap items-end justify-between gap-6">
             <div className="space-y-2">
-              <p className="text-sm text-muted-foreground uppercase tracking-wider">Disponível pra gastar</p>
-              <p className={`num-hero text-5xl md:text-7xl ${disponivelHoje >= 0 ? 'text-primary' : 'text-destructive'}`}>
-                {formatCurrency(disponivelHoje)}
-              </p>
-              <p className="text-sm text-muted-foreground">
-                Saldo atual de <span className="tabular font-medium text-foreground">{formatCurrency(saldoAtual || 0)}</span>
-                {impactoVenc.impactoLiquido !== 0 && (
-                  <> {impactoVenc.impactoLiquido < 0 ? '−' : '+'} {formatCurrency(Math.abs(impactoVenc.impactoLiquido))} previstos em 30d</>
-                )}
-              </p>
+              {semContaDebito ? (
+                <>
+                  <p className="text-sm text-muted-foreground uppercase tracking-wider">Saldo</p>
+                  <p className="num-hero text-3xl md:text-4xl text-muted-foreground">—</p>
+                  <p className="text-sm text-muted-foreground">
+                    Você ainda não cadastrou uma conta corrente.{' '}
+                    <button
+                      type="button"
+                      onClick={() => navigate('/contas')}
+                      className="text-primary underline hover:no-underline"
+                    >
+                      Cadastrar agora →
+                    </button>
+                  </p>
+                </>
+              ) : (
+                <>
+                  <p className="text-sm text-muted-foreground uppercase tracking-wider">Disponível pra gastar</p>
+                  <p className={`num-hero text-5xl md:text-7xl ${(disponivelHoje ?? 0) >= 0 ? 'text-primary' : 'text-destructive'}`}>
+                    {formatCurrency(disponivelHoje ?? 0)}
+                  </p>
+                  <p className="text-sm text-muted-foreground">
+                    Saldo atual de <span className="tabular font-medium text-foreground">{formatCurrency(saldoAtual ?? 0)}</span>
+                    {impactoVenc.impactoLiquido !== 0 && (
+                      <> {impactoVenc.impactoLiquido < 0 ? '−' : '+'} {formatCurrency(Math.abs(impactoVenc.impactoLiquido))} previstos em 30d</>
+                    )}
+                  </p>
+                </>
+              )}
             </div>
             <div className="flex flex-wrap gap-3">
               <button

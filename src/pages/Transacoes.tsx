@@ -5,7 +5,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { formatCurrency, formatDate, getMonthRange, toLocalIso } from '@/lib/format';
 import { fetchAllRows } from '@/lib/supabase-fetch';
-import { CATEGORIAS, CATEGORIAS_DESPESA, CATEGORIAS_RECEITA, CATEGORIAS_CONFIG, getCategoriaColor, getSubcategorias } from '@/types/database.types';
+import { CATEGORIAS, CATEGORIAS_DESPESA, CATEGORIAS_RECEITA, CATEGORIAS_CONFIG, getCategoriaColor } from '@/types/database.types';
 import { useCategorias } from '@/hooks/useCategorias';
 import { CategoriaSelector } from '@/components/CategoriaSelector';
 import { Card, CardContent } from '@/components/ui/card';
@@ -17,7 +17,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { useToast } from '@/hooks/use-toast';
-import { Pencil, Trash2, Search, Download, Copy, EyeOff, Filter, ChevronDown, ChevronUp, Layers, CreditCard, Tag, Calendar } from 'lucide-react';
+import { Trash2, Search, Download, Copy, EyeOff, Filter, ChevronDown, ChevronUp, Layers, CreditCard, Tag, Calendar } from 'lucide-react';
 import { ConfirmDelete } from '@/components/ConfirmDelete';
 import { Checkbox } from '@/components/ui/checkbox';
 import { exportCSV, copyToClipboard } from '@/lib/export';
@@ -470,7 +470,7 @@ export default function TransacoesPage() {
       <div
         key={t.id}
         className={`flex items-center gap-3 px-4 py-3 hover:bg-muted/30 transition-colors cursor-pointer ${t.ignorar_dashboard ? 'opacity-50' : ''} ${isPendente ? 'border-l-2 border-warning/60' : ''}`}
-        onClick={() => { setEditingTx({ ...t, subcategoria: null }); setLearnPattern(false); }}
+        onClick={() => setEditingTx({ ...t, subcategoria: null })}
       >
         <button
           type="button"

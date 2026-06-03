@@ -77,9 +77,6 @@ export default function ConfiguracoesPage() {
     try {
       // Delete all transactions
       await supabase.from('transacoes').delete().eq('user_id', user.id);
-      // Limpa resíduos da tabela legada regras_categorizacao (auto-aprendizado
-      // foi removido). Ignora erro silenciosamente — tabela pode ter sumido.
-      try { await supabase.from('regras_categorizacao').delete().eq('user_id', user.id); } catch {}
       // Delete config
       await supabase.from('configuracoes').delete().eq('user_id', user.id);
       // Reset saldo_inicial on all accounts

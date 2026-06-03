@@ -68,18 +68,41 @@ export function useFaturaAcumulada(cardIds: string[], billingMonth: string) {
       for (const cardId of cardIds) {
         const cardTxs = allTxs.filter(t => t.conta_id === cardId);
 
-        // Agrupa por período (mes_competencia se houver, senão YYYY-MM da data)
+        // Agrupa por período.
+        //
+        // REGRA DE COMPETÊNCIA DO PAGAMENTO:
+        //   Pagamento (receita ignorar_dashboard=true) ABATE a fatura do
+        //   MÊS ANTERIOR à data do pagamento — porque o ciclo do cartão é
+        //   "fatura fechada em N → vencimento em N+1 → pagamento em N+1".
+        //
+        //   Antes a gente usava `t.mes_competencia || t.data.substring(0,7)`,
+        //   que pra pagamentos importados do extrato (mes_competencia=null)
+        //   creditava o pagamento no mês CIVIL do pagamento, não no mês da
+        //   fatura. Resultado: fatura paga aparecia em aberto E fatura atual
+        //   aparecia "Paga" (porque pagamentos > despesas).
+        //
+        //   Despesas continuam usando mes_competencia se houver, senão data.
         const byPeriod: Record<string, { despesas: number; pagamentos: number }> = {};
         for (const t of cardTxs) {
-          const periodo = t.mes_competencia || t.data.substring(0, 7);
-          if (!byPeriod[periodo]) byPeriod[periodo] = { despesas: 0, pagamentos: 0 };
-
           const valor = Math.abs(Number(t.valor));
-          if (t.tipo === 'despesa' && !t.ignorar_dashboard) {
-            byPeriod[periodo].despesas += valor;
-          } else if (t.tipo === 'receita' && t.ignorar_dashboard) {
-            // Receita ignorar_dashboard=true é pagamento de fatura (interno).
+          let periodo: string;
+
+          if (t.tipo === 'receita' && t.ignorar_dashboard) {
+            // Pagamento: respeita mes_competencia se setado (UI manual seta
+            // pra mês corrente). Senão, abate fatura ANTERIOR à data.
+            if (t.mes_competencia) {
+              periodo = t.mes_competencia;
+            } else {
+              const [y, m] = t.data.split('-').map(Number);
+              const ant = new Date(Date.UTC(y, m - 2, 1)); // m=6 (jun) → m-2=4 (mai)
+              periodo = `${ant.getUTCFullYear()}-${String(ant.getUTCMonth() + 1).padStart(2, '0')}`;
+            }
+            if (!byPeriod[periodo]) byPeriod[periodo] = { despesas: 0, pagamentos: 0 };
             byPeriod[periodo].pagamentos += valor;
+          } else if (t.tipo === 'despesa' && !t.ignorar_dashboard) {
+            periodo = t.mes_competencia || t.data.substring(0, 7);
+            if (!byPeriod[periodo]) byPeriod[periodo] = { despesas: 0, pagamentos: 0 };
+            byPeriod[periodo].despesas += valor;
           }
           // (despesa com ignorar=true e receita com ignorar=false são descartadas)
         }

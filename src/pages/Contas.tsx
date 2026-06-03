@@ -312,7 +312,9 @@ export default function ContasPage() {
           ))
         )}
         {contas?.map(conta => {
-          const saldoAtual = Number(conta.saldo_inicial || 0) + Number(saldos?.[conta.id] || 0);
+          // calcularSaldosContas em lib/saldo JÁ inclui saldo_inicial em
+          // saldos[conta.id]. Antes a gente somava de novo aqui = duplo conta.
+          const saldoAtual = Number(saldos?.[conta.id] ?? conta.saldo_inicial ?? 0);
           const isCredito = conta.tipo === 'credito';
           const acum = faturaAcum?.[conta.id] || { saldoAnterior: 0, despesasMes: 0, pagamentosMes: 0, totalAPagar: 0, valorFatura: 0 };
           const bp = `${year}-${String(month + 1).padStart(2, '0')}`;

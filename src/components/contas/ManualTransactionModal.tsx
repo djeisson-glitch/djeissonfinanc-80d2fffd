@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -78,9 +78,12 @@ export function ManualTransactionModal({
     if (contaId) setSelectedContaId(contaId);
   }, [contaId]);
 
-  // Auto-detecta pago/pendente baseado na data: futuro = pendente, hoje/passado = pago.
-  // User pode sobrescrever depois manualmente.
+  // Auto-detecta pago/pendente APENAS na primeira vez (ou após reset).
+  // Antes a gente re-rodava a cada mudança de `data`, o que sobrescrevia
+  // a escolha manual do user quando ele ajustava a data depois.
+  const userTocouPago = useRef(false);
   useEffect(() => {
+    if (userTocouPago.current) return;
     const hoje = toLocalIso(new Date());
     setPago(data <= hoje);
   }, [data]);
@@ -259,6 +262,7 @@ export function ManualTransactionModal({
       setTipo(defaultTipo || 'despesa');
       setEssencial(false);
       setPago(true);
+      userTocouPago.current = false; // reset: próximo open volta a auto-detectar
       setRecorrente(false);
       setMeses('12');
       setParcelado(false);
@@ -374,7 +378,7 @@ export function ManualTransactionModal({
               <Checkbox
                 id="pago"
                 checked={pago}
-                onCheckedChange={(v) => setPago(!!v)}
+                onCheckedChange={(v) => { setPago(!!v); userTocouPago.current = true; }}
               />
               <Label htmlFor="pago" className="cursor-pointer text-sm font-normal">
                 {tipo === 'receita' ? 'Já recebi' : 'Já paguei'}

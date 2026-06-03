@@ -780,8 +780,8 @@ export function CsvImportDialog({ open, onOpenChange }: Props) {
       ignorar_dashboard: t.ignorar_dashboard ?? false,
       // Projeção de parcela futura = pendente. Linhas originais do extrato
       // já mantêm o pago=true setado no push acima.
-      pago: t.pago ?? !("_isProjected" in t),
-      _isOriginal: !("_isProjected" in t),
+      pago: t.pago ?? !(t as any)._isProjected,
+      _isOriginal: !(t as any)._isProjected,
     }));
 
     // Importa PAGAMENTOS reais da fatura (ex: "Pagamento da fatura de X") como
