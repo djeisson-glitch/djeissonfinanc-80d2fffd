@@ -29,6 +29,7 @@ interface TxLike {
   data: string;
   hash_transacao?: string | null;
   conta_id?: string | null;
+  parcela_total?: number | null;
 }
 
 /**
@@ -36,7 +37,8 @@ interface TxLike {
  *
  * Regras:
  *  1. Hash igual = duplicata segura (ignora data, mesma operação).
- *  2. (descricao_normalizada, valor, data ±1d) = duplicata por similaridade.
+ *  2. (descricao_normalizada, valor, MESMA DATA) = duplicata por similaridade,
+ *     EXCETO parcelamentos (parcela_total > 1, que compartilham desc+valor).
  *
  * Não tenta resolver — só sinaliza. UI mostra grupo e deixa o user escolher
  * qual apagar (ou ignorar se for legítimo).
@@ -51,17 +53,22 @@ export function detectarDuplicatas(txs: TxLike[]): DuplicataGrupo[] {
     byHash.set(t.hash_transacao, arr);
   }
 
-  // 2) Agrupa por chave de similaridade: descNorm + valor centavos + ano-mês
-  // (a tolerância ±1d é simplificada pra mesmo mês — refinar depois se virar
-  // problema; vale notar que parcelamentos legítimos compartilham desc + valor)
+  // 2) Agrupa por chave de similaridade: descNorm + valor centavos + DATA EXATA.
+  //
+  // Mudanças contra falso-positivo (que levaria o user a apagar tx legítima):
+  //  - Usa data exata (YYYY-MM-DD), não o mês inteiro. Duas compras iguais no
+  //    mesmo mês mas dias diferentes (2 cafés no mesmo lugar) NÃO são duplicata.
+  //  - PULA parcelamentos (parcela_total > 1): parcelas legítimas compartilham
+  //    descrição + valor por definição; não são duplicatas.
   const bySim = new Map<string, TxLike[]>();
   for (const t of txs) {
+    if (t.parcela_total && Number(t.parcela_total) > 1) continue; // parcela legítima
     const descNorm = (t.descricao_normalizada || t.descricao || '').trim().toUpperCase().slice(0, 40);
     if (!descNorm) continue;
     const valorCents = Math.round(Math.abs(Number(t.valor)) * 100);
     if (!valorCents) continue;
-    const ym = (t.data || '').substring(0, 7);
-    const key = `${descNorm}|${valorCents}|${ym}`;
+    const dia = (t.data || '').substring(0, 10); // data exata
+    const key = `${descNorm}|${valorCents}|${dia}`;
     const arr = bySim.get(key) || [];
     arr.push(t);
     bySim.set(key, arr);

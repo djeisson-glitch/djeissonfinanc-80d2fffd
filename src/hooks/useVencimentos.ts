@@ -33,7 +33,13 @@ export function useVencimentos(ateNDias = 30, extras: Vencimento[] = []) {
     return { inicioRange: inicio, fimRange: fim };
   }, [todayIso]);
 
-  // Pendentes em transações. Filtra pago=false client-side pra resiliência.
+  // Pendentes em transações de DÉBITO/DINHEIRO apenas (mes_competencia IS NULL).
+  //
+  // Por que excluir cartão (mes_competencia setado): a fatura do cartão já entra
+  // como vencimento próprio via `extras` (buildVencimentosFatura). Se contássemos
+  // a parcela pendente do cartão aqui TAMBÉM, ela seria subtraída 2x do
+  // "Disponível pra gastar" — uma vez na fatura, outra como vencimento avulso.
+  // Débito/dinheiro têm mes_competencia null e não têm fatura, então entram aqui.
   const { data: txsPendentes, isLoading: loadingTxs, isError: errorTxs } = useQuery({
     queryKey: ['vencimentos', 'transacoes', user?.id, inicioRange, fimRange],
     queryFn: async () => {
@@ -42,6 +48,7 @@ export function useVencimentos(ateNDias = 30, extras: Vencimento[] = []) {
           .from('transacoes')
           .select('id, descricao, valor, tipo, data, categoria, pago')
           .eq('user_id', user!.id)
+          .is('mes_competencia', null)
           .gte('data', inicioRange)
           .lte('data', fimRange)
       );

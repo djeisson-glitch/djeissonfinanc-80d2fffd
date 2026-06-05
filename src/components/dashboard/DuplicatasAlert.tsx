@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
+import { useTodayIso } from '@/hooks/useTodayIso';
 import { fetchAllRows } from '@/lib/supabase-fetch';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -29,19 +30,21 @@ export function DuplicatasAlert() {
   const { toast } = useToast();
   const qc = useQueryClient();
   const [dismissed, setDismissed] = useState(false);
+  const todayIso = useTodayIso();
 
+  // 90 dias atrás a partir do dia local (useTodayIso, timezone-safe). Antes
+  // usava new Date()+toISOString() (UTC) — divergia 1 dia perto da meia-noite.
   const inicio = useMemo(() => {
-    const dt = new Date();
-    dt.setDate(dt.getDate() - 90);
-    return dt.toISOString().slice(0, 10);
-  }, []);
+    const [y, m, d] = todayIso.split('-').map(Number);
+    return new Date(Date.UTC(y, m - 1, d - 90)).toISOString().slice(0, 10);
+  }, [todayIso]);
 
   const { data: txs } = useQuery({
     queryKey: ['duplicatas-source', user?.id, inicio],
     queryFn: async () => {
-      return await fetchAllRows<{ id: string; descricao: string; descricao_normalizada: string | null; valor: number; data: string; hash_transacao: string | null; conta_id: string }>(() => supabase
+      return await fetchAllRows<{ id: string; descricao: string; descricao_normalizada: string | null; valor: number; data: string; hash_transacao: string | null; conta_id: string; parcela_total: number | null }>(() => supabase
         .from('transacoes')
-        .select('id, descricao, descricao_normalizada, valor, data, hash_transacao, conta_id')
+        .select('id, descricao, descricao_normalizada, valor, data, hash_transacao, conta_id, parcela_total')
         .eq('user_id', user!.id)
         .gte('data', inicio));
     },

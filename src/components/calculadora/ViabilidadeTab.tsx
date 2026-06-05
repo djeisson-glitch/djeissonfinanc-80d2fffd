@@ -161,10 +161,10 @@ export function ViabilidadeTab({ params, onChange }: Props) {
                   variant="outline"
                   className="h-7 text-xs gap-1.5"
                   onClick={() => onChange({ dividasAbertasQuitar: saldoDividasAtual || 0 })}
-                  title="Puxa a soma das parcelas futuras de Empréstimos (página Dívidas)"
+                  title="Soma das PARCELAS futuras de Empréstimos (inclui juros). O saldo devedor real pra quitação antecipada costuma ser MENOR — confirme com o banco."
                 >
                   <RefreshCw className="h-3 w-3" />
-                  Puxar de Dívidas ({formatCurrency(saldoDividasAtual || 0)})
+                  Somar parcelas ({formatCurrency(saldoDividasAtual || 0)})
                 </Button>
               )}
             </div>
@@ -172,10 +172,10 @@ export function ViabilidadeTab({ params, onChange }: Props) {
               label=""
               value={params.dividasAbertasQuitar}
               onChange={val => onChange({ dividasAbertasQuitar: val })}
-              tooltip="Total de dívidas em aberto que serão quitadas com o líquido da venda (empréstimos, financiamentos, etc). Subtrai do capital disponível pra entrada do novo imóvel."
+              tooltip="Saldo devedor das dívidas que serão quitadas com o líquido da venda. Pro número EXATO da quitação antecipada, peça o saldo devedor atualizado ao banco — geralmente é menor que a soma das parcelas (que embute juros futuros)."
             />
             <p className="text-[11px] text-muted-foreground">
-              Se sobrar dinheiro depois de quitar a dívida, vira capital pra entrada. Se faltar, a venda fica no negativo.
+              Use o saldo devedor (quitação antecipada), não a soma das parcelas. O botão acima soma parcelas como ponto de partida — ajuste pra baixo com o valor real do banco.
             </p>
           </div>
           <div className="bg-muted/50 rounded-lg p-2.5 space-y-0.5 text-sm">

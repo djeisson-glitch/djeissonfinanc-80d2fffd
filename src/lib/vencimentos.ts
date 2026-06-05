@@ -152,10 +152,17 @@ interface FaturaInfo {
  */
 export function proximoVencimentoCartao(diaVencimento: number, hoje: string): string {
   const [y, m, d] = hoje.split('-').map(Number);
-  const targetDay = Math.min(Math.max(diaVencimento, 1), 28); // clamp pra evitar fev/31
-  // Se o dia ja passou neste mes, vai pro proximo
-  const useNextMonth = targetDay < d;
-  const dt = new Date(Date.UTC(y, m - 1 + (useNextMonth ? 1 : 0), targetDay));
+  const diaPedido = Math.max(diaVencimento, 1);
+  // Decide mês ALVO comparando o dia REAL pedido com hoje (não o clampado).
+  // Cartão que vence dia 30 e hoje é dia 29 → ainda vence ESTE mês (amanhã),
+  // não no mês que vem. O bug antigo clampava pra 28 antes de comparar.
+  const useNextMonth = diaPedido < d;
+  const mesAlvo0 = m - 1 + (useNextMonth ? 1 : 0); // 0-indexed, pode passar de 11
+  // Clampa pro último dia REAL do mês alvo (ex: fev tem 28/29, abril 30).
+  // Date.UTC(ano, mes+1, 0) = último dia do mês `mes`.
+  const ultimoDiaMes = new Date(Date.UTC(y, mesAlvo0 + 1, 0)).getUTCDate();
+  const diaFinal = Math.min(diaPedido, ultimoDiaMes);
+  const dt = new Date(Date.UTC(y, mesAlvo0, diaFinal));
   return dt.toISOString().slice(0, 10);
 }
 

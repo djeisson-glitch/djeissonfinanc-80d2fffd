@@ -12,6 +12,20 @@ describe('proximoVencimentoCartao', () => {
   it('dia 28 atravessa pra janeiro do próximo ano', () => {
     expect(proximoVencimentoCartao(15, '2026-12-20')).toBe('2027-01-15');
   });
+  // Regressão do bug: clampar dia em 28 antes de comparar mandava fatura
+  // do dia 30 (que vence amanhã) pro mês que vem.
+  it('cartão dia 30, hoje 29: vence AMANHÃ (este mês), não mês que vem', () => {
+    expect(proximoVencimentoCartao(30, '2026-06-29')).toBe('2026-06-30');
+  });
+  it('cartão dia 31 em mês de 30 dias: clampa pro último dia real (30)', () => {
+    expect(proximoVencimentoCartao(31, '2026-04-10')).toBe('2026-04-30');
+  });
+  it('cartão dia 31 em fevereiro: clampa pro dia 28', () => {
+    expect(proximoVencimentoCartao(31, '2026-02-10')).toBe('2026-02-28');
+  });
+  it('cartão dia 30, hoje dia 30: vence HOJE (este mês)', () => {
+    expect(proximoVencimentoCartao(30, '2026-06-30')).toBe('2026-06-30');
+  });
 });
 
 describe('buildVencimentosFatura', () => {

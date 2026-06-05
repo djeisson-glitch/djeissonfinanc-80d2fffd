@@ -93,6 +93,7 @@ describe('calcViabilidade — venda do imóvel e capital para compra', () => {
     irVendaEstimado: 0,
     outrosCustosVenda: 0,
     fgtsDisponivel: 0,
+    dividasAbertasQuitar: 0,
   };
 
   it('valorFinanciado = imóvel - entrada; entradaPercent correto', () => {

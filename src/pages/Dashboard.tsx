@@ -74,8 +74,11 @@ export default function DashboardPage() {
     enabled: !!user,
   });
 
-  const creditCards = contas?.filter(c => c.tipo === 'credito') || [];
-  const cardIds = creditCards.map(c => c.id);
+  // Memoizados pra estabilizar referência — sem isso, cada render gera novo
+  // array, derrubando o useMemo de vencimentosFatura e recalculando vencimentos
+  // em 2 consumers (hero + widget) a cada render.
+  const creditCards = useMemo(() => contas?.filter(c => c.tipo === 'credito') || [], [contas]);
+  const cardIds = useMemo(() => creditCards.map(c => c.id), [creditCards]);
 
   const { data: faturaAcumulada } = useFaturaAcumulada(cardIds, billingMonth);
 

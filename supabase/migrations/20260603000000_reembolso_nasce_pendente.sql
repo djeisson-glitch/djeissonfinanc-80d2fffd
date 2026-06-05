@@ -78,3 +78,18 @@ BEGIN
   RETURN v_receita_id;
 END;
 $$;
+
+-- DATA-MIGRATION: corrige reembolsos JÁ criados como pago=true antes desta
+-- mudança. Eles inflavam o saldo antes da pessoa transferir. Marca como
+-- pendente (pago=false) toda receita de reembolso que é apontada por alguma
+-- despesa via reembolso_transacao_id. Idempotente — rodar 2x não causa dano.
+UPDATE public.transacoes r
+   SET pago = false
+ WHERE r.tipo = 'receita'
+   AND r.categoria = 'Reembolsos'
+   AND r.pago = true
+   AND EXISTS (
+     SELECT 1 FROM public.transacoes d
+      WHERE d.reembolso_transacao_id = r.id
+        AND d.user_id = r.user_id
+   );
