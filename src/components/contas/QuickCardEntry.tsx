@@ -20,10 +20,12 @@ interface Props {
 }
 
 interface Lancado {
-  id: string;
+  id: string;          // id da 1ª transação (pra desfazer)
+  grupoParcela: string | null; // pra desfazer a série inteira
   descricao: string;
-  valor: number;
+  valor: number;       // valor por parcela
   categoria: string;
+  nParcelas: number;   // 1 = à vista
 }
 
 const LS_CARD = 'quickcard:lastCardId';
@@ -50,6 +52,7 @@ export function QuickCardEntry({ open, onOpenChange }: Props) {
 
   const [descricao, setDescricao] = useState('');
   const [valor, setValor] = useState('');
+  const [parcelas, setParcelas] = useState('');  // vazio/1 = à vista; N = parcela 1/N
   const [categoria, setCategoria] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [sessao, setSessao] = useState<Lancado[]>([]);
@@ -88,6 +91,7 @@ export function QuickCardEntry({ open, onOpenChange }: Props) {
   // Auto-categoriza enquanto digita (preview; user pode trocar no select)
   const catPreview = useMemo(() => autoCategorizarTransacao(descricao) || 'Outros', [descricao]);
   const catFinal = categoria || catPreview;
+  const nParcVal = Math.max(1, Math.min(parseInt(parcelas) || 1, 99));
 
   const prevMonth = () => {
     if (compMonth === 0) { setCompMonth(11); setCompYear(y => y - 1); }
@@ -113,42 +117,65 @@ export function QuickCardEntry({ open, onOpenChange }: Props) {
     if (!user || !cardId) return;
     const valorNum = Number(valor.replace(',', '.'));
     if (!valorNum || valorNum <= 0 || !descricao.trim()) return;
+    const nParc = Math.max(1, Math.min(parseInt(parcelas) || 1, 99)); // 1 = à vista
 
     setSubmitting(true);
     try {
-      // Data da compra = hoje (compra de cartão é "agora"); competência define
-      // em qual fatura cai. Compra é fato consumado → pago=true.
+      // Compra de cartão = hoje; competência define a fatura. Compra é fato
+      // consumado → 1ª parcela pago=true. Parcelas futuras nascem pendentes
+      // (pago=false), projetadas nas faturas seguintes (mesmo grupo_parcela).
       const hoje = toLocalIso(new Date());
       const desc = descricao.trim();
-      const runId = crypto.randomUUID().slice(0, 6);
-      const hash = generateHash(hoje, desc, valorNum, pessoaNome) + '_quick_' + runId;
+      const grupoParcela = nParc > 1 ? crypto.randomUUID() : null;
+      const [cy, cm] = mesCompetencia.split('-').map(Number);
 
-      const { data: inserida, error } = await supabase.from('transacoes').insert({
-        user_id: user.id,
-        conta_id: cardId,
-        data: hoje,
-        descricao: desc,
-        descricao_normalizada: desc.toUpperCase().replace(/[^A-Z0-9 ]/g, '').trim(),
-        valor: valorNum,
-        tipo: 'despesa',
-        categoria: catFinal,
-        essencial: false,
-        hash_transacao: hash,
-        pessoa: pessoaNome,
-        mes_competencia: mesCompetencia,
-        ignorar_dashboard: false,
-        pago: true,
-      }).select('id').single();
+      const rows = [];
+      for (let i = 0; i < nParc; i++) {
+        // Competência da parcela i: mês escolhido + i meses
+        const dt = new Date(cy, cm - 1 + i, 1);
+        const compI = `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}`;
+        const descFinal = nParc > 1 ? `${desc} (${i + 1}/${nParc})` : desc;
+        const seed = grupoParcela ? `${grupoParcela}_${i + 1}` : crypto.randomUUID().slice(0, 8);
+        const hash = generateHash(hoje, descFinal, valorNum, pessoaNome) + '_quick_' + seed.slice(0, 12);
+        rows.push({
+          user_id: user.id,
+          conta_id: cardId,
+          data: hoje,
+          descricao: descFinal,
+          descricao_normalizada: descFinal.toUpperCase().replace(/[^A-Z0-9 ]/g, '').trim(),
+          valor: valorNum,
+          tipo: 'despesa',
+          categoria: catFinal,
+          essencial: false,
+          parcela_atual: nParc > 1 ? i + 1 : null,
+          parcela_total: nParc > 1 ? nParc : null,
+          grupo_parcela: grupoParcela,
+          hash_transacao: hash,
+          pessoa: pessoaNome,
+          mes_competencia: compI,
+          ignorar_dashboard: false,
+          pago: i === 0, // só a 1ª parcela é "paga"; resto pendente
+        });
+      }
+
+      const { data: inseridas, error } = await supabase.from('transacoes').insert(rows).select('id');
       if (error) throw error;
 
-      // Prepend na lista da sessão (mais recente no topo)
-      setSessao(prev => [{ id: inserida.id, descricao: desc, valor: valorNum, categoria: catFinal }, ...prev]);
+      setSessao(prev => [{
+        id: inseridas[0].id,
+        grupoParcela,
+        descricao: desc,
+        valor: valorNum,
+        categoria: catFinal,
+        nParcelas: nParc,
+      }, ...prev]);
       localStorage.setItem(LS_CARD, cardId);
       invalidate();
 
       // Limpa e volta o foco pra próxima compra
       setDescricao('');
       setValor('');
+      setParcelas('');
       setCategoria('');
       descRef.current?.focus();
     } catch (err: any) {
@@ -157,10 +184,15 @@ export function QuickCardEntry({ open, onOpenChange }: Props) {
     setSubmitting(false);
   };
 
-  const desfazer = async (id: string) => {
+  const desfazer = async (l: Lancado) => {
     try {
-      await supabase.from('transacoes').delete().eq('id', id);
-      setSessao(prev => prev.filter(l => l.id !== id));
+      // Parcelado: apaga a série inteira pelo grupo. À vista: só a transação.
+      if (l.grupoParcela) {
+        await supabase.from('transacoes').delete().eq('grupo_parcela', l.grupoParcela).eq('user_id', user!.id);
+      } else {
+        await supabase.from('transacoes').delete().eq('id', l.id);
+      }
+      setSessao(prev => prev.filter(x => x.id !== l.id));
       invalidate();
     } catch (err: any) {
       toast({ title: 'Erro ao desfazer', variant: 'destructive' });
@@ -210,7 +242,7 @@ export function QuickCardEntry({ open, onOpenChange }: Props) {
           onSubmit={(e) => { e.preventDefault(); lancar(); }}
           className="rounded-xl border bg-secondary/20 p-3 space-y-2"
         >
-          <div className="grid grid-cols-[1fr_120px] gap-2">
+          <div className="grid grid-cols-[1fr_110px_70px] gap-2">
             <div className="space-y-1">
               <Label className="text-xs text-muted-foreground">Descrição</Label>
               <Input
@@ -222,7 +254,9 @@ export function QuickCardEntry({ open, onOpenChange }: Props) {
               />
             </div>
             <div className="space-y-1">
-              <Label className="text-xs text-muted-foreground">Valor (R$)</Label>
+              <Label className="text-xs text-muted-foreground">
+                {nParcVal > 1 ? 'Valor/parc.' : 'Valor (R$)'}
+              </Label>
               <Input
                 value={valor}
                 onChange={e => setValor(e.target.value)}
@@ -230,7 +264,22 @@ export function QuickCardEntry({ open, onOpenChange }: Props) {
                 inputMode="decimal"
               />
             </div>
+            <div className="space-y-1">
+              <Label className="text-xs text-muted-foreground">Parcelas</Label>
+              <Input
+                value={parcelas}
+                onChange={e => setParcelas(e.target.value.replace(/[^0-9]/g, ''))}
+                placeholder="1x"
+                inputMode="numeric"
+                title="Deixe vazio pra à vista. Ex: 12 = parcela 1/12 + projeta as futuras."
+              />
+            </div>
           </div>
+          {nParcVal > 1 && (
+            <p className="text-[11px] text-primary">
+              {nParcVal}× de {formatCurrency(Number(valor.replace(',', '.')) || 0)} = {formatCurrency((Number(valor.replace(',', '.')) || 0) * nParcVal)} total · cria a 1ª na fatura escolhida e projeta {nParcVal - 1} nas seguintes
+            </p>
+          )}
           <div className="grid grid-cols-[1fr_auto] gap-2 items-end">
             <div className="space-y-1">
               <Label className="text-xs text-muted-foreground">Categoria (auto)</Label>
@@ -268,11 +317,16 @@ export function QuickCardEntry({ open, onOpenChange }: Props) {
               {sessao.map(l => (
                 <div key={l.id} className="flex items-center gap-2 rounded-lg bg-secondary/30 px-2.5 py-1.5 text-sm">
                   <div className="min-w-0 flex-1">
-                    <p className="truncate">{l.descricao}</p>
+                    <p className="truncate">
+                      {l.descricao}
+                      {l.nParcelas > 1 && <span className="ml-1.5 text-[10px] text-primary font-medium">{l.nParcelas}×</span>}
+                    </p>
                     <p className="text-[11px] text-muted-foreground">{l.categoria}</p>
                   </div>
-                  <span className="tabular text-destructive shrink-0">{formatCurrency(l.valor)}</span>
-                  <Button type="button" variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-destructive shrink-0" onClick={() => desfazer(l.id)} title="Desfazer">
+                  <span className="tabular text-destructive shrink-0">
+                    {formatCurrency(l.valor)}{l.nParcelas > 1 && <span className="text-[10px] text-muted-foreground">/parc</span>}
+                  </span>
+                  <Button type="button" variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-destructive shrink-0" onClick={() => desfazer(l)} title={l.nParcelas > 1 ? 'Desfazer série inteira' : 'Desfazer'}>
                     <Trash2 className="h-3.5 w-3.5" />
                   </Button>
                 </div>
