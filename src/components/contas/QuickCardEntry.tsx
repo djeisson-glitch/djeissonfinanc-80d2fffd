@@ -212,8 +212,8 @@ export function QuickCardEntry({ open, onOpenChange }: Props) {
           </DialogDescription>
         </DialogHeader>
 
-        {/* Cartão + competência — escolhidos 1x, ficam fixos */}
-        <div className="grid grid-cols-[1fr_auto] gap-3 items-end">
+        {/* TOPO FIXO: cartão + fatura — escolhidos 1x */}
+        <div className="grid grid-cols-[1fr_auto] gap-3 items-end pb-1">
           <div className="space-y-1">
             <Label className="text-xs flex items-center gap-1"><CreditCard className="h-3 w-3" /> Cartão</Label>
             <Select value={cardId} onValueChange={setCardId}>
@@ -237,103 +237,107 @@ export function QuickCardEntry({ open, onOpenChange }: Props) {
           </div>
         </div>
 
-        {/* Linha de entrada rápida */}
-        <form
-          onSubmit={(e) => { e.preventDefault(); lancar(); }}
-          className="rounded-xl border bg-secondary/20 p-3 space-y-2"
-        >
-          <div className="grid grid-cols-[1fr_110px_70px] gap-2">
-            <div className="space-y-1">
-              <Label className="text-xs text-muted-foreground">Descrição</Label>
+        {/* LISTA: tabela contínua. Cabeçalho + linha de entrada + itens. */}
+        <div className="rounded-xl border overflow-hidden">
+          {/* Cabeçalho de colunas */}
+          <div className="grid grid-cols-[1fr_92px_52px_32px] gap-2 px-2.5 py-1.5 bg-secondary/40 text-[11px] uppercase tracking-wider text-muted-foreground">
+            <span>Descrição</span>
+            <span className="text-right">Valor</span>
+            <span className="text-center">Parc.</span>
+            <span></span>
+          </div>
+
+          {/* Linha de entrada ativa (sempre no topo, fica fixa) */}
+          <form
+            onSubmit={(e) => { e.preventDefault(); lancar(); }}
+            className="border-b bg-primary/5"
+          >
+            <div className="grid grid-cols-[1fr_92px_52px_32px] gap-2 px-2.5 py-2 items-center">
               <Input
                 ref={descRef}
                 value={descricao}
                 onChange={e => setDescricao(e.target.value)}
-                placeholder="Ex: Mercado São João"
+                placeholder="Mercado São João"
+                className="h-8 border-0 bg-transparent px-1 focus-visible:ring-1"
                 autoFocus
               />
-            </div>
-            <div className="space-y-1">
-              <Label className="text-xs text-muted-foreground">
-                {nParcVal > 1 ? 'Valor/parc.' : 'Valor (R$)'}
-              </Label>
               <Input
                 value={valor}
                 onChange={e => setValor(e.target.value)}
                 placeholder="0,00"
                 inputMode="decimal"
+                className="h-8 text-right border-0 bg-transparent px-1 focus-visible:ring-1"
               />
-            </div>
-            <div className="space-y-1">
-              <Label className="text-xs text-muted-foreground">Parcelas</Label>
               <Input
                 value={parcelas}
                 onChange={e => setParcelas(e.target.value.replace(/[^0-9]/g, ''))}
                 placeholder="1x"
                 inputMode="numeric"
-                title="Deixe vazio pra à vista. Ex: 12 = parcela 1/12 + projeta as futuras."
+                className="h-8 text-center border-0 bg-transparent px-1 focus-visible:ring-1"
+                title="Vazio = à vista. Ex: 12 = parcela 1/12 + projeta as futuras."
               />
+              <Button
+                type="submit"
+                size="icon"
+                disabled={submitting || !cardId || !descricao.trim() || !Number(valor.replace(',', '.'))}
+                className="h-8 w-8"
+                title="Lançar (Enter)"
+              >
+                <Zap className="h-4 w-4" />
+              </Button>
             </div>
-          </div>
-          {nParcVal > 1 && (
-            <p className="text-[11px] text-primary">
-              {nParcVal}× de {formatCurrency(Number(valor.replace(',', '.')) || 0)} = {formatCurrency((Number(valor.replace(',', '.')) || 0) * nParcVal)} total · cria a 1ª na fatura escolhida e projeta {nParcVal - 1} nas seguintes
-            </p>
-          )}
-          <div className="grid grid-cols-[1fr_auto] gap-2 items-end">
-            <div className="space-y-1">
-              <Label className="text-xs text-muted-foreground">Categoria (auto)</Label>
-              <Select value={catFinal} onValueChange={setCategoria}>
-                <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {CATEGORIAS_DESPESA.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
-                </SelectContent>
-              </Select>
+            {/* Categoria auto + hint de parcelamento na mesma linha de apoio */}
+            <div className="flex items-center justify-between gap-2 px-2.5 pb-2">
+              <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                <span>Categoria:</span>
+                <Select value={catFinal} onValueChange={setCategoria}>
+                  <SelectTrigger className="h-6 text-[11px] border-0 bg-secondary/50 px-2 gap-1 w-auto"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {CATEGORIAS_DESPESA.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              {nParcVal > 1 && (
+                <span className="text-[11px] text-primary text-right">
+                  {nParcVal}× = {formatCurrency((Number(valor.replace(',', '.')) || 0) * nParcVal)} total
+                </span>
+              )}
             </div>
-            <Button
-              type="submit"
-              disabled={submitting || !cardId || !descricao.trim() || !Number(valor.replace(',', '.'))}
-              className="h-9 gap-1.5"
-            >
-              <Zap className="h-4 w-4" />
-              Lançar
-            </Button>
-          </div>
-          <p className="text-[11px] text-muted-foreground">
-            Dica: digita descrição → Tab → valor → <kbd className="px-1 rounded bg-muted">Enter</kbd>. Repete.
-          </p>
-        </form>
+          </form>
 
-        {/* Lista da sessão */}
-        {sessao.length > 0 && (
-          <div className="space-y-2">
-            <div className="flex items-center justify-between text-sm">
-              <span className="text-muted-foreground">
-                {sessao.length} {sessao.length === 1 ? 'lançamento' : 'lançamentos'} em {cardNome} · {getMonthName(compMonth).slice(0, 3)}/{String(compYear).slice(2)}
-              </span>
-              <span className="font-semibold tabular text-destructive">{formatCurrency(totalSessao)}</span>
-            </div>
-            <div className="max-h-44 overflow-y-auto space-y-1">
+          {/* Itens já lançados nesta sessão */}
+          {sessao.length > 0 && (
+            <div className="max-h-52 overflow-y-auto divide-y divide-border/50">
               {sessao.map(l => (
-                <div key={l.id} className="flex items-center gap-2 rounded-lg bg-secondary/30 px-2.5 py-1.5 text-sm">
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate">
-                      {l.descricao}
-                      {l.nParcelas > 1 && <span className="ml-1.5 text-[10px] text-primary font-medium">{l.nParcelas}×</span>}
-                    </p>
-                    <p className="text-[11px] text-muted-foreground">{l.categoria}</p>
+                <div key={l.id} className="grid grid-cols-[1fr_92px_52px_32px] gap-2 px-2.5 py-2 items-center text-sm hover:bg-secondary/20">
+                  <div className="min-w-0">
+                    <p className="truncate">{l.descricao}</p>
+                    <p className="text-[10px] text-muted-foreground">{l.categoria}</p>
                   </div>
-                  <span className="tabular text-destructive shrink-0">
-                    {formatCurrency(l.valor)}{l.nParcelas > 1 && <span className="text-[10px] text-muted-foreground">/parc</span>}
-                  </span>
-                  <Button type="button" variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-destructive shrink-0" onClick={() => desfazer(l)} title={l.nParcelas > 1 ? 'Desfazer série inteira' : 'Desfazer'}>
+                  <span className="tabular text-destructive text-right text-sm">{formatCurrency(l.valor)}</span>
+                  <span className="text-center text-[11px] text-muted-foreground">{l.nParcelas > 1 ? `${l.nParcelas}×` : 'à vista'}</span>
+                  <Button type="button" variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-destructive" onClick={() => desfazer(l)} title={l.nParcelas > 1 ? 'Desfazer série inteira' : 'Desfazer'}>
                     <Trash2 className="h-3.5 w-3.5" />
                   </Button>
                 </div>
               ))}
             </div>
-          </div>
-        )}
+          )}
+
+          {/* Rodapé com total da sessão */}
+          {sessao.length > 0 && (
+            <div className="flex items-center justify-between px-2.5 py-2 bg-secondary/40 text-sm border-t">
+              <span className="text-muted-foreground">
+                {sessao.length} {sessao.length === 1 ? 'lançamento' : 'lançamentos'} · {cardNome} {getMonthName(compMonth).slice(0, 3)}/{String(compYear).slice(2)}
+              </span>
+              <span className="font-semibold tabular text-destructive">{formatCurrency(totalSessao)}</span>
+            </div>
+          )}
+        </div>
+
+        <p className="text-[11px] text-muted-foreground text-center">
+          Descrição → Tab → valor → <kbd className="px-1 rounded bg-muted">Enter</kbd>. Parcelas só se tiver.
+        </p>
       </DialogContent>
     </Dialog>
   );
