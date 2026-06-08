@@ -14,11 +14,12 @@ import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/hooks/use-toast';
 import { useState } from 'react';
-import { Plus, CreditCard, Banknote, DollarSign, CalendarDays, PenLine, Trash2, ArrowLeftRight } from 'lucide-react';
+import { Plus, CreditCard, Banknote, DollarSign, CalendarDays, PenLine, Trash2, ArrowLeftRight, Zap } from 'lucide-react';
 import { ConfirmDelete } from '@/components/ConfirmDelete';
 import { PaymentModal } from '@/components/contas/PaymentModal';
 import { ManualTransactionModal } from '@/components/contas/ManualTransactionModal';
 import { TransferModal } from '@/components/contas/TransferModal';
+import { QuickCardEntry } from '@/components/contas/QuickCardEntry';
 import { MonthSelector } from '@/components/MonthSelector';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
@@ -45,6 +46,7 @@ export default function ContasPage() {
   const [numeroConta, setNumeroConta] = useState('');
   const [paymentConta, setPaymentConta] = useState<{ id: string; nome: string; fatura: number } | null>(null);
   const [transferOpen, setTransferOpen] = useState(false);
+  const [quickOpen, setQuickOpen] = useState(false);
   const [manualTxConta, setManualTxConta] = useState<{ id: string; nome: string; tipo: 'credito' | 'debito'; mesCompetencia?: string } | null>(null);
 
   const now = new Date();
@@ -290,6 +292,9 @@ export default function ContasPage() {
         <h1 className="text-2xl font-bold">Contas</h1>
         <div className="flex items-center gap-2">
           <MonthSelector month={month} year={year} onChange={(m, y) => { setMonth(m); setYear(y); }} />
+          <Button variant="outline" onClick={() => setQuickOpen(true)} className="gap-1.5">
+            <Zap className="h-4 w-4 text-primary" /> Lançar cartão
+          </Button>
           <Button variant="outline" onClick={() => setTransferOpen(true)}>
             <ArrowLeftRight className="mr-2 h-4 w-4" /> Transferir
           </Button>
@@ -517,6 +522,7 @@ export default function ContasPage() {
       )}
 
       <TransferModal open={transferOpen} onOpenChange={setTransferOpen} />
+      <QuickCardEntry open={quickOpen} onOpenChange={setQuickOpen} />
     </div>
   );
 }
