@@ -13,6 +13,7 @@ import {
   isFaturaPayment,
   isCreditoParcelamento,
   isSaldoAnteriorFatura,
+  isDevolution,
   // (importado mais abaixo via auto-categorize) — usado pra marcar PIX entre
   // cônjuges como transferência interna logo no import.
   FATURA_TOTAL_MARKER,
@@ -698,7 +699,11 @@ export function CsvImportDialog({ open, onOpenChange }: Props) {
         ignorar_dashboard:
           isSaldoAnteriorFatura(t.descricao) ||
           isTransferenciaInterna(t.descricao) ||
-          isFaturaPayment(t.descricao),
+          isFaturaPayment(t.descricao) ||
+          // Estorno/devolução de CARTÃO: crédito que abate a fatura, não é
+          // renda. ignorar_dashboard=true tira do Dashboard como receita;
+          // useFaturaAcumulada detecta por isDevolution e subtrai da fatura.
+          (isCredito && t.tipo === 'receita' && isDevolution(t.descricao)),
         // Linhas vindas de extrato bancário/cartão são SEMPRE pagas
         // (já saíram/entraram efetivamente no banco). Projeções futuras
         // de parcelas (gerado depois) sobrescrevem pra false.

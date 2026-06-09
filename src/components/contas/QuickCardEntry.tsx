@@ -61,6 +61,7 @@ export function QuickCardEntry({ open, onOpenChange }: Props) {
   const [parcTotal, setParcTotal] = useState('');
   const [categoria, setCategoria] = useState('');
   const [subcategoria, setSubcategoria] = useState('');
+  const [estorno, setEstorno] = useState(false); // true = crédito que abate a fatura
   const [submitting, setSubmitting] = useState(false);
   const [sessao, setSessao] = useState<Lancado[]>([]);
   // Memória de aprendizado da sessão: descrição_normalizada → {cat, sub}.
@@ -202,7 +203,8 @@ export function QuickCardEntry({ open, onOpenChange }: Props) {
       // foram pagas antes e estão fora do controle atual.
       const hoje = toLocalIso(new Date());
       const desc = descricao.trim();
-      const ehParcelado = pTotal > 1;
+      // Estorno é crédito único — nunca parcelado.
+      const ehParcelado = pTotal > 1 && !estorno;
       const grupoParcela = ehParcelado ? crypto.randomUUID() : null;
       const [cy, cm] = mesCompetencia.split('-').map(Number);
 
@@ -222,9 +224,11 @@ export function QuickCardEntry({ open, onOpenChange }: Props) {
           descricao: descFinal,
           descricao_normalizada: descFinal.toUpperCase().replace(/[^A-Z0-9 ]/g, '').trim(),
           valor: valorNum,
-          tipo: 'despesa',
-          categoria: catFinal,
-          subcategoria: subFinal || null,
+          // Estorno: receita com categoria 'Estorno' e ignorar_dashboard=true
+          // (abate a fatura via useFaturaAcumulada; não conta como renda).
+          tipo: estorno ? 'receita' : 'despesa',
+          categoria: estorno ? 'Estorno' : catFinal,
+          subcategoria: estorno ? null : (subFinal || null),
           essencial: false,
           parcela_atual: parcelaIdx,
           parcela_total: ehParcelado ? pTotal : null,
@@ -232,7 +236,7 @@ export function QuickCardEntry({ open, onOpenChange }: Props) {
           hash_transacao: hash,
           pessoa: pessoaNome,
           mes_competencia: compI,
-          ignorar_dashboard: false,
+          ignorar_dashboard: estorno,
           pago: i === 0, // a parcela atual é paga; as projetadas, pendentes
         });
       }
@@ -244,16 +248,16 @@ export function QuickCardEntry({ open, onOpenChange }: Props) {
         id: inseridas[0].id,
         grupoParcela,
         descricao: desc,
-        valor: valorNum,
-        categoria: catFinal,
-        subcategoria: subFinal || null,
+        valor: estorno ? -valorNum : valorNum, // estorno entra como crédito (negativo)
+        categoria: estorno ? 'Estorno' : catFinal,
+        subcategoria: estorno ? null : (subFinal || null),
         parcelaAtual: ehParcelado ? pAtual : 1,
         parcelaTotal: ehParcelado ? pTotal : 1,
       }, ...prev]);
-      // Aprende NA HORA: próxima vez que digitar essa descrição, já vem
-      // com categoria + subcategoria preenchidas (sem esperar o banco).
+      // Aprende NA HORA (só compras, não estornos): próxima vez que digitar
+      // essa descrição, já vem com categoria + subcategoria preenchidas.
       const kAprend = desc.toUpperCase().replace(/[^A-Z0-9 ]/g, '').trim();
-      if (kAprend) {
+      if (kAprend && !estorno) {
         setAprendidoSessao(prev => ({ ...prev, [kAprend]: { categoria: catFinal, subcategoria: subFinal || '' } }));
       }
       localStorage.setItem(LS_CARD, cardId);
@@ -266,6 +270,7 @@ export function QuickCardEntry({ open, onOpenChange }: Props) {
       setParcTotal('');
       setCategoria('');
       setSubcategoria('');
+      setEstorno(false);
       descRef.current?.focus();
     } catch (err: any) {
       toast({ title: 'Erro ao lançar', description: String(err?.message || err).slice(0, 160), variant: 'destructive' });
@@ -386,56 +391,78 @@ export function QuickCardEntry({ open, onOpenChange }: Props) {
                 <Zap className="h-4 w-4" />
               </Button>
             </div>
-            {/* Categoria auto + hint de parcelamento na mesma linha de apoio */}
+            {/* Categoria auto + estorno + hint de parcelamento na linha de apoio */}
             <div className="flex items-center justify-between gap-2 px-2.5 pb-2">
               <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground flex-wrap">
-                <span>Categoria:</span>
-                <Select value={catFinal} onValueChange={(v) => { setCategoria(v); setSubcategoria(''); }}>
-                  <SelectTrigger className="h-6 text-[11px] border-0 bg-secondary/50 px-2 gap-1 w-auto"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {CATEGORIAS_DESPESA.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-                {subsDisponiveis.length > 0 && (
+                {estorno ? (
+                  <span className="text-[11px] text-green-500 font-medium">↩ Estorno — abate a fatura</span>
+                ) : (
                   <>
-                    <span>›</span>
-                    <Select value={subFinal || '__none__'} onValueChange={(v) => setSubcategoria(v === '__none__' ? '' : v)}>
-                      <SelectTrigger className="h-6 text-[11px] border-0 bg-secondary/50 px-2 gap-1 w-auto"><SelectValue placeholder="sub (opcional)" /></SelectTrigger>
+                    <span>Categoria:</span>
+                    <Select value={catFinal} onValueChange={(v) => { setCategoria(v); setSubcategoria(''); }}>
+                      <SelectTrigger className="h-6 text-[11px] border-0 bg-secondary/50 px-2 gap-1 w-auto"><SelectValue /></SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="__none__">— sem sub —</SelectItem>
-                        {subsDisponiveis.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                        {CATEGORIAS_DESPESA.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
                       </SelectContent>
                     </Select>
+                    {subsDisponiveis.length > 0 && (
+                      <>
+                        <span>›</span>
+                        <Select value={subFinal || '__none__'} onValueChange={(v) => setSubcategoria(v === '__none__' ? '' : v)}>
+                          <SelectTrigger className="h-6 text-[11px] border-0 bg-secondary/50 px-2 gap-1 w-auto"><SelectValue placeholder="sub (opcional)" /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="__none__">— sem sub —</SelectItem>
+                            {subsDisponiveis.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                          </SelectContent>
+                        </Select>
+                      </>
+                    )}
+                    {veioDoHistorico && (
+                      <span className="text-[10px] text-primary" title="Sugerido pelo seu histórico de lançamentos">↩ histórico</span>
+                    )}
                   </>
                 )}
-                {veioDoHistorico && (
-                  <span className="text-[10px] text-primary" title="Sugerido pelo seu histórico de lançamentos">↩ histórico</span>
-                )}
               </div>
-              {pTotalVal > 1 && (
-                <span className="text-[11px] text-primary text-right">
-                  parcela {pAtualVal}/{pTotalVal} aqui · cria + {nRows - 1} futura{nRows - 1 === 1 ? '' : 's'}
-                </span>
-              )}
+              <div className="flex items-center gap-2 shrink-0">
+                {pTotalVal > 1 && !estorno && (
+                  <span className="text-[11px] text-primary text-right">
+                    {pAtualVal}/{pTotalVal} · + {nRows - 1} fut.
+                  </span>
+                )}
+                {/* Toggle estorno */}
+                <button
+                  type="button"
+                  onClick={() => setEstorno(e => !e)}
+                  className={`text-[10px] px-2 py-0.5 rounded-full border transition-colors ${estorno ? 'bg-green-500/15 border-green-500/50 text-green-500' : 'border-muted text-muted-foreground hover:text-foreground'}`}
+                  title="Marca como estorno/devolução — vira crédito que abate a fatura"
+                >
+                  estorno
+                </button>
+              </div>
             </div>
           </form>
 
           {/* Itens já lançados nesta sessão */}
           {sessao.length > 0 && (
             <div className="max-h-52 overflow-y-auto divide-y divide-border/50">
-              {sessao.map(l => (
+              {sessao.map(l => {
+                const ehEstornoItem = l.valor < 0 || l.categoria === 'Estorno';
+                return (
                 <div key={l.id} className="grid grid-cols-[1fr_80px_84px_32px] gap-2 px-2.5 py-2 items-center text-sm hover:bg-secondary/20">
                   <div className="min-w-0">
                     <p className="truncate">{l.descricao}</p>
-                    <p className="text-[10px] text-muted-foreground">{l.categoria}{l.subcategoria ? ` › ${l.subcategoria}` : ''}</p>
+                    <p className="text-[10px] text-muted-foreground">{ehEstornoItem ? '↩ Estorno' : `${l.categoria}${l.subcategoria ? ` › ${l.subcategoria}` : ''}`}</p>
                   </div>
-                  <span className="tabular text-destructive text-right text-sm">{formatCurrency(l.valor)}</span>
-                  <span className="text-center text-[11px] text-muted-foreground">{l.parcelaTotal > 1 ? `${l.parcelaAtual}/${l.parcelaTotal}` : 'à vista'}</span>
+                  <span className={`tabular text-right text-sm ${ehEstornoItem ? 'text-green-500' : 'text-destructive'}`}>
+                    {ehEstornoItem ? '+' : ''}{formatCurrency(Math.abs(l.valor))}
+                  </span>
+                  <span className="text-center text-[11px] text-muted-foreground">{l.parcelaTotal > 1 ? `${l.parcelaAtual}/${l.parcelaTotal}` : ehEstornoItem ? '—' : 'à vista'}</span>
                   <Button type="button" variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-destructive" onClick={() => desfazer(l)} title={l.parcelaTotal > 1 ? 'Desfazer série inteira' : 'Desfazer'}>
                     <Trash2 className="h-3.5 w-3.5" />
                   </Button>
                 </div>
-              ))}
+                );
+              })}
             </div>
           )}
 

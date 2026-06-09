@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { fetchAllRows } from '@/lib/supabase-fetch';
+import { isDevolution } from '@/lib/csv-parser';
 
 interface CardTxRow {
   conta_id: string;
@@ -10,6 +11,8 @@ interface CardTxRow {
   data: string;
   mes_competencia: string | null;
   ignorar_dashboard: boolean;
+  categoria: string | null;
+  descricao: string | null;
 }
 
 interface FaturaMes {
@@ -59,7 +62,7 @@ export function useFaturaAcumulada(cardIds: string[], billingMonth: string) {
 
       const allTxs = await fetchAllRows<CardTxRow>(() => supabase
         .from('transacoes')
-        .select('conta_id, tipo, valor, data, mes_competencia, ignorar_dashboard')
+        .select('conta_id, tipo, valor, data, mes_competencia, ignorar_dashboard, categoria, descricao')
         .eq('user_id', user!.id)
         .in('conta_id', cardIds));
 
@@ -87,7 +90,19 @@ export function useFaturaAcumulada(cardIds: string[], billingMonth: string) {
           const valor = Math.abs(Number(t.valor));
           let periodo: string;
 
-          if (t.tipo === 'receita' && t.ignorar_dashboard) {
+          // ESTORNO/DEVOLUÇÃO: crédito do lojista que ABATE a despesa da fatura
+          // (não é pagamento seu, não é renda). Detecta por categoria='Estorno'
+          // ou descrição (devolução/estorno). Reduz a despesa do MESMO período
+          // da compra (mes_competencia se houver, senão mês da data).
+          const ehEstorno = t.tipo === 'receita' && (
+            t.categoria === 'Estorno' || isDevolution(t.descricao || '')
+          );
+
+          if (ehEstorno) {
+            periodo = t.mes_competencia || t.data.substring(0, 7);
+            if (!byPeriod[periodo]) byPeriod[periodo] = { despesas: 0, pagamentos: 0 };
+            byPeriod[periodo].despesas -= valor; // abate a fatura
+          } else if (t.tipo === 'receita' && t.ignorar_dashboard) {
             // Pagamento: respeita mes_competencia se setado (UI manual seta
             // pra mês corrente). Senão, abate fatura ANTERIOR à data.
             if (t.mes_competencia) {
