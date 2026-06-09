@@ -25,7 +25,8 @@ interface Lancado {
   descricao: string;
   valor: number;       // valor por parcela
   categoria: string;
-  nParcelas: number;   // 1 = à vista
+  parcelaAtual: number; // 1 = à vista
+  parcelaTotal: number; // 1 = à vista
 }
 
 const LS_CARD = 'quickcard:lastCardId';
@@ -52,7 +53,10 @@ export function QuickCardEntry({ open, onOpenChange }: Props) {
 
   const [descricao, setDescricao] = useState('');
   const [valor, setValor] = useState('');
-  const [parcelas, setParcelas] = useState('');  // vazio/1 = à vista; N = parcela 1/N
+  // Parcelamento: atual/total. Vazio = à vista. Ex: 5 / 12 = parcela 5 de 12
+  // (cria 5/12 na fatura escolhida + projeta 6/12..12/12).
+  const [parcAtual, setParcAtual] = useState('');
+  const [parcTotal, setParcTotal] = useState('');
   const [categoria, setCategoria] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [sessao, setSessao] = useState<Lancado[]>([]);
@@ -91,7 +95,11 @@ export function QuickCardEntry({ open, onOpenChange }: Props) {
   // Auto-categoriza enquanto digita (preview; user pode trocar no select)
   const catPreview = useMemo(() => autoCategorizarTransacao(descricao) || 'Outros', [descricao]);
   const catFinal = categoria || catPreview;
-  const nParcVal = Math.max(1, Math.min(parseInt(parcelas) || 1, 99));
+  // total de parcelas (1 = à vista); atual default 1 se total setado.
+  const pTotalVal = Math.max(1, Math.min(parseInt(parcTotal) || 1, 99));
+  const pAtualVal = pTotalVal > 1 ? Math.max(1, Math.min(parseInt(parcAtual) || 1, pTotalVal)) : 1;
+  // quantas linhas serão criadas: da parcela atual até a última.
+  const nRows = pTotalVal > 1 ? (pTotalVal - pAtualVal + 1) : 1;
 
   const prevMonth = () => {
     if (compMonth === 0) { setCompMonth(11); setCompYear(y => y - 1); }
@@ -117,25 +125,30 @@ export function QuickCardEntry({ open, onOpenChange }: Props) {
     if (!user || !cardId) return;
     const valorNum = Number(valor.replace(',', '.'));
     if (!valorNum || valorNum <= 0 || !descricao.trim()) return;
-    const nParc = Math.max(1, Math.min(parseInt(parcelas) || 1, 99)); // 1 = à vista
+    const pTotal = pTotalVal;   // total de parcelas (1 = à vista)
+    const pAtual = pAtualVal;   // parcela atual (a que cai na fatura escolhida)
 
     setSubmitting(true);
     try {
-      // Compra de cartão = hoje; competência define a fatura. Compra é fato
-      // consumado → 1ª parcela pago=true. Parcelas futuras nascem pendentes
-      // (pago=false), projetadas nas faturas seguintes (mesmo grupo_parcela).
+      // Compra de cartão = hoje; competência define a fatura. A parcela ATUAL
+      // (pAtual) cai na fatura escolhida e é paga (fato consumado). As
+      // seguintes (pAtual+1..pTotal) projetam nas faturas posteriores como
+      // pendentes. Parcelas ANTERIORES (1..pAtual-1) não são criadas — já
+      // foram pagas antes e estão fora do controle atual.
       const hoje = toLocalIso(new Date());
       const desc = descricao.trim();
-      const grupoParcela = nParc > 1 ? crypto.randomUUID() : null;
+      const ehParcelado = pTotal > 1;
+      const grupoParcela = ehParcelado ? crypto.randomUUID() : null;
       const [cy, cm] = mesCompetencia.split('-').map(Number);
 
       const rows = [];
-      for (let i = 0; i < nParc; i++) {
-        // Competência da parcela i: mês escolhido + i meses
-        const dt = new Date(cy, cm - 1 + i, 1);
+      const numLinhas = ehParcelado ? (pTotal - pAtual + 1) : 1;
+      for (let i = 0; i < numLinhas; i++) {
+        const parcelaIdx = ehParcelado ? pAtual + i : null;       // 5, 6, 7...
+        const dt = new Date(cy, cm - 1 + i, 1);                   // competência avança
         const compI = `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}`;
-        const descFinal = nParc > 1 ? `${desc} (${i + 1}/${nParc})` : desc;
-        const seed = grupoParcela ? `${grupoParcela}_${i + 1}` : crypto.randomUUID().slice(0, 8);
+        const descFinal = ehParcelado ? `${desc} (${parcelaIdx}/${pTotal})` : desc;
+        const seed = grupoParcela ? `${grupoParcela}_${parcelaIdx}` : crypto.randomUUID().slice(0, 8);
         const hash = generateHash(hoje, descFinal, valorNum, pessoaNome) + '_quick_' + seed.slice(0, 12);
         rows.push({
           user_id: user.id,
@@ -147,14 +160,14 @@ export function QuickCardEntry({ open, onOpenChange }: Props) {
           tipo: 'despesa',
           categoria: catFinal,
           essencial: false,
-          parcela_atual: nParc > 1 ? i + 1 : null,
-          parcela_total: nParc > 1 ? nParc : null,
+          parcela_atual: parcelaIdx,
+          parcela_total: ehParcelado ? pTotal : null,
           grupo_parcela: grupoParcela,
           hash_transacao: hash,
           pessoa: pessoaNome,
           mes_competencia: compI,
           ignorar_dashboard: false,
-          pago: i === 0, // só a 1ª parcela é "paga"; resto pendente
+          pago: i === 0, // a parcela atual é paga; as projetadas, pendentes
         });
       }
 
@@ -167,7 +180,8 @@ export function QuickCardEntry({ open, onOpenChange }: Props) {
         descricao: desc,
         valor: valorNum,
         categoria: catFinal,
-        nParcelas: nParc,
+        parcelaAtual: ehParcelado ? pAtual : 1,
+        parcelaTotal: ehParcelado ? pTotal : 1,
       }, ...prev]);
       localStorage.setItem(LS_CARD, cardId);
       invalidate();
@@ -175,7 +189,8 @@ export function QuickCardEntry({ open, onOpenChange }: Props) {
       // Limpa e volta o foco pra próxima compra
       setDescricao('');
       setValor('');
-      setParcelas('');
+      setParcAtual('');
+      setParcTotal('');
       setCategoria('');
       descRef.current?.focus();
     } catch (err: any) {
@@ -240,10 +255,10 @@ export function QuickCardEntry({ open, onOpenChange }: Props) {
         {/* LISTA: tabela contínua. Cabeçalho + linha de entrada + itens. */}
         <div className="rounded-xl border overflow-hidden">
           {/* Cabeçalho de colunas */}
-          <div className="grid grid-cols-[1fr_92px_52px_32px] gap-2 px-2.5 py-1.5 bg-secondary/40 text-[11px] uppercase tracking-wider text-muted-foreground">
+          <div className="grid grid-cols-[1fr_80px_84px_32px] gap-2 px-2.5 py-1.5 bg-secondary/40 text-[11px] uppercase tracking-wider text-muted-foreground">
             <span>Descrição</span>
             <span className="text-right">Valor</span>
-            <span className="text-center">Parc.</span>
+            <span className="text-center">Parc/tot</span>
             <span></span>
           </div>
 
@@ -252,7 +267,7 @@ export function QuickCardEntry({ open, onOpenChange }: Props) {
             onSubmit={(e) => { e.preventDefault(); lancar(); }}
             className="border-b bg-primary/5"
           >
-            <div className="grid grid-cols-[1fr_92px_52px_32px] gap-2 px-2.5 py-2 items-center">
+            <div className="grid grid-cols-[1fr_80px_84px_32px] gap-2 px-2.5 py-2 items-center">
               <Input
                 ref={descRef}
                 value={descricao}
@@ -268,14 +283,25 @@ export function QuickCardEntry({ open, onOpenChange }: Props) {
                 inputMode="decimal"
                 className="h-8 text-right border-0 bg-transparent px-1 focus-visible:ring-1"
               />
-              <Input
-                value={parcelas}
-                onChange={e => setParcelas(e.target.value.replace(/[^0-9]/g, ''))}
-                placeholder="1x"
-                inputMode="numeric"
-                className="h-8 text-center border-0 bg-transparent px-1 focus-visible:ring-1"
-                title="Vazio = à vista. Ex: 12 = parcela 1/12 + projeta as futuras."
-              />
+              <div className="flex items-center gap-0.5">
+                <Input
+                  value={parcAtual}
+                  onChange={e => setParcAtual(e.target.value.replace(/[^0-9]/g, ''))}
+                  placeholder="—"
+                  inputMode="numeric"
+                  className="h-8 w-9 text-center border-0 bg-transparent px-0.5 focus-visible:ring-1"
+                  title="Parcela atual (a que cai nesta fatura). Vazio = à vista."
+                />
+                <span className="text-muted-foreground text-sm">/</span>
+                <Input
+                  value={parcTotal}
+                  onChange={e => setParcTotal(e.target.value.replace(/[^0-9]/g, ''))}
+                  placeholder="—"
+                  inputMode="numeric"
+                  className="h-8 w-9 text-center border-0 bg-transparent px-0.5 focus-visible:ring-1"
+                  title="Total de parcelas. Ex: atual 5 / total 12."
+                />
+              </div>
               <Button
                 type="submit"
                 size="icon"
@@ -297,9 +323,9 @@ export function QuickCardEntry({ open, onOpenChange }: Props) {
                   </SelectContent>
                 </Select>
               </div>
-              {nParcVal > 1 && (
+              {pTotalVal > 1 && (
                 <span className="text-[11px] text-primary text-right">
-                  {nParcVal}× = {formatCurrency((Number(valor.replace(',', '.')) || 0) * nParcVal)} total
+                  parcela {pAtualVal}/{pTotalVal} aqui · cria + {nRows - 1} futura{nRows - 1 === 1 ? '' : 's'}
                 </span>
               )}
             </div>
@@ -309,14 +335,14 @@ export function QuickCardEntry({ open, onOpenChange }: Props) {
           {sessao.length > 0 && (
             <div className="max-h-52 overflow-y-auto divide-y divide-border/50">
               {sessao.map(l => (
-                <div key={l.id} className="grid grid-cols-[1fr_92px_52px_32px] gap-2 px-2.5 py-2 items-center text-sm hover:bg-secondary/20">
+                <div key={l.id} className="grid grid-cols-[1fr_80px_84px_32px] gap-2 px-2.5 py-2 items-center text-sm hover:bg-secondary/20">
                   <div className="min-w-0">
                     <p className="truncate">{l.descricao}</p>
                     <p className="text-[10px] text-muted-foreground">{l.categoria}</p>
                   </div>
                   <span className="tabular text-destructive text-right text-sm">{formatCurrency(l.valor)}</span>
-                  <span className="text-center text-[11px] text-muted-foreground">{l.nParcelas > 1 ? `${l.nParcelas}×` : 'à vista'}</span>
-                  <Button type="button" variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-destructive" onClick={() => desfazer(l)} title={l.nParcelas > 1 ? 'Desfazer série inteira' : 'Desfazer'}>
+                  <span className="text-center text-[11px] text-muted-foreground">{l.parcelaTotal > 1 ? `${l.parcelaAtual}/${l.parcelaTotal}` : 'à vista'}</span>
+                  <Button type="button" variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-destructive" onClick={() => desfazer(l)} title={l.parcelaTotal > 1 ? 'Desfazer série inteira' : 'Desfazer'}>
                     <Trash2 className="h-3.5 w-3.5" />
                   </Button>
                 </div>
