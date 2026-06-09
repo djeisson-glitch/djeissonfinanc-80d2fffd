@@ -63,6 +63,9 @@ export function QuickCardEntry({ open, onOpenChange }: Props) {
   const [subcategoria, setSubcategoria] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [sessao, setSessao] = useState<Lancado[]>([]);
+  // Memória de aprendizado da sessão: descrição_normalizada → {cat, sub}.
+  // Atualiza na hora a cada lançamento (sem esperar refetch do banco).
+  const [aprendidoSessao, setAprendidoSessao] = useState<Record<string, { categoria: string; subcategoria: string }>>({});
 
   const pessoaNome = user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'Titular';
   const mesCompetencia = `${compYear}-${String(compMonth + 1).padStart(2, '0')}`;
@@ -130,24 +133,32 @@ export function QuickCardEntry({ open, onOpenChange }: Props) {
   });
 
   const normDesc = useMemo(() => descricao.toUpperCase().replace(/[^A-Z0-9 ]/g, '').trim(), [descricao]);
-  // Sugestão: 1º o que VOCÊ já usou pra essa descrição; 2º dicionário; 3º Outros
+  // Aprendizado: 1º a memória INSTANTÂNEA da sessão (atualiza a cada lançamento,
+  // sem esperar refetch do banco); 2º o histórico do banco. A sessão ganha
+  // porque reflete o que você ACABOU de escolher.
+  const aprendido = useMemo(() => {
+    if (normDesc && aprendidoSessao[normDesc]) return aprendidoSessao[normDesc];
+    if (normDesc && histMap?.[normDesc]) return histMap[normDesc];
+    return null;
+  }, [normDesc, aprendidoSessao, histMap]);
+  // Sugestão de categoria: aprendizado > dicionário > Outros
   const catPreview = useMemo(() => {
-    if (normDesc && histMap?.[normDesc]) return histMap[normDesc].categoria;
+    if (aprendido) return aprendido.categoria;
     return autoCategorizarTransacao(descricao) || 'Outros';
-  }, [descricao, normDesc, histMap]);
+  }, [descricao, aprendido]);
   const catFinal = categoria || catPreview;
   // Subcategorias disponíveis pra categoria atual
   const subsDisponiveis = useMemo(() => getSubcategorias(catFinal), [catFinal]);
-  // Sugestão de sub: do histórico, se válida pra categoria atual
+  // Sugestão de sub: do aprendizado, se válida pra categoria atual
   const subPreview = useMemo(() => {
-    const h = histMap?.[normDesc]?.subcategoria;
+    const h = aprendido?.subcategoria;
     if (h && subsDisponiveis.includes(h)) return h;
     return '';
-  }, [normDesc, histMap, subsDisponiveis]);
+  }, [aprendido, subsDisponiveis]);
   const subFinal = subcategoria || subPreview;
   const veioDoHistorico = useMemo(() => {
-    return !categoria && !!normDesc && !!histMap?.[normDesc];
-  }, [normDesc, histMap, categoria]);
+    return !categoria && !!normDesc && !!aprendido;
+  }, [normDesc, aprendido, categoria]);
   // total de parcelas (1 = à vista); atual default 1 se total setado.
   const pTotalVal = Math.max(1, Math.min(parseInt(parcTotal) || 1, 99));
   const pAtualVal = pTotalVal > 1 ? Math.max(1, Math.min(parseInt(parcAtual) || 1, pTotalVal)) : 1;
@@ -239,6 +250,12 @@ export function QuickCardEntry({ open, onOpenChange }: Props) {
         parcelaAtual: ehParcelado ? pAtual : 1,
         parcelaTotal: ehParcelado ? pTotal : 1,
       }, ...prev]);
+      // Aprende NA HORA: próxima vez que digitar essa descrição, já vem
+      // com categoria + subcategoria preenchidas (sem esperar o banco).
+      const kAprend = desc.toUpperCase().replace(/[^A-Z0-9 ]/g, '').trim();
+      if (kAprend) {
+        setAprendidoSessao(prev => ({ ...prev, [kAprend]: { categoria: catFinal, subcategoria: subFinal || '' } }));
+      }
       localStorage.setItem(LS_CARD, cardId);
       invalidate();
 
