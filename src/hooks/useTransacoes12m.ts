@@ -24,7 +24,7 @@ export function useTransacoes12m() {
       const data = await fetchAllRows<TransactionRecord>(() =>
         supabase
           .from('transacoes')
-          .select('data, mes_competencia, descricao, valor, tipo, categoria, categoria_id, parcela_atual, parcela_total, grupo_parcela, ignorar_dashboard, essencial, conta_id')
+          .select('data, mes_competencia, descricao, valor, tipo, categoria, categoria_id, subcategoria, parcela_atual, parcela_total, grupo_parcela, ignorar_dashboard, essencial, conta_id')
           .eq('user_id', user!.id)
           .gte('data', startDate),
       );

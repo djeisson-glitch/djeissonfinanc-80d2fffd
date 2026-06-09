@@ -12,7 +12,7 @@ import { fetchAllRows } from '@/lib/supabase-fetch';
 import { generateHash } from '@/lib/csv-parser';
 import { autoCategorizarTransacao } from '@/lib/auto-categorize';
 import { toLocalIso, getMonthName, formatCurrency } from '@/lib/format';
-import { CATEGORIAS_DESPESA } from '@/types/database.types';
+import { CATEGORIAS_DESPESA, getSubcategorias } from '@/types/database.types';
 import { ChevronLeft, ChevronRight, Zap, Trash2, CreditCard } from 'lucide-react';
 
 interface Props {
@@ -26,6 +26,7 @@ interface Lancado {
   descricao: string;
   valor: number;       // valor por parcela
   categoria: string;
+  subcategoria: string | null;
   parcelaAtual: number; // 1 = à vista
   parcelaTotal: number; // 1 = à vista
 }
@@ -59,6 +60,7 @@ export function QuickCardEntry({ open, onOpenChange }: Props) {
   const [parcAtual, setParcAtual] = useState('');
   const [parcTotal, setParcTotal] = useState('');
   const [categoria, setCategoria] = useState('');
+  const [subcategoria, setSubcategoria] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [sessao, setSessao] = useState<Lancado[]>([]);
 
@@ -101,21 +103,25 @@ export function QuickCardEntry({ open, onOpenChange }: Props) {
   const { data: histMap } = useQuery({
     queryKey: ['cat-history', user?.id],
     queryFn: async () => {
-      const rows = await fetchAllRows<{ descricao_normalizada: string | null; categoria: string }>(() => supabase
+      const rows = await fetchAllRows<{ descricao_normalizada: string | null; categoria: string; subcategoria: string | null }>(() => supabase
         .from('transacoes')
-        .select('descricao_normalizada, categoria')
+        .select('descricao_normalizada, categoria, subcategoria')
         .eq('user_id', user!.id)
         .eq('tipo', 'despesa')
         .neq('categoria', 'Outros'));
+      // Conta o par (categoria|subcategoria) mais usado por descrição
       const freq: Record<string, Record<string, number>> = {};
       for (const r of rows) {
         const k = (r.descricao_normalizada || '').trim().toUpperCase();
         if (!k || !r.categoria) continue;
-        (freq[k] ||= {})[r.categoria] = (freq[k]?.[r.categoria] || 0) + 1;
+        const par = `${r.categoria}|${r.subcategoria || ''}`;
+        (freq[k] ||= {})[par] = (freq[k]?.[par] || 0) + 1;
       }
-      const best: Record<string, string> = {};
-      for (const [k, cats] of Object.entries(freq)) {
-        best[k] = Object.entries(cats).sort((a, b) => b[1] - a[1])[0][0];
+      const best: Record<string, { categoria: string; subcategoria: string }> = {};
+      for (const [k, pares] of Object.entries(freq)) {
+        const top = Object.entries(pares).sort((a, b) => b[1] - a[1])[0][0];
+        const [cat, sub] = top.split('|');
+        best[k] = { categoria: cat, subcategoria: sub };
       }
       return best;
     },
@@ -123,18 +129,25 @@ export function QuickCardEntry({ open, onOpenChange }: Props) {
     staleTime: 5 * 60_000,
   });
 
+  const normDesc = useMemo(() => descricao.toUpperCase().replace(/[^A-Z0-9 ]/g, '').trim(), [descricao]);
   // Sugestão: 1º o que VOCÊ já usou pra essa descrição; 2º dicionário; 3º Outros
   const catPreview = useMemo(() => {
-    const norm = descricao.toUpperCase().replace(/[^A-Z0-9 ]/g, '').trim();
-    if (norm && histMap?.[norm]) return histMap[norm];
+    if (normDesc && histMap?.[normDesc]) return histMap[normDesc].categoria;
     return autoCategorizarTransacao(descricao) || 'Outros';
-  }, [descricao, histMap]);
+  }, [descricao, normDesc, histMap]);
   const catFinal = categoria || catPreview;
-  // Marca se a sugestão veio do teu histórico (pra mostrar no UI)
+  // Subcategorias disponíveis pra categoria atual
+  const subsDisponiveis = useMemo(() => getSubcategorias(catFinal), [catFinal]);
+  // Sugestão de sub: do histórico, se válida pra categoria atual
+  const subPreview = useMemo(() => {
+    const h = histMap?.[normDesc]?.subcategoria;
+    if (h && subsDisponiveis.includes(h)) return h;
+    return '';
+  }, [normDesc, histMap, subsDisponiveis]);
+  const subFinal = subcategoria || subPreview;
   const veioDoHistorico = useMemo(() => {
-    const norm = descricao.toUpperCase().replace(/[^A-Z0-9 ]/g, '').trim();
-    return !categoria && !!norm && !!histMap?.[norm];
-  }, [descricao, histMap, categoria]);
+    return !categoria && !!normDesc && !!histMap?.[normDesc];
+  }, [normDesc, histMap, categoria]);
   // total de parcelas (1 = à vista); atual default 1 se total setado.
   const pTotalVal = Math.max(1, Math.min(parseInt(parcTotal) || 1, 99));
   const pAtualVal = pTotalVal > 1 ? Math.max(1, Math.min(parseInt(parcAtual) || 1, pTotalVal)) : 1;
@@ -200,6 +213,7 @@ export function QuickCardEntry({ open, onOpenChange }: Props) {
           valor: valorNum,
           tipo: 'despesa',
           categoria: catFinal,
+          subcategoria: subFinal || null,
           essencial: false,
           parcela_atual: parcelaIdx,
           parcela_total: ehParcelado ? pTotal : null,
@@ -221,6 +235,7 @@ export function QuickCardEntry({ open, onOpenChange }: Props) {
         descricao: desc,
         valor: valorNum,
         categoria: catFinal,
+        subcategoria: subFinal || null,
         parcelaAtual: ehParcelado ? pAtual : 1,
         parcelaTotal: ehParcelado ? pTotal : 1,
       }, ...prev]);
@@ -233,6 +248,7 @@ export function QuickCardEntry({ open, onOpenChange }: Props) {
       setParcAtual('');
       setParcTotal('');
       setCategoria('');
+      setSubcategoria('');
       descRef.current?.focus();
     } catch (err: any) {
       toast({ title: 'Erro ao lançar', description: String(err?.message || err).slice(0, 160), variant: 'destructive' });
@@ -355,14 +371,26 @@ export function QuickCardEntry({ open, onOpenChange }: Props) {
             </div>
             {/* Categoria auto + hint de parcelamento na mesma linha de apoio */}
             <div className="flex items-center justify-between gap-2 px-2.5 pb-2">
-              <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+              <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground flex-wrap">
                 <span>Categoria:</span>
-                <Select value={catFinal} onValueChange={setCategoria}>
+                <Select value={catFinal} onValueChange={(v) => { setCategoria(v); setSubcategoria(''); }}>
                   <SelectTrigger className="h-6 text-[11px] border-0 bg-secondary/50 px-2 gap-1 w-auto"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     {CATEGORIAS_DESPESA.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
                   </SelectContent>
                 </Select>
+                {subsDisponiveis.length > 0 && (
+                  <>
+                    <span>›</span>
+                    <Select value={subFinal || '__none__'} onValueChange={(v) => setSubcategoria(v === '__none__' ? '' : v)}>
+                      <SelectTrigger className="h-6 text-[11px] border-0 bg-secondary/50 px-2 gap-1 w-auto"><SelectValue placeholder="sub (opcional)" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="__none__">— sem sub —</SelectItem>
+                        {subsDisponiveis.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </>
+                )}
                 {veioDoHistorico && (
                   <span className="text-[10px] text-primary" title="Sugerido pelo seu histórico de lançamentos">↩ histórico</span>
                 )}
@@ -382,7 +410,7 @@ export function QuickCardEntry({ open, onOpenChange }: Props) {
                 <div key={l.id} className="grid grid-cols-[1fr_80px_84px_32px] gap-2 px-2.5 py-2 items-center text-sm hover:bg-secondary/20">
                   <div className="min-w-0">
                     <p className="truncate">{l.descricao}</p>
-                    <p className="text-[10px] text-muted-foreground">{l.categoria}</p>
+                    <p className="text-[10px] text-muted-foreground">{l.categoria}{l.subcategoria ? ` › ${l.subcategoria}` : ''}</p>
                   </div>
                   <span className="tabular text-destructive text-right text-sm">{formatCurrency(l.valor)}</span>
                   <span className="text-center text-[11px] text-muted-foreground">{l.parcelaTotal > 1 ? `${l.parcelaAtual}/${l.parcelaTotal}` : 'à vista'}</span>

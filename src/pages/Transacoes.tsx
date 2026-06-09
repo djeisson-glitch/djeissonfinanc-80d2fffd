@@ -5,7 +5,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { formatCurrency, formatDate, getMonthRange, toLocalIso } from '@/lib/format';
 import { fetchAllRows } from '@/lib/supabase-fetch';
-import { CATEGORIAS, CATEGORIAS_DESPESA, CATEGORIAS_RECEITA, CATEGORIAS_CONFIG, getCategoriaColor } from '@/types/database.types';
+import { CATEGORIAS, CATEGORIAS_DESPESA, CATEGORIAS_RECEITA, CATEGORIAS_CONFIG, getCategoriaColor, getSubcategorias } from '@/types/database.types';
 import { useCategorias } from '@/hooks/useCategorias';
 import { CategoriaSelector } from '@/components/CategoriaSelector';
 import { Card, CardContent } from '@/components/ui/card';
@@ -32,6 +32,7 @@ export default function TransacoesPage() {
   const [month, setMonth] = useState(now.getMonth());
   const [year, setYear] = useState(now.getFullYear());
   const [filterCategoria, setFilterCategoria] = useState('all');
+  const [filterSubcategoria, setFilterSubcategoria] = useState('all');
   const [filterTipo, setFilterTipo] = useState('all');
   const [filterEssencial, setFilterEssencial] = useState('all');
   const [filterConta, setFilterConta] = useState('all');
@@ -67,12 +68,14 @@ export default function TransacoesPage() {
   // Dívidas: /transacoes?categoria=Saude&mes=2026-05&busca=oboticario etc.
   useEffect(() => {
     const cat = searchParams.get('categoria');
+    const subcat = searchParams.get('subcategoria');
     const tipo = searchParams.get('tipo');
     const essencial = searchParams.get('essencial');
     const busca = searchParams.get('busca');
     const mes = searchParams.get('mes'); // YYYY-MM
     const conta = searchParams.get('conta');
     if (cat) setFilterCategoria(cat);
+    if (subcat) setFilterSubcategoria(subcat);
     if (tipo) setFilterTipo(tipo);
     if (essencial) setFilterEssencial(essencial);
     if (busca) setSearch(busca);
@@ -192,7 +195,7 @@ export default function TransacoesPage() {
   });
 
   const updateMutation = useMutation({
-    mutationFn: async (tx: { id: string; categoria: string; categoria_id: string | null; essencial: boolean; ignorar_dashboard: boolean; pago: boolean }) => {
+    mutationFn: async (tx: { id: string; categoria: string; categoria_id: string | null; subcategoria: string | null; essencial: boolean; ignorar_dashboard: boolean; pago: boolean }) => {
       // Edição simples e direta — só atualiza esta transação. Sem auto-
       // aprendizado, sem "aprender padrão", sem bulk-recategorizar similares.
       // A complexidade anterior gerava bugs ("por que minha despesa virou
@@ -200,6 +203,7 @@ export default function TransacoesPage() {
       const { error: upErr } = await supabase.from('transacoes').update({
         categoria: tx.categoria,
         categoria_id: tx.categoria_id,
+        subcategoria: tx.subcategoria,
         essencial: tx.essencial,
         ignorar_dashboard: tx.ignorar_dashboard,
         pago: tx.pago,
@@ -333,6 +337,7 @@ export default function TransacoesPage() {
   const filtered = useMemo(() => (transacoes?.filter(t => {
     if (!showIgnoradas && t.ignorar_dashboard) return false;
     if (filterCategoria !== 'all' && t.categoria !== filterCategoria) return false;
+    if (filterSubcategoria !== 'all' && (t.subcategoria || '') !== filterSubcategoria) return false;
     if (filterTipo !== 'all' && t.tipo !== filterTipo) return false;
     if (filterEssencial === 'true' && !t.essencial) return false;
     if (filterEssencial === 'false' && t.essencial) return false;
@@ -342,7 +347,7 @@ export default function TransacoesPage() {
     if (filterPago === 'pendente' && t.pago !== false) return false;
     if (search && !t.descricao.toLowerCase().includes(search.toLowerCase())) return false;
     return true;
-  }) || []), [transacoes, showIgnoradas, filterCategoria, filterTipo, filterEssencial, filterConta, filterPessoa, filterPago, search]);
+  }) || []), [transacoes, showIgnoradas, filterCategoria, filterSubcategoria, filterTipo, filterEssencial, filterConta, filterPessoa, filterPago, search]);
 
   // Group filtered transactions by day
   const groupedByDay = useMemo(() => {
@@ -443,7 +448,7 @@ export default function TransacoesPage() {
   );
   const { getCategoriaById, getDisplayName, getColor } = useCategorias();
 
-  const hasActiveFilters = filterCategoria !== 'all' || filterTipo !== 'all' || filterEssencial !== 'all' || filterConta !== 'all' || filterPessoa !== 'all';
+  const hasActiveFilters = filterCategoria !== 'all' || filterSubcategoria !== 'all' || filterTipo !== 'all' || filterEssencial !== 'all' || filterConta !== 'all' || filterPessoa !== 'all';
 
   const formatDayHeader = (dateStr: string) => {
     const date = new Date(dateStr + 'T12:00:00');
@@ -500,7 +505,9 @@ export default function TransacoesPage() {
             <span className="text-[10px] text-muted-foreground">
               {txDate.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}
             </span>
-            <span className="text-xs text-muted-foreground">{catName}</span>
+            <span className="text-xs text-muted-foreground">
+              {catName}{t.subcategoria ? <span className="opacity-70"> › {t.subcategoria}</span> : null}
+            </span>
             {t.parcela_atual && t.parcela_total && (
               <Badge variant="outline" className="text-[10px] px-1 py-0 h-4">
                 {t.parcela_atual}/{t.parcela_total}
@@ -729,6 +736,11 @@ export default function TransacoesPage() {
           {filterCategoria !== 'all' && (
             <Badge variant="secondary" className="cursor-pointer text-xs" onClick={() => handleFilterCategoria('all')}>
               {filterCategoria} ✕
+            </Badge>
+          )}
+          {filterSubcategoria !== 'all' && (
+            <Badge variant="secondary" className="cursor-pointer text-xs" onClick={() => { setFilterSubcategoria('all'); searchParams.delete('subcategoria'); setSearchParams(searchParams, { replace: true }); }}>
+              › {filterSubcategoria} ✕
             </Badge>
           )}
           {filterEssencial !== 'all' && (
@@ -969,6 +981,7 @@ export default function TransacoesPage() {
                 id: editingTx.id,
                 categoria: editingTx.categoria,
                 categoria_id: editingTx.categoria_id || null,
+                subcategoria: editingTx.subcategoria || null,
                 essencial: editingTx.essencial,
                 ignorar_dashboard: editingTx.ignorar_dashboard || false,
                 pago: editingTx.pago !== false, // default true se undefined
@@ -1010,11 +1023,28 @@ export default function TransacoesPage() {
                       ...editingTx,
                       categoria_id: catId,
                       categoria: cat?.nome || editingTx.categoria,
+                      subcategoria: null, // troca de categoria zera a sub
                       essencial: CATEGORIAS_CONFIG[cat?.nome || '']?.essencial ?? editingTx.essencial,
                     });
                   }}
                 />
               </div>
+              {/* Subcategoria — só aparece se a categoria tem subs definidas */}
+              {getSubcategorias(editingTx.categoria).length > 0 && (
+                <div className="space-y-2">
+                  <Label>Subcategoria</Label>
+                  <Select
+                    value={editingTx.subcategoria || '__none__'}
+                    onValueChange={(v) => setEditingTx({ ...editingTx, subcategoria: v === '__none__' ? null : v })}
+                  >
+                    <SelectTrigger><SelectValue placeholder="Opcional" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__none__">— sem subcategoria —</SelectItem>
+                      {getSubcategorias(editingTx.categoria).map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
               <div className="flex items-center justify-between">
                 <Label>Essencial</Label>
                 <Switch checked={editingTx.essencial} onCheckedChange={v => setEditingTx({ ...editingTx, essencial: v })} />

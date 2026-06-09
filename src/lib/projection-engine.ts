@@ -17,6 +17,7 @@ export interface TransactionRecord {
   tipo: string;
   categoria: string;
   categoria_id: string | null;
+  subcategoria?: string | null;
   parcela_atual: number | null;
   parcela_total: number | null;
   grupo_parcela: string | null;

@@ -73,10 +73,17 @@ export function buildMonthlyFlow(
 // Composição de categorias do mês corrente. Aceita um seletor de "qual mês"
 // — passa `null` pra usar todos os meses presentes (top categorias all-time).
 // ---------------------------------------------------------------------------
+export interface SubSlice {
+  subcategoria: string; // "Sem subcategoria" quando null
+  valor: number;
+  pct: number; // % dentro da categoria pai
+}
+
 export interface CategorySlice {
   categoria: string;
   valor: number;
   pct: number;
+  subs: SubSlice[]; // breakdown por subcategoria (vazio se não há)
 }
 
 export function buildCategoryComposition(
@@ -90,18 +97,38 @@ export function buildCategoryComposition(
     return true;
   });
   const totals: Record<string, number> = {};
+  const subTotals: Record<string, Record<string, number>> = {}; // cat → sub → valor
   let grandTotal = 0;
   for (const t of filtered) {
     const cat = t.categoria || 'Outros';
-    totals[cat] = (totals[cat] || 0) + Number(t.valor);
-    grandTotal += Number(t.valor);
+    const v = Number(t.valor);
+    totals[cat] = (totals[cat] || 0) + v;
+    grandTotal += v;
+    const sub = ((t as any).subcategoria as string | null) || 'Sem subcategoria';
+    (subTotals[cat] ||= {})[sub] = (subTotals[cat]?.[sub] || 0) + v;
   }
   return Object.entries(totals)
-    .map(([categoria, valor]) => ({
-      categoria,
-      valor: Math.round(valor * 100) / 100,
-      pct: grandTotal > 0 ? Math.round((valor / grandTotal) * 10000) / 100 : 0,
-    }))
+    .map(([categoria, valor]) => {
+      const subsRaw = subTotals[categoria] || {};
+      const subKeys = Object.keys(subsRaw);
+      // Só expõe breakdown se houver subcategoria real (mais que só "Sem sub")
+      const temSub = subKeys.some(k => k !== 'Sem subcategoria');
+      const subs: SubSlice[] = temSub
+        ? Object.entries(subsRaw)
+            .map(([subcategoria, sv]) => ({
+              subcategoria,
+              valor: Math.round(sv * 100) / 100,
+              pct: valor > 0 ? Math.round((sv / valor) * 10000) / 100 : 0,
+            }))
+            .sort((a, b) => b.valor - a.valor)
+        : [];
+      return {
+        categoria,
+        valor: Math.round(valor * 100) / 100,
+        pct: grandTotal > 0 ? Math.round((valor / grandTotal) * 10000) / 100 : 0,
+        subs,
+      };
+    })
     .sort((a, b) => b.valor - a.valor);
 }
 
