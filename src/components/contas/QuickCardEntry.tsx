@@ -8,6 +8,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { fetchAllRows } from '@/lib/supabase-fetch';
 import { generateHash } from '@/lib/csv-parser';
 import { autoCategorizarTransacao } from '@/lib/auto-categorize';
 import { toLocalIso, getMonthName, formatCurrency } from '@/lib/format';
@@ -92,9 +93,48 @@ export function QuickCardEntry({ open, onOpenChange }: Props) {
     if (open) setTimeout(() => descRef.current?.focus(), 100);
   }, [open]);
 
-  // Auto-categoriza enquanto digita (preview; user pode trocar no select)
-  const catPreview = useMemo(() => autoCategorizarTransacao(descricao) || 'Outros', [descricao]);
+  // ── "Aprendizado" SEGURO ──────────────────────────────────────────────
+  // Mapa: descrição_normalizada → categoria que VOCÊ mais usou pra ela.
+  // Carregado 1x ao abrir. É só SUGESTÃO no form (pré-preenche o select).
+  // NUNCA reescreve transação existente nem roda no import — diferente do
+  // antigo regras_categorizacao que causava "virou Saúde sozinha".
+  const { data: histMap } = useQuery({
+    queryKey: ['cat-history', user?.id],
+    queryFn: async () => {
+      const rows = await fetchAllRows<{ descricao_normalizada: string | null; categoria: string }>(() => supabase
+        .from('transacoes')
+        .select('descricao_normalizada, categoria')
+        .eq('user_id', user!.id)
+        .eq('tipo', 'despesa')
+        .neq('categoria', 'Outros'));
+      const freq: Record<string, Record<string, number>> = {};
+      for (const r of rows) {
+        const k = (r.descricao_normalizada || '').trim().toUpperCase();
+        if (!k || !r.categoria) continue;
+        (freq[k] ||= {})[r.categoria] = (freq[k]?.[r.categoria] || 0) + 1;
+      }
+      const best: Record<string, string> = {};
+      for (const [k, cats] of Object.entries(freq)) {
+        best[k] = Object.entries(cats).sort((a, b) => b[1] - a[1])[0][0];
+      }
+      return best;
+    },
+    enabled: open && !!user,
+    staleTime: 5 * 60_000,
+  });
+
+  // Sugestão: 1º o que VOCÊ já usou pra essa descrição; 2º dicionário; 3º Outros
+  const catPreview = useMemo(() => {
+    const norm = descricao.toUpperCase().replace(/[^A-Z0-9 ]/g, '').trim();
+    if (norm && histMap?.[norm]) return histMap[norm];
+    return autoCategorizarTransacao(descricao) || 'Outros';
+  }, [descricao, histMap]);
   const catFinal = categoria || catPreview;
+  // Marca se a sugestão veio do teu histórico (pra mostrar no UI)
+  const veioDoHistorico = useMemo(() => {
+    const norm = descricao.toUpperCase().replace(/[^A-Z0-9 ]/g, '').trim();
+    return !categoria && !!norm && !!histMap?.[norm];
+  }, [descricao, histMap, categoria]);
   // total de parcelas (1 = à vista); atual default 1 se total setado.
   const pTotalVal = Math.max(1, Math.min(parseInt(parcTotal) || 1, 99));
   const pAtualVal = pTotalVal > 1 ? Math.max(1, Math.min(parseInt(parcAtual) || 1, pTotalVal)) : 1;
@@ -119,6 +159,7 @@ export function QuickCardEntry({ open, onOpenChange }: Props) {
     qc.invalidateQueries({ queryKey: ['fatura-acumulada'] });
     qc.invalidateQueries({ queryKey: ['dashboard'] });
     qc.invalidateQueries({ queryKey: ['saldos'] });
+    qc.invalidateQueries({ queryKey: ['cat-history'] }); // aprende a cada lançamento
   };
 
   const lancar = async () => {
@@ -322,6 +363,9 @@ export function QuickCardEntry({ open, onOpenChange }: Props) {
                     {CATEGORIAS_DESPESA.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
                   </SelectContent>
                 </Select>
+                {veioDoHistorico && (
+                  <span className="text-[10px] text-primary" title="Sugerido pelo seu histórico de lançamentos">↩ histórico</span>
+                )}
               </div>
               {pTotalVal > 1 && (
                 <span className="text-[11px] text-primary text-right">

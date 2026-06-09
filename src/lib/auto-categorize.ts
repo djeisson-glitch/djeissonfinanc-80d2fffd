@@ -136,6 +136,18 @@ const RULES: CategoriaRule[] = [
   // ALIMENTAÇÃO (mercado/atacarejo, restaurantes, delivery, padaria)
   { patterns: ['MIX CENTER', 'FRUTEIRA TERRIBILE', 'COTRISAL', 'SUPERMERCADO', 'ZAFFARI', 'STOK CENTER', 'TOP MAIS', 'MINIMARKET', 'MERCADO MOY', 'DOCE MANIA', '212 BISTRO', 'QUESTO GASTRONOMIA', 'IFOOD', 'IFD*', 'CAFE PREMIUM', 'DONA AUGUSTA', 'AMO RESTAURANTE', 'AMO CABANA', 'RESTAURANTE', 'ALASSIO CAFE', 'CAFE E PROSA', 'CONVENIENCIA', 'QUIERO CAFE', 'PADARIA'], categoria: 'Alimentação' },
 
+  // ── TERMOS GENÉRICOS digitados à mão (lançamento manual de cartão) ──
+  // Vêm DEPOIS das regras específicas de extrato pra não atropelar (ex:
+  // 'MERCADO LIVRE' já cai em Compras acima antes de bater 'MERCADO' aqui).
+  { patterns: ['COMBUSTIVEL', 'GASOLINA', 'ETANOL', 'ALCOOL COMUM', 'DIESEL', 'ABASTECIMENTO', 'ABASTECI', 'POSTO', 'TAXI', 'ONIBUS', 'PASSAGEM', 'OFICINA', 'PNEU', 'TROCA DE OLEO', 'IPVA', 'LICENCIAMENTO', 'SEGURO AUTO', 'SEGURO DO CARRO', 'ESTACIONAMENTO'], categoria: 'Transporte' },
+  { patterns: ['MERCADO', 'MERCADINHO', 'ACOUGUE', 'HORTIFRUTI', 'HORTI', 'FEIRA', 'QUITANDA', 'LANCHE', 'LANCHONETE', 'PIZZA', 'PIZZARIA', 'HAMBURGER', 'HAMBURGUER', 'BURGER', 'DELIVERY', 'ALMOCO', 'JANTA', 'CAFE', 'SORVETE', 'ACAI', 'BEBIDA', 'CERVEJA', 'ATACAREJO', 'ATACADAO', 'ASSAI'], categoria: 'Alimentação' },
+  { patterns: ['FARMACIA', 'DROGARIA', 'REMEDIO', 'MEDICAMENTO', 'CONSULTA', 'MEDICO', 'DENTISTA', 'EXAME', 'LABORATORIO', 'PSICOLOG', 'FISIOTERAP', 'ACADEMIA', 'GYM', 'PERSONAL', 'PLANO DE SAUDE', 'OTICA', 'OCULOS'], categoria: 'Saúde' },
+  { patterns: ['ALUGUEL', 'CONDOMINIO', 'LUZ', 'ENERGIA', 'AGUA', 'ESGOTO', 'INTERNET', 'WIFI', 'GAS DE COZINHA', 'BOTIJAO', 'FAXINA', 'DIARISTA', 'MATERIAL DE CONSTRUCAO', 'MOVEIS', 'ELETRODOMESTICO'], categoria: 'Casa' },
+  { patterns: ['ROUPA', 'CALCADO', 'SAPATO', 'TENIS', 'CAMISA', 'CALCA', 'VESTIDO', 'MODA', 'BOUTIQUE', 'LOJA DE ROUPA'], categoria: 'Vestuário' },
+  { patterns: ['SALAO', 'CABELELEIR', 'CABELO', 'BARBEARIA', 'BARBER', 'MANICURE', 'ESMALTE', 'MAQUIAGEM', 'COSMETICO', 'PERFUME'], categoria: 'Beleza' },
+  { patterns: ['CINEMA', 'SHOW', 'INGRESSO', 'BAR', 'BALADA', 'JOGO', 'STEAM', 'PLAYSTATION', 'XBOX', 'BRINQUEDO', 'PARQUE', 'VIAGEM', 'HOTEL', 'POUSADA', 'AIRBNB'], categoria: 'Compras' },
+  { patterns: ['CURSO', 'FACULDADE', 'ESCOLA', 'MENSALIDADE', 'LIVRO', 'APOSTILA', 'MATERIAL ESCOLAR'], categoria: 'Educação' },
+
   // RECEITA → Outras receitas (catch-all)
   { patterns: ['RECEBIMENTO PIX', 'PIX SICREDI', 'VERTATTO NEGOCIOS'], categoria: 'Outras receitas' },
 
