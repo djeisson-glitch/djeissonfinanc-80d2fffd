@@ -34,7 +34,9 @@ export const MoneyInput = React.forwardRef<HTMLInputElement, MoneyInputProps>(
         onChange={(e) => {
           // Acumulador de centavos: pega TODOS os dígitos, ignora o resto.
           // parseInt cuida de zeros à esquerda ("0097" → 97).
-          const digits = e.target.value.replace(/\D/g, '');
+          // Cap em 15 dígitos: acima disso parseInt estoura o limite seguro
+          // de inteiro do JS e corrompe os últimos dígitos em silêncio.
+          const digits = e.target.value.replace(/\D/g, '').slice(0, 15);
           onChange(digits ? parseInt(digits, 10) / 100 : 0);
         }}
         {...props}

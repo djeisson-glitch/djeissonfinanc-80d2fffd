@@ -184,11 +184,16 @@ export function QuickCardEntry({ open, onOpenChange }: Props) {
   // Total REAL da fatura: soma de TODOS os lançamentos do cartão nesta
   // competência (importados + de outras sessões + os de agora), já com
   // estornos abatidos. Invalidado a cada lançar/desfazer → atualiza ao vivo.
-  const { data: faturaMap, isLoading: faturaLoading } = useFaturaAcumulada(
+  // isFetching (não isLoading): isLoading só é true na PRIMEIRA carga; os
+  // refetches após cada lançamento precisam de sinal próprio.
+  const { data: faturaMap, isLoading: faturaLoading, isFetching: faturaFetching } = useFaturaAcumulada(
     open && cardId ? [cardId] : [],
     mesCompetencia,
   );
   const totalFatura = faturaMap?.[cardId]?.despesasMes ?? 0;
+  // Pagamentos já feitos NESTE mês de fatura — quando há pagamento parcial,
+  // o rodapé mostra o que resta, igual ao card de Contas/Dashboard.
+  const pagosMes = faturaMap?.[cardId]?.pagamentosMes ?? 0;
 
   const invalidate = () => {
     qc.invalidateQueries({ queryKey: ['transacoes'] });
@@ -485,10 +490,18 @@ export function QuickCardEntry({ open, onOpenChange }: Props) {
                   <CreditCard className="h-3.5 w-3.5" />
                   Fatura {cardNome} {getMonthName(compMonth).slice(0, 3)}/{String(compYear).slice(2)}
                 </span>
-                <span className="font-bold tabular text-destructive text-base">
+                {/* opacity durante refetch: o número antigo fica visível mas
+                    sinaliza que está atualizando (sem flicker de '…') */}
+                <span className={`font-bold tabular text-destructive text-base transition-opacity ${faturaFetching ? 'opacity-50' : ''}`}>
                   {faturaLoading ? '…' : formatCurrency(totalFatura)}
                 </span>
               </div>
+              {pagosMes > 0 && (
+                <div className="flex items-center justify-between text-[11px] text-muted-foreground">
+                  <span>já pago {formatCurrency(pagosMes)}</span>
+                  <span className="tabular">restam {formatCurrency(Math.max(0, totalFatura - pagosMes))}</span>
+                </div>
+              )}
               {sessao.length > 0 && (
                 <div className="flex items-center justify-between text-[11px] text-muted-foreground">
                   <span>{sessao.length} {sessao.length === 1 ? 'lançado' : 'lançados'} agora</span>

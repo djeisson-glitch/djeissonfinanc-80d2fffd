@@ -50,13 +50,18 @@ export function PaymentModal({ open, onOpenChange, contaId, contaNome, faturaTot
   const [data, setData] = useState<string>(todayIso);
   const [submitting, setSubmitting] = useState(false);
 
-  // Pré-preenche o valor com a fatura total quando o modal abre
+  // Pré-preenche o valor com a fatura total quando o modal ABRE.
+  // Arredonda a 2 casas: faturaTotal vem de soma de floats (ex:
+  // 1235.7999999999997) e iria cru pro banco no caminho de 1 clique.
+  // Deps só [open]: se a fatura refetchar com o modal aberto, NÃO
+  // sobrescreve o valor que o usuário já digitou (pagamento parcial).
   useEffect(() => {
     if (open) {
-      setValor(faturaTotal > 0 ? faturaTotal : 0);
+      setValor(faturaTotal > 0 ? Math.round(faturaTotal * 100) / 100 : 0);
       setData(todayIso);
     }
-  }, [open, faturaTotal, todayIso]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
 
   const pessoaNome = user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'Titular';
   const billingPeriod = `${year}-${String(month + 1).padStart(2, '0')}`;
@@ -84,6 +89,17 @@ export function PaymentModal({ open, onOpenChange, contaId, contaNome, faturaTot
     const valorNum = valor;
     if (!valorNum || valorNum <= 0) return;
     if (!effectiveContaOrigem) return;
+    // Teto de overpayment (antes era o max= do input type=number, que o
+    // MoneyInput não tem): 150% da fatura. Bloqueia o typo clássico de
+    // digitar um zero a mais — pagamento maior que isso não é pagamento.
+    if (faturaTotal > 0 && valorNum > faturaTotal * 1.5) {
+      toast({
+        title: 'Valor muito acima da fatura',
+        description: `Você digitou ${formatCurrency(valorNum)} pra uma fatura de ${formatCurrency(faturaTotal)}. Confira o valor.`,
+        variant: 'destructive',
+      });
+      return;
+    }
 
     setSubmitting(true);
     try {
