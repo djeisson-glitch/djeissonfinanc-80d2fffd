@@ -18,7 +18,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { useToast } from '@/hooks/use-toast';
-import { Trash2, Search, Download, Copy, EyeOff, Filter, ChevronDown, ChevronUp, Layers, CreditCard, Tag, Calendar } from 'lucide-react';
+import { Trash2, Search, Download, Copy, EyeOff, Filter, ChevronDown, ChevronUp, Layers, CreditCard, Tag, Calendar, ArrowDownWideNarrow, ArrowUpNarrowWide } from 'lucide-react';
 import { ConfirmDelete } from '@/components/ConfirmDelete';
 import { Checkbox } from '@/components/ui/checkbox';
 import { exportCSV, copyToClipboard } from '@/lib/export';
@@ -54,7 +54,9 @@ export default function TransacoesPage() {
   // ou 'all' (histórico inteiro). Útil pra caçar parcelas específicas no histórico.
   const [periodo, setPeriodo] = useState<'mes' | '12m' | 'all'>('mes');
   const [filterPago, setFilterPago] = useState<'all' | 'pago' | 'pendente'>('all');
-  const [groupBy, setGroupBy] = useState<'dia' | 'categoria' | 'parcelamento' | 'cartao'>('dia');
+  const [groupBy, setGroupBy] = useState<'dia' | 'categoria' | 'parcelamento' | 'cartao' | 'valor'>('dia');
+  // Direção da ordenação por valor: 'desc' = maior→menor (default), 'asc' = menor→maior.
+  const [valorDir, setValorDir] = useState<'desc' | 'asc'>('desc');
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
 
   const toggleGroup = (key: string) => {
@@ -470,6 +472,15 @@ export default function TransacoesPage() {
     return Object.values(groups).sort((a, b) => Math.abs(b.total) - Math.abs(a.total));
   }, [filtered, contas]);
 
+  // Lista plana ordenada por valor (maior↔menor). Usa o valor absoluto, então
+  // a maior despesa e a maior receita disputam o topo pelo tamanho.
+  const sortedByValor = useMemo(() => {
+    return [...filtered].sort((a, b) => {
+      const diff = Math.abs(Number(b.valor)) - Math.abs(Number(a.valor));
+      return valorDir === 'desc' ? diff : -diff;
+    });
+  }, [filtered, valorDir]);
+
   // Summary totals
   const totalReceitas = filtered.filter(t => t.tipo === 'receita').reduce((s, t) => s + Number(t.valor), 0);
   const totalDespesas = filtered.filter(t => t.tipo === 'despesa').reduce((s, t) => s + Number(t.valor), 0);
@@ -684,6 +695,22 @@ export default function TransacoesPage() {
           onClick={() => { setGroupBy('cartao'); setExpandedGroups(new Set()); }}
         >
           <CreditCard className="h-3 w-3" /> Cartão/Conta
+        </Button>
+        <Button
+          size="sm"
+          variant={groupBy === 'valor' ? 'default' : 'outline'}
+          className="h-7 px-2 text-xs gap-1 shrink-0"
+          // Já ativo? inverte a direção. Senão, ativa em maior→menor.
+          onClick={() => {
+            if (groupBy === 'valor') setValorDir(d => (d === 'desc' ? 'asc' : 'desc'));
+            else { setGroupBy('valor'); setExpandedGroups(new Set()); }
+          }}
+          title={groupBy === 'valor' ? 'Toque pra inverter a ordem' : 'Ordenar por valor'}
+        >
+          {groupBy === 'valor' && valorDir === 'asc'
+            ? <ArrowUpNarrowWide className="h-3 w-3" />
+            : <ArrowDownWideNarrow className="h-3 w-3" />}
+          Valor
         </Button>
       </div>
 
@@ -993,6 +1020,22 @@ export default function TransacoesPage() {
             </Card>
           );
         })}
+
+        {groupBy === 'valor' && filtered.length > 0 && (
+          <div>
+            <div className="flex items-center justify-between px-1 mb-2">
+              <span className="text-sm font-semibold">
+                Por valor · {valorDir === 'desc' ? 'maior → menor' : 'menor → maior'}
+              </span>
+              <span className="text-xs text-muted-foreground">{filtered.length} transações</span>
+            </div>
+            <Card>
+              <CardContent className="p-0 divide-y divide-border">
+                {sortedByValor.map(t => renderTransactionRow(t))}
+              </CardContent>
+            </Card>
+          </div>
+        )}
 
         {filtered.length === 0 && (
           <div className="text-center py-12">
