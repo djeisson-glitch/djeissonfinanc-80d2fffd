@@ -2,6 +2,7 @@ import { useState, useRef, useEffect, useMemo } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { MoneyInput } from '@/components/ui/money-input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { supabase } from '@/integrations/supabase/client';
@@ -54,7 +55,7 @@ export function QuickCardEntry({ open, onOpenChange }: Props) {
   const [compYear, setCompYear] = useState(now.getFullYear());
 
   const [descricao, setDescricao] = useState('');
-  const [valor, setValor] = useState('');
+  const [valor, setValor] = useState<number>(0);
   // Parcelamento: atual/total. Vazio = à vista. Ex: 5 / 12 = parcela 5 de 12
   // (cria 5/12 na fatura escolhida + projeta 6/12..12/12).
   const [parcAtual, setParcAtual] = useState('');
@@ -189,7 +190,7 @@ export function QuickCardEntry({ open, onOpenChange }: Props) {
 
   const lancar = async () => {
     if (!user || !cardId) return;
-    const valorNum = Number(valor.replace(',', '.'));
+    const valorNum = valor;
     if (!valorNum || valorNum <= 0 || !descricao.trim()) return;
     const pTotal = pTotalVal;   // total de parcelas (1 = à vista)
     const pAtual = pAtualVal;   // parcela atual (a que cai na fatura escolhida)
@@ -265,7 +266,7 @@ export function QuickCardEntry({ open, onOpenChange }: Props) {
 
       // Limpa e volta o foco pra próxima compra
       setDescricao('');
-      setValor('');
+      setValor(0);
       setParcAtual('');
       setParcTotal('');
       setCategoria('');
@@ -355,11 +356,10 @@ export function QuickCardEntry({ open, onOpenChange }: Props) {
                 className="h-8 border-0 bg-transparent px-1 focus-visible:ring-1"
                 autoFocus
               />
-              <Input
+              <MoneyInput
                 value={valor}
-                onChange={e => setValor(e.target.value)}
+                onChange={setValor}
                 placeholder="0,00"
-                inputMode="decimal"
                 className="h-8 text-right border-0 bg-transparent px-1 focus-visible:ring-1"
               />
               <div className="flex items-center gap-0.5">
@@ -384,7 +384,7 @@ export function QuickCardEntry({ open, onOpenChange }: Props) {
               <Button
                 type="submit"
                 size="icon"
-                disabled={submitting || !cardId || !descricao.trim() || !Number(valor.replace(',', '.'))}
+                disabled={submitting || !cardId || !descricao.trim() || !valor}
                 className="h-8 w-8"
                 title="Lançar (Enter)"
               >

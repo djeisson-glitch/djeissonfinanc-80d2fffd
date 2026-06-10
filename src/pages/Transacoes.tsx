@@ -11,6 +11,7 @@ import { CategoriaSelector } from '@/components/CategoriaSelector';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { MoneyInput } from '@/components/ui/money-input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -45,7 +46,7 @@ export default function TransacoesPage() {
   // (se já tem reembolso vinculado, o toggle vem ligado).
   const [editReembolsoOn, setEditReembolsoOn] = useState(false);
   const [editReembolsoPessoa, setEditReembolsoPessoa] = useState('');
-  const [editReembolsoValor, setEditReembolsoValor] = useState('');
+  const [editReembolsoValor, setEditReembolsoValor] = useState<number>(0);
   const [editContaReembolsoId, setEditContaReembolsoId] = useState('');
   const [showIgnoradas, setShowIgnoradas] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
@@ -303,7 +304,7 @@ export default function TransacoesPage() {
     const temReembolso = !!editingTx.reembolso_transacao_id;
     setEditReembolsoOn(temReembolso);
     setEditReembolsoPessoa(editingTx.reembolso_pessoa || '');
-    setEditReembolsoValor(editingTx.reembolso_valor ? String(editingTx.reembolso_valor) : '');
+    setEditReembolsoValor(editingTx.reembolso_valor ? Number(editingTx.reembolso_valor) : 0);
     if (!temReembolso) {
       // default: primeira conta de débito disponível
       const debito = contas?.find(c => c.tipo === 'debito');
@@ -325,7 +326,7 @@ export default function TransacoesPage() {
       }
       // 2) Caso B: novo OU edição → se já tinha, remove o antigo antes
       if (editReembolsoOn) {
-        if (!editReembolsoPessoa.trim() || !Number(editReembolsoValor) || !editContaReembolsoId) {
+        if (!editReembolsoPessoa.trim() || !editReembolsoValor || !editContaReembolsoId) {
           throw new Error('Preencha pessoa, valor e conta de destino');
         }
         if (temAtual) {
@@ -339,7 +340,7 @@ export default function TransacoesPage() {
           despesaConta: editingTx.conta_id,
           contaReceitaId: editContaReembolsoId,
           pessoa: editReembolsoPessoa.trim(),
-          valor: Number(editReembolsoValor),
+          valor: editReembolsoValor,
           pessoaTitular: editingTx.pessoa || 'Titular',
         });
       }
@@ -1024,7 +1025,7 @@ export default function TransacoesPage() {
                 !!editingTx.reembolso_transacao_id !== editReembolsoOn ||
                 (editReembolsoOn && (
                   editReembolsoPessoa !== (editingTx.reembolso_pessoa || '') ||
-                  Number(editReembolsoValor) !== Number(editingTx.reembolso_valor || 0)
+                  editReembolsoValor !== Number(editingTx.reembolso_valor || 0)
                 ));
               if (reembolsoMudou) reembolsoMutation.mutate();
             }} className="space-y-4">
@@ -1124,7 +1125,7 @@ export default function TransacoesPage() {
                         const on = !!v;
                         setEditReembolsoOn(on);
                         if (on && !editReembolsoValor && editingTx.valor) {
-                          setEditReembolsoValor(String(editingTx.valor));
+                          setEditReembolsoValor(Number(editingTx.valor) || 0);
                         }
                       }}
                       className="mt-0.5 shrink-0"
@@ -1148,13 +1149,9 @@ export default function TransacoesPage() {
                           <Label className="text-xs text-muted-foreground">
                             Valor (de {formatCurrency(Number(editingTx.valor))})
                           </Label>
-                          <Input
-                            type="number"
-                            step="0.01"
-                            min="0.01"
-                            max={editingTx.valor}
+                          <MoneyInput
                             value={editReembolsoValor}
-                            onChange={(e) => setEditReembolsoValor(e.target.value)}
+                            onChange={setEditReembolsoValor}
                             placeholder="0,00"
                           />
                         </div>

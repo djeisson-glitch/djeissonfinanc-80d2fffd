@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { MoneyInput } from '@/components/ui/money-input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { formatCurrency } from '@/lib/format';
@@ -44,7 +45,7 @@ export function PaymentModal({ open, onOpenChange, contaId, contaNome, faturaTot
   const queryClient = useQueryClient();
   const todayIso = useTodayIso();
 
-  const [valor, setValor] = useState<string>('');
+  const [valor, setValor] = useState<number>(0);
   const [contaOrigem, setContaOrigem] = useState<string>('');
   const [data, setData] = useState<string>(todayIso);
   const [submitting, setSubmitting] = useState(false);
@@ -52,7 +53,7 @@ export function PaymentModal({ open, onOpenChange, contaId, contaNome, faturaTot
   // Pré-preenche o valor com a fatura total quando o modal abre
   useEffect(() => {
     if (open) {
-      setValor(faturaTotal > 0 ? faturaTotal.toFixed(2) : '');
+      setValor(faturaTotal > 0 ? faturaTotal : 0);
       setData(todayIso);
     }
   }, [open, faturaTotal, todayIso]);
@@ -80,7 +81,7 @@ export function PaymentModal({ open, onOpenChange, contaId, contaNome, faturaTot
 
   const handleConfirm = async () => {
     if (!user) return;
-    const valorNum = Number(valor);
+    const valorNum = valor;
     if (!valorNum || valorNum <= 0) return;
     if (!effectiveContaOrigem) return;
 
@@ -151,7 +152,7 @@ export function PaymentModal({ open, onOpenChange, contaId, contaNome, faturaTot
     setSubmitting(false);
   };
 
-  const valorNum = Number(valor) || 0;
+  const valorNum = valor;
   const restante = Math.max(0, faturaTotal - valorNum);
 
   return (
@@ -169,13 +170,10 @@ export function PaymentModal({ open, onOpenChange, contaId, contaNome, faturaTot
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1">
               <Label>Valor a pagar</Label>
-              <Input
-                type="number"
-                step="0.01"
-                min="0.01"
-                max={faturaTotal * 1.5}
+              <MoneyInput
                 value={valor}
-                onChange={(e) => setValor(e.target.value)}
+                onChange={setValor}
+                placeholder="0,00"
                 autoFocus
               />
             </div>

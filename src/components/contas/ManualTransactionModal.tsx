@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { MoneyInput } from '@/components/ui/money-input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -34,7 +35,7 @@ export function ManualTransactionModal({
   const queryClient = useQueryClient();
 
   const [descricao, setDescricao] = useState('');
-  const [valor, setValor] = useState('');
+  const [valor, setValor] = useState<number>(0);
   const [tipo, setTipo] = useState<'despesa' | 'receita'>(defaultTipo || 'despesa');
   // toLocalIso (não toISOString): no fuso BR, à noite o toISOString() avança pro
   // dia seguinte, defaultando a data pra "amanhã" e deixando a transação fora do
@@ -68,7 +69,7 @@ export function ManualTransactionModal({
   // Quando ligado, criamos uma receita vinculada com categoria='Reembolsos'.
   const [reembolsoOn, setReembolsoOn] = useState(false);
   const [reembolsoPessoa, setReembolsoPessoa] = useState('');
-  const [reembolsoValor, setReembolsoValor] = useState('');
+  const [reembolsoValor, setReembolsoValor] = useState<number>(0);
   const [contaReembolsoId, setContaReembolsoId] = useState('');
 
   const pessoaNome = user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'Titular';
@@ -113,7 +114,7 @@ export function ManualTransactionModal({
     setSubmitting(true);
 
     try {
-      const valorNum = Number(valor);
+      const valorNum = valor;
       const autoCat = autoCategorizarTransacao(descricao);
       const mesesNum = recorrente ? Math.max(1, Math.min(60, parseInt(meses) || 1)) : 1;
       const grupoRec = recorrente ? crypto.randomUUID() : null;
@@ -213,7 +214,7 @@ export function ManualTransactionModal({
         tipo === 'despesa' &&
         !recorrente &&
         reembolsoPessoa.trim() &&
-        Number(reembolsoValor) > 0 &&
+        reembolsoValor > 0 &&
         contaReembolsoId &&
         inseridas?.[0]?.id
       ) {
@@ -226,7 +227,7 @@ export function ManualTransactionModal({
             despesaConta: selectedContaId,
             contaReceitaId: contaReembolsoId,
             pessoa: reembolsoPessoa.trim(),
-            valor: Number(reembolsoValor),
+            valor: reembolsoValor,
             pessoaTitular: pessoaNome,
           });
           reembolsoCriado = true;
@@ -258,7 +259,7 @@ export function ManualTransactionModal({
 
       // Reset form
       setDescricao('');
-      setValor('');
+      setValor(0);
       setTipo(defaultTipo || 'despesa');
       setEssencial(false);
       setPago(true);
@@ -271,7 +272,7 @@ export function ManualTransactionModal({
       setMesCompetencia(defaultCompYM);
       setReembolsoOn(false);
       setReembolsoPessoa('');
-      setReembolsoValor('');
+      setReembolsoValor(0);
       onOpenChange(false);
     } catch (err) {
       console.error(err);
@@ -320,12 +321,9 @@ export function ManualTransactionModal({
           <div className="grid grid-cols-3 gap-3">
             <div className="space-y-2">
               <Label>Valor (R$)</Label>
-              <Input
-                type="number"
-                step="0.01"
-                min="0.01"
+              <MoneyInput
                 value={valor}
-                onChange={e => setValor(e.target.value)}
+                onChange={setValor}
                 placeholder="0,00"
               />
             </div>
@@ -474,7 +472,7 @@ export function ManualTransactionModal({
                       const a = Math.max(1, parseInt(parcelaAtual) || 1);
                       const t = Math.max(a, parseInt(parcelaTotal) || a);
                       const restantes = t - a;
-                      const v = Number(valor) || 0;
+                      const v = valor || 0;
                       return (
                         <p className="text-xs text-muted-foreground">
                           Lança a parcela <strong>{a}/{t}</strong> na fatura de <strong>{(() => { const [y, m] = mesCompetencia.split('-').map(Number); return `${getMonthName(m - 1)}/${y}`; })()}</strong>
@@ -530,15 +528,11 @@ export function ManualTransactionModal({
                     </div>
                     <div className="space-y-1">
                       <Label className="text-xs text-muted-foreground">
-                        Valor a receber {valor && `(de ${Number(valor).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })})`}
+                        Valor a receber {valor > 0 && `(de ${valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })})`}
                       </Label>
-                      <Input
-                        type="number"
-                        step="0.01"
-                        min="0.01"
-                        max={valor || undefined}
+                      <MoneyInput
                         value={reembolsoValor}
-                        onChange={(e) => setReembolsoValor(e.target.value)}
+                        onChange={setReembolsoValor}
                         placeholder="0,00"
                       />
                     </div>

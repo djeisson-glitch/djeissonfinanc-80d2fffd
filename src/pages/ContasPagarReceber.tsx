@@ -7,6 +7,7 @@ import { MonthSelector } from '@/components/MonthSelector';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { MoneyInput } from '@/components/ui/money-input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -66,7 +67,7 @@ export default function ContasPagarReceberPage() {
   // Form state
   const [tipo, setTipo] = useState<Tipo>('pagar');
   const [descricao, setDescricao] = useState('');
-  const [valor, setValor] = useState('');
+  const [valor, setValor] = useState<number>(0);
   const [dataVencimento, setDataVencimento] = useState<string>('');
   const [categoria, setCategoria] = useState<string>('');
 
@@ -89,7 +90,7 @@ export default function ContasPagarReceberPage() {
     setEditing(null);
     setTipo('pagar');
     setDescricao('');
-    setValor('');
+    setValor(0);
     setDataVencimento('');
     setCategoria('');
   };
@@ -104,7 +105,7 @@ export default function ContasPagarReceberPage() {
     setEditing(item);
     setTipo(item.tipo);
     setDescricao(item.descricao);
-    setValor(String(item.valor));
+    setValor(Number(item.valor) || 0);
     setDataVencimento(item.data_vencimento || '');
     setCategoria(item.categoria || '');
     setDialogOpen(true);
@@ -115,7 +116,7 @@ export default function ContasPagarReceberPage() {
       if (!user || !descricao.trim() || !valor) {
         throw new Error('Preencha descrição e valor');
       }
-      const valorNum = Number(valor);
+      const valorNum = valor;
       if (!isFinite(valorNum) || valorNum <= 0) {
         throw new Error('Valor inválido');
       }
@@ -379,7 +380,7 @@ export default function ContasPagarReceberPage() {
             <div className="grid grid-cols-2 gap-2">
               <div className="space-y-2">
                 <Label>Valor (R$)</Label>
-                <Input type="number" step="0.01" min="0.01" value={valor} onChange={(e) => setValor(e.target.value)} placeholder="0,00" />
+                <MoneyInput value={valor} onChange={setValor} placeholder="0,00" />
               </div>
               <div className="space-y-2">
                 <Label>Vencimento</Label>

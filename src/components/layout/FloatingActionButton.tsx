@@ -13,6 +13,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
+import { MoneyInput } from '@/components/ui/money-input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import { useQueryClient } from '@tanstack/react-query';
@@ -36,7 +37,7 @@ export function FloatingActionButton() {
   // Transfer state
   const [transferOrigem, setTransferOrigem] = useState('');
   const [transferDestino, setTransferDestino] = useState('');
-  const [transferValor, setTransferValor] = useState('');
+  const [transferValor, setTransferValor] = useState<number>(0);
   const [transferring, setTransferring] = useState(false);
 
   const { data: contas } = useQuery({
@@ -83,7 +84,7 @@ export function FloatingActionButton() {
     if (!user || !transferOrigem || !transferDestino || !transferValor) return;
     setTransferring(true);
     try {
-      const valor = Number(transferValor);
+      const valor = transferValor;
       const data = new Date().toISOString().substring(0, 10);
       const pessoa = user.user_metadata?.full_name || user.email?.split('@')[0] || 'Titular';
       const origemNome = allContas.find(c => c.id === transferOrigem)?.nome || '';
@@ -139,7 +140,7 @@ export function FloatingActionButton() {
       setTransferOpen(false);
       setTransferOrigem('');
       setTransferDestino('');
-      setTransferValor('');
+      setTransferValor(0);
     } catch (err) {
       console.error(err);
       toast({ title: 'Erro ao transferir', variant: 'destructive' });
@@ -252,12 +253,9 @@ export function FloatingActionButton() {
             </div>
             <div className="space-y-2">
               <Label>Valor (R$)</Label>
-              <Input
-                type="number"
-                step="0.01"
-                min="0.01"
+              <MoneyInput
                 value={transferValor}
-                onChange={e => setTransferValor(e.target.value)}
+                onChange={setTransferValor}
                 placeholder="0,00"
               />
             </div>

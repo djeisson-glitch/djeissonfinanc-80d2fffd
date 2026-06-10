@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { MoneyInput } from '@/components/ui/money-input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ArrowRight } from 'lucide-react';
@@ -40,7 +41,7 @@ export function TransferModal({ open, onOpenChange, contaOrigemId: defaultOrigem
   const queryClient = useQueryClient();
   const todayIso = useTodayIso();
 
-  const [valor, setValor] = useState<string>('');
+  const [valor, setValor] = useState<number>(0);
   const [origemId, setOrigemId] = useState<string>(defaultOrigem || '');
   const [destinoId, setDestinoId] = useState<string>('');
   const [data, setData] = useState<string>(todayIso);
@@ -50,7 +51,7 @@ export function TransferModal({ open, onOpenChange, contaOrigemId: defaultOrigem
   useEffect(() => {
     if (open) {
       setData(todayIso);
-      setValor('');
+      setValor(0);
       setDescricao('');
       if (defaultOrigem) setOrigemId(defaultOrigem);
     }
@@ -75,7 +76,7 @@ export function TransferModal({ open, onOpenChange, contaOrigemId: defaultOrigem
 
   const contaOrigem = contas?.find(c => c.id === origemId);
   const contaDestino = contas?.find(c => c.id === destinoId);
-  const valorNum = Number(valor) || 0;
+  const valorNum = valor;
 
   const handleConfirm = async () => {
     if (!user) return;
@@ -193,12 +194,9 @@ export function TransferModal({ open, onOpenChange, contaOrigemId: defaultOrigem
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1">
               <Label>Valor (R$)</Label>
-              <Input
-                type="number"
-                step="0.01"
-                min="0.01"
+              <MoneyInput
                 value={valor}
-                onChange={(e) => setValor(e.target.value)}
+                onChange={setValor}
                 placeholder="0,00"
                 autoFocus
               />
