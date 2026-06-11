@@ -1,6 +1,5 @@
 import { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useTodayIso } from '@/hooks/useTodayIso';
@@ -27,10 +26,10 @@ import { ConfirmDelete } from '@/components/ConfirmDelete';
  */
 export function DuplicatasAlert() {
   const { user } = useAuth();
-  const navigate = useNavigate();
   const { toast } = useToast();
   const qc = useQueryClient();
   const [dismissed, setDismissed] = useState(false);
+  const [showAll, setShowAll] = useState(false);
   const todayIso = useTodayIso();
 
   // 365 dias atrás a partir do dia local (useTodayIso, timezone-safe). Antes
@@ -43,9 +42,9 @@ export function DuplicatasAlert() {
   const { data: txs } = useQuery({
     queryKey: ['duplicatas-source', user?.id, inicio],
     queryFn: async () => {
-      return await fetchAllRows<{ id: string; descricao: string; descricao_normalizada: string | null; valor: number; data: string; hash_transacao: string | null; conta_id: string; parcela_total: number | null }>(() => supabase
+      return await fetchAllRows<{ id: string; descricao: string; descricao_normalizada: string | null; valor: number; data: string; hash_transacao: string | null; conta_id: string; parcela_total: number | null; mes_competencia: string | null }>(() => supabase
         .from('transacoes')
-        .select('id, descricao, descricao_normalizada, valor, data, hash_transacao, conta_id, parcela_total')
+        .select('id, descricao, descricao_normalizada, valor, data, hash_transacao, conta_id, parcela_total, mes_competencia')
         .eq('user_id', user!.id)
         .gte('data', inicio));
     },
@@ -100,14 +99,14 @@ export function DuplicatasAlert() {
             <p className="text-xs text-muted-foreground mb-3">
               Mesma descrição + valor lançados duas (ou mais) vezes. Apague o duplicado pra manter saldo correto.
             </p>
-            <DuplicatasList grupos={grupos.slice(0, 4)} onDelete={(id) => apagar.mutate(id)} />
+            <DuplicatasList grupos={showAll ? grupos : grupos.slice(0, 4)} onDelete={(id) => apagar.mutate(id)} />
             {grupos.length > 4 && (
               <button
                 type="button"
-                onClick={() => navigate('/transacoes')}
+                onClick={() => setShowAll(v => !v)}
                 className="mt-2 text-xs text-primary hover:underline"
               >
-                Ver os outros {grupos.length - 4} grupos →
+                {showAll ? 'Mostrar menos ↑' : `Ver os outros ${grupos.length - 4} grupos →`}
               </button>
             )}
           </div>

@@ -30,6 +30,7 @@ interface TxLike {
   hash_transacao?: string | null;
   conta_id?: string | null;
   parcela_total?: number | null;
+  mes_competencia?: string | null;
 }
 
 /**
@@ -65,6 +66,7 @@ export function detectarDuplicatas(txs: TxLike[]): DuplicataGrupo[] {
   const bySim = new Map<string, TxLike[]>();
   for (const t of txs) {
     if (t.parcela_total && Number(t.parcela_total) > 1) continue; // parcela legítima
+    if ((t.descricao || '').includes('(auto-projetada)')) continue; // projeção, não duplicata
     const descNorm = (t.descricao_normalizada || t.descricao || '').trim().toUpperCase().slice(0, 40);
     if (!descNorm) continue;
     const valorCents = Math.round(Math.abs(Number(t.valor)) * 100);
@@ -75,7 +77,13 @@ export function detectarDuplicatas(txs: TxLike[]): DuplicataGrupo[] {
     // par da baixa manual — débito na conta + crédito-abatimento no cartão,
     // mesma descrição/valor/dia — era marcado como duplicata por engano.
     const conta = t.conta_id || '';
-    const key = `${conta}|${descNorm}|${valorCents}|${dia}`;
+    // mes_competencia na chave: o lançamento rápido de cartão grava data=HOJE
+    // pra todos, variando só a competência (mês da fatura). Sem isso, o MESMO
+    // recorrente lançado em faturas diferentes (netflix de jan, fev, mar...)
+    // caía todo na mesma data e era marcado como duplicata. Faturas distintas
+    // = lançamentos distintos.
+    const comp = t.mes_competencia || '';
+    const key = `${conta}|${descNorm}|${valorCents}|${dia}|${comp}`;
     const arr = bySim.get(key) || [];
     arr.push(t);
     bySim.set(key, arr);

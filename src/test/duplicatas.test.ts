@@ -58,6 +58,28 @@ describe('detectarDuplicatas', () => {
     expect(grupos[0].txIds.length).toBe(3);
   });
 
+  it('NÃO marca o mesmo recorrente em faturas diferentes (lançamento rápido grava data=hoje, competência varia)', () => {
+    // netflix lançado pelo quick entry pra 3 faturas — todas com data=HOJE,
+    // mas mes_competencia diferente. Não é duplicata: são 3 faturas distintas.
+    const hoje = '2026-06-10';
+    const txs = [
+      { id: 'jan', descricao: 'netflix', descricao_normalizada: 'NETFLIX', valor: 59.9, data: hoje, conta_id: 'black', mes_competencia: '2026-01' },
+      { id: 'fev', descricao: 'netflix', descricao_normalizada: 'NETFLIX', valor: 59.9, data: hoje, conta_id: 'black', mes_competencia: '2026-02' },
+      { id: 'mar', descricao: 'netflix', descricao_normalizada: 'NETFLIX', valor: 59.9, data: hoje, conta_id: 'black', mes_competencia: '2026-03' },
+    ];
+    expect(detectarDuplicatas(txs)).toHaveLength(0);
+  });
+
+  it('marca duplicata real: mesmo cartão, mesma competência, mesma data/desc/valor', () => {
+    const txs = [
+      { id: 'a', descricao: 'netflix', descricao_normalizada: 'NETFLIX', valor: 59.9, data: '2026-06-10', conta_id: 'black', mes_competencia: '2026-06' },
+      { id: 'b', descricao: 'netflix', descricao_normalizada: 'NETFLIX', valor: 59.9, data: '2026-06-10', conta_id: 'black', mes_competencia: '2026-06' },
+    ];
+    const grupos = detectarDuplicatas(txs);
+    expect(grupos).toHaveLength(1);
+    expect(grupos[0].txIds.length).toBe(2);
+  });
+
   it('detecta pagamento de fatura duplicado: baixa manual + débito do extrato (descrições diferentes)', () => {
     const txs = [
       // baixa manual na conta de débito
