@@ -1,4 +1,4 @@
-import { generateHash } from '@/lib/csv-parser';
+import { generateHash, isFaturaPayment } from '@/lib/csv-parser';
 
 /**
  * Adds months to a date without overflow (e.g. Jan 31 + 1 month = Feb 28, not Mar 3).
@@ -231,6 +231,26 @@ export function detectConflicts(
     }
 
     const txOriginal = (tx as any).data_original || tx.data;
+
+    // PAGAMENTO DE FATURA: a baixa manual ("Pag Fat Deb Cc - Black", criada pelo
+    // botão Pagar Fatura) e o débito real do extrato ("PAGTO FATURA MASTER-...")
+    // têm descrições TOTALMENTE diferentes, mas são o MESMO pagamento na MESMA
+    // conta (existing já vem escopado por conta_id). O sameSkeleton nunca casa os
+    // dois. Aqui casamos só por valor (±0,01) e data próxima (≤3 dias), ignorando
+    // a descrição. Auto-skip do import: preserva a baixa manual, que vem pareada
+    // com o crédito que abate a fatura no cartão — remover esse débito orfanaria
+    // o abatimento.
+    if (isFaturaPayment(tx.descricao)) {
+      const faturaDup = existing.find(e =>
+        isFaturaPayment(e.descricao) &&
+        Math.abs(Number(e.valor) - tx.valor) <= 0.01 &&
+        daysDiff(txOriginal, e.data_original || e.data) <= 3,
+      );
+      if (faturaDup) {
+        exactMatches.push({ planned: tx, existingId: faturaDup.id });
+        continue;
+      }
+    }
 
     // Recurring projection replacement: a real (non-installment) transaction coming
     // from the import replaces a previously projected recurring "(auto-projetada)"

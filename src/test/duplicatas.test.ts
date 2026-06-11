@@ -57,4 +57,26 @@ describe('detectarDuplicatas', () => {
     expect(grupos).toHaveLength(1);
     expect(grupos[0].txIds.length).toBe(3);
   });
+
+  it('detecta pagamento de fatura duplicado: baixa manual + débito do extrato (descrições diferentes)', () => {
+    const txs = [
+      // baixa manual na conta de débito
+      { id: 'man', descricao: 'Pag Fat Deb Cc - Black', valor: 6078.16, data: '2026-01-15', conta_id: 'sicredi', hash_transacao: 'hm' },
+      // débito real importado do OFX do Sicredi
+      { id: 'imp', descricao: 'PAGTO FATURA MASTER-008323084', valor: 6078.16, data: '2026-01-15', conta_id: 'sicredi', hash_transacao: 'hi' },
+    ];
+    const grupos = detectarDuplicatas(txs);
+    expect(grupos).toHaveLength(1);
+    expect(grupos[0].txIds.sort()).toEqual(['imp', 'man']);
+  });
+
+  it('NÃO agrupa o débito (conta) com o crédito-abatimento (cartão) da mesma baixa manual', () => {
+    const txs = [
+      // o par criado pela baixa manual: débito na conta + crédito no cartão (abatimento)
+      { id: 'deb', descricao: 'Pag Fat Deb Cc - Black', valor: 6078.16, data: '2026-01-15', conta_id: 'sicredi' },
+      { id: 'cred', descricao: 'Pag Fat Deb Cc - Black', valor: 6078.16, data: '2026-01-15', conta_id: 'black' },
+    ];
+    const grupos = detectarDuplicatas(txs);
+    expect(grupos).toHaveLength(0); // contas diferentes — não é duplicata
+  });
 });

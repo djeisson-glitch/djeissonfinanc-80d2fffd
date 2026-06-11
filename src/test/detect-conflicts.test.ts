@@ -121,6 +121,45 @@ describe('detectConflicts — dedup independente de hash', () => {
     expect(r.clean).toHaveLength(0);
   });
 
+  it('pagamento de fatura: baixa manual existente + débito do extrato (desc diferente) → pula o import', () => {
+    // baixa manual já no banco
+    const manual = existing({
+      id: 'man',
+      descricao: 'Pag Fat Deb Cc - Black',
+      valor: 6078.16,
+      data: '2026-01-15',
+      data_original: '2026-01-15',
+      hash_transacao: 'hman',
+    });
+    // débito real vindo do OFX do Sicredi — descrição totalmente diferente
+    const real = planned({
+      descricao: 'PAGTO FATURA MASTER-008323084',
+      valor: 6078.16,
+      data: '2026-01-15',
+      data_original: '2026-01-15',
+      hash_transacao: 'himp',
+    });
+    const r = detectConflicts([real], [manual]);
+    expect(r.exactMatches).toHaveLength(1);
+    expect(r.exactMatches[0].existingId).toBe('man');
+    expect(r.clean).toHaveLength(0);
+  });
+
+  it('pagamento de fatura: tolera ±3 dias entre baixa manual e settlement do banco', () => {
+    const manual = existing({ id: 'man', descricao: 'Pag Fat Deb Cc - Black', valor: 6078.16, data: '2026-01-15', data_original: '2026-01-15', hash_transacao: 'hman' });
+    const real = planned({ descricao: 'PAGTO FATURA MASTER-008323084', valor: 6078.16, data: '2026-01-17', data_original: '2026-01-17', hash_transacao: 'himp' });
+    const r = detectConflicts([real], [manual]);
+    expect(r.exactMatches).toHaveLength(1);
+  });
+
+  it('pagamento de fatura: valores diferentes NÃO casam (dois cartões distintos)', () => {
+    const manual = existing({ id: 'man', descricao: 'Pag Fat Deb Cc - Black', valor: 6078.16, data: '2026-01-15', data_original: '2026-01-15', hash_transacao: 'hman' });
+    const real = planned({ descricao: 'PAGTO FATURA MASTER-008323084', valor: 1200.00, data: '2026-01-15', data_original: '2026-01-15', hash_transacao: 'himp' });
+    const r = detectConflicts([real], [manual]);
+    expect(r.exactMatches).toHaveLength(0);
+    expect(r.clean).toHaveLength(1);
+  });
+
   it('mesma desc/valor em competência diferente NÃO é tratada como duplicata pela regra de fatura', () => {
     const e1 = existing({ id: 'a', descricao: 'NETFLIX', valor: 59.9, mes_competencia: '2026-02', data: '2026-02-28', data_original: '2026-02-28', hash_transacao: 'h1' });
     const real = planned({ descricao: 'NETFLIX', valor: 59.9, mes_competencia: '2026-03', data: '2026-03-31', data_original: '2026-03-31', hash_transacao: 'h2' });
