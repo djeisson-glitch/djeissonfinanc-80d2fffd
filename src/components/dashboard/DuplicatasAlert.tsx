@@ -21,8 +21,9 @@ import { ConfirmDelete } from '@/components/ConfirmDelete';
  * concentrei aqui no Dashboard: zero clique pra descobrir; user vê
  * direto na home se tem duplicata pra resolver.
  *
- * Limita a janela de busca aos últimos 90 dias (cobre erro humano comum
- * de "lancei 2x" sem trazer histórico inteiro).
+ * Limita a janela de busca aos últimos 365 dias (cobre o ano corrente —
+ * inclui duplicatas de pagamento de fatura antigas, baixa manual + linha
+ * do extrato, que podem ser de meses atrás).
  */
 export function DuplicatasAlert() {
   const { user } = useAuth();
@@ -32,11 +33,11 @@ export function DuplicatasAlert() {
   const [dismissed, setDismissed] = useState(false);
   const todayIso = useTodayIso();
 
-  // 90 dias atrás a partir do dia local (useTodayIso, timezone-safe). Antes
+  // 365 dias atrás a partir do dia local (useTodayIso, timezone-safe). Antes
   // usava new Date()+toISOString() (UTC) — divergia 1 dia perto da meia-noite.
   const inicio = useMemo(() => {
     const [y, m, d] = todayIso.split('-').map(Number);
-    return new Date(Date.UTC(y, m - 1, d - 90)).toISOString().slice(0, 10);
+    return new Date(Date.UTC(y, m - 1, d - 365)).toISOString().slice(0, 10);
   }, [todayIso]);
 
   const { data: txs } = useQuery({
@@ -85,7 +86,7 @@ export function DuplicatasAlert() {
           <div className="min-w-0 flex-1">
             <div className="flex items-center justify-between gap-2 mb-1">
               <p className="text-sm font-semibold">
-                {totalDups} possível {totalDups === 1 ? 'duplicata' : 'duplicatas'} nos últimos 90 dias
+                {totalDups} possível {totalDups === 1 ? 'duplicata' : 'duplicatas'} nos últimos 12 meses
               </p>
               <button
                 type="button"

@@ -70,6 +70,18 @@ describe('detectarDuplicatas', () => {
     expect(grupos[0].txIds.sort()).toEqual(['imp', 'man']);
   });
 
+  it('no grupo de fatura, a baixa manual fica em [0] (mantida) e a do extrato é a oferecida pra apagar', () => {
+    const txs = [
+      // ordem invertida de propósito: importada vem primeiro no array
+      { id: 'imp', descricao: 'PAGTO FATURA MASTER-008323084', valor: 6078.16, data: '2026-01-15', conta_id: 'sicredi', hash_transacao: 'hi' },
+      { id: 'man', descricao: 'Pag Fat Deb Cc - Black', valor: 6078.16, data: '2026-01-15', conta_id: 'sicredi', hash_transacao: 'hm' },
+    ];
+    const grupos = detectarDuplicatas(txs);
+    expect(grupos).toHaveLength(1);
+    expect(grupos[0].txIds[0]).toBe('man');           // manual preservada (índice 0)
+    expect(grupos[0].txIds.slice(1)).toEqual(['imp']); // só a importada é apagável
+  });
+
   it('NÃO agrupa o débito (conta) com o crédito-abatimento (cartão) da mesma baixa manual', () => {
     const txs = [
       // o par criado pela baixa manual: débito na conta + crédito no cartão (abatimento)

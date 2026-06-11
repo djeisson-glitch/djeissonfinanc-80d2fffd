@@ -43,7 +43,7 @@ interface TxLike {
  * Não tenta resolver — só sinaliza. UI mostra grupo e deixa o user escolher
  * qual apagar (ou ignorar se for legítimo).
  */
-import { isFaturaPayment } from '@/lib/csv-parser';
+import { isFaturaPayment, isConciliacaoPayment } from '@/lib/csv-parser';
 
 export function detectarDuplicatas(txs: TxLike[]): DuplicataGrupo[] {
   // 1) Agrupa por hash (quando existe)
@@ -142,12 +142,18 @@ export function detectarDuplicatas(txs: TxLike[]): DuplicataGrupo[] {
     if (lista.length < 2) continue;
     const idsNovos = lista.filter(t => !txIdsJaAgrupados.has(t.id));
     if (idsNovos.length < 2) continue;
+    // Mantém a BAIXA MANUAL ("Pag Fat Deb Cc - X") e oferece apagar o resto
+    // (a linha importada do extrato). A DuplicatasList preserva o item [0] e
+    // só deixa apagar os demais — por isso a manual vai pra frente.
+    idsNovos.sort((a, b) =>
+      Number(isConciliacaoPayment(b.descricao || '')) - Number(isConciliacaoPayment(a.descricao || '')),
+    );
     idsNovos.forEach(t => txIdsJaAgrupados.add(t.id));
     grupos.push({
       groupId: 'f:' + key,
       chave: key,
-      descricao: lista[0].descricao,
-      valor: Number(lista[0].valor),
+      descricao: idsNovos[0].descricao,
+      valor: Number(idsNovos[0].valor),
       txIds: idsNovos.map(t => t.id),
     });
   }
